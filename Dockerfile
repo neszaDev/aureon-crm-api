@@ -6,8 +6,7 @@ COPY src src
 CMD ["mvn", "-Dspring-boot.run.fork=true", "spring-boot:run"]
 
 FROM local AS build
-WORKDIR /workspace
-COPY src src
+# Inherits pom.xml, the offline dependency cache and src from the local stage.
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
