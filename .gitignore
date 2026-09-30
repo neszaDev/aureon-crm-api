@@ -1,7 +1,22 @@
+# Build output and reports (surefire, failsafe, jacoco live under target/)
 target/
+
+# IDEs and OS
 .idea/
 .vscode/
 *.iml
+.DS_Store
+
+# Local environment and secrets
 .env
+.env.*
 !.env.example
+
+# Claude Code: personal overrides (shared settings live in .claude/settings.json)
+.claude/settings.local.json
+
+# JVM crash/heap dumps and logs
 *.log
+hs_err_pid*.log
+replay_pid*.log
+*.hprof

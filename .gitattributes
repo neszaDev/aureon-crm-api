@@ -1,0 +1,9 @@
+# Normalise line endings in the repository; files are UTF-8 without BOM (see .editorconfig).
+* text=auto eol=lf
+
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+*.jar  binary
+*.png  binary
+*.jpg  binary
