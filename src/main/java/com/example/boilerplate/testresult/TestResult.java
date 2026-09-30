@@ -11,7 +11,9 @@ public class TestResult extends AuditableEntity {
   @Column(nullable = false) private Instant testedAt;
   @Column(length = 1000) private String notes;
   protected TestResult() {}
-  public TestResult(User owner,String testName,TestStatus status,BigDecimal score,Instant testedAt,String notes) { this.owner=owner; update(testName,status,score,testedAt,notes); }
-  public void update(String testName,TestStatus status,BigDecimal score,Instant testedAt,String notes) { this.testName=testName;this.status=status;this.score=score;this.testedAt=testedAt;this.notes=notes; }
+  public TestResult(User owner,String testName,TestStatus status,BigDecimal score,Instant testedAt,String notes) { this.owner=owner; apply(testName,status,score,testedAt,notes); }
+  public void update(String testName,TestStatus status,BigDecimal score,Instant testedAt,String notes) { apply(testName,status,score,testedAt,notes); }
+  // Private so the constructor does not call an overridable method (javac this-escape).
+  private void apply(String testName,TestStatus status,BigDecimal score,Instant testedAt,String notes) { this.testName=testName;this.status=status;this.score=score;this.testedAt=testedAt;this.notes=notes; }
   public String getTestName(){return testName;} public TestStatus getStatus(){return status;} public BigDecimal getScore(){return score;} public Instant getTestedAt(){return testedAt;} public String getNotes(){return notes;}
 }
