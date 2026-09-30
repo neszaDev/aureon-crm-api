@@ -256,6 +256,27 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
 - **403 for missing/invalid tokens kept** and pinned by `SecurityIT`. Switching to 401 is an
   API change for clients and needs a decision.
 
+## Status (2026-09-30)
+
+| Phase | PR | State |
+|---|---|---|
+| 1 Audit | — | done (this document) |
+| 2 Foundation | #25 | open, CI green |
+| 3 Tests | #26 | open, CI green |
+| 4 Agent instructions | #27 | open, CI green |
+| 5 Quality gates | #28 | open, CI green |
+| `docker/` move | #29 | open, CI green |
+| 6 Documentation | #30 | open |
+
+Found while implementing, **needs a decision** (not changed):
+- `/actuator/prometheus` requires a JWT (only health/info are `permitAll`), so a real
+  Prometheus server cannot scrape it. Options: permit it and restrict it at the network level,
+  or run a separate management port.
+- Missing or invalid tokens return 403. The conventional status is 401 (an
+  `AuthenticationEntryPoint`).
+- `UserService.currentUser` throws `UsernameNotFoundException` (→ 500) if a valid token's user
+  was deleted.
+
 ## Remaining / explicitly out of scope
 - Spring Boot 4.x / jjwt 0.13 upgrades: separate PRs via Dependabot after gates exist.
 - Deployment pipeline (registry push, environments). Needs a decision on the hosting target.
