@@ -10,6 +10,10 @@ tokens, an owner-scoped `test-results` CRUD example, Flyway migrations, Actuator
 Docker. Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md). Why the repo is set up
 this way: [docs/plans/0001-repository-hardening.md](docs/plans/0001-repository-hardening.md).
 
+Deeper guides, read the relevant one before changing that area:
+[configuration](docs/configuration.md) · [database/migrations](docs/database.md) ·
+[testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md)
+
 ## Layout
 
 ```
