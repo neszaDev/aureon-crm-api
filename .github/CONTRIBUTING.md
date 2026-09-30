@@ -9,8 +9,9 @@ make verify  # should pass before you change anything (Docker must be running)
 
 ## Workflow
 
-1. Branch from `main`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `ci/…`. Never commit directly
-   to `main`.
+1. Branch from `dev`: `feat/…`, `fix/…`, `chore/…`, `docs/…`, `ci/…`, and open the PR against
+   `dev`. Never push directly to `dev` or `main`; releases are a `dev` → `main` PR
+   ([CI/CD](../docs/ci.md#releasing)).
 2. Make small, focused commits. Keep mechanical changes (reformatting, renames) in their own
    commits.
 3. Before pushing, run `make verify`, and also `make smoke` if you touched Docker, config or

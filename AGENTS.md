@@ -82,7 +82,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 | `application-prod.yml` | No default values for secrets (`DB_*`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`). |
 | `logback-spring.xml` | Prod must emit JSON to stdout. Confirm by starting the jar with `SPRING_PROFILES_ACTIVE=prod`. |
 | `docker/` (Dockerfile, compose files) | Keep the runtime image non-root. Check with `make smoke`. Compose must run with `--project-directory .` (the `make` targets do this). |
-| `.github/workflows/` | One CI workflow. Don't add debug or duplicate workflows. |
+| `.github/workflows/` | Checks live only in `ci.yml` and image publishing only in `publish-image.yml`; `cd-dev.yml` / `cd-main.yml` just call them. Don't duplicate logic or add debug workflows. |
 | `pom.xml` | Every new dependency needs a stated reason in the commit message. Prefer Spring Boot–managed versions. |
 
 ## Forbidden shortcuts
@@ -92,7 +92,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 - Editing an applied Flyway migration, or `ddl-auto` other than `validate`.
 - Widening `permitAll()` matchers or catching `JwtException` more broadly to "fix" a 401.
 - Committing secrets. `env/.env` is git-ignored; `env/.env.example` holds placeholders only.
-- Force-pushing `main`, or committing directly to `main`: use a branch and PR.
+- Force-pushing or committing directly to `dev` or `main`: use a branch and a PR into `dev`.
 - Adding a framework or tool because another repo has it.
 
 ## Verifying changes

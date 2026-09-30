@@ -1,10 +1,11 @@
 # Weekly, grouped updates to avoid a pile of one-line PRs. Minor/patch bumps are grouped per
-# ecosystem; major bumps (e.g. Spring Boot 4) arrive as separate PRs and need a deliberate review.
+# ecosystem and target dev (they reach main with the next release); major bumps (e.g. Spring Boot 4) arrive as separate PRs and need a deliberate review.
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /
     schedule: { interval: weekly }
+    target-branch: dev
     open-pull-requests-limit: 5
     commit-message: { prefix: build, include: scope }
     groups:
@@ -14,6 +15,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    target-branch: dev
     commit-message: { prefix: ci }
     groups:
       actions:
@@ -22,6 +24,7 @@ updates:
   - package-ecosystem: docker
     directory: /docker
     schedule: { interval: weekly }
+    target-branch: dev
     commit-message: { prefix: build, include: scope }
     groups:
       docker-images:
