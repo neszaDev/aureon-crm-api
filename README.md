@@ -36,6 +36,7 @@ If port 5432 is already taken by another database, set `POSTGRES_PORT=5433` in `
 | `make down` / `make db-reset` | Stop containers / also delete the local database |
 
 Run `make` to list them all. Each target is a one-line alias for `./mvnw` or `docker compose`.
+Targets that need Docker check it first; on macOS they start Docker Desktop if it isn't running.
 
 ## Project layout
 

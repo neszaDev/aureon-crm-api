@@ -48,8 +48,9 @@ CI uploads the same files as the `test-reports` artifact. They are never committ
 
 ## Troubleshooting
 
-- **`Could not find a valid Docker environment`**: start Docker. Testcontainers needs 1.21.4
-  or newer for Docker Engine 29 (pinned in `pom.xml`).
+- **`Could not find a valid Docker environment`**: start Docker. `make verify` does this for you
+  on macOS (`scripts/ensure-docker.sh`); plain `./mvnw verify` doesn't. Testcontainers needs
+  1.21.4 or newer for Docker Engine 29 (pinned in `pom.xml`).
 - **`No qualifying bean of type 'UserMapper'` locally but not in CI**: the VS Code Java
   extension rebuilds `target/classes` while Maven runs, and races the MapStruct-generated
   class. Re-run without `clean`, or run from a fresh clone. It is not a code problem.

@@ -25,7 +25,8 @@ src/main/java/com/example/boilerplate/
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make
-scripts/       smoke-test.sh (prod-profile container check, used by CI and `make smoke`)
+scripts/       smoke-test.sh (prod-profile container check, CI + `make smoke`),
+               ensure-docker.sh (make targets: start Docker Desktop if needed)
 src/main/resources/
   application*.yml        profiles: local, dev, test, prod
   db/migration/V*__*.sql  Flyway, the only schema authority
