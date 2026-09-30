@@ -7,7 +7,7 @@ flowchart LR
   C[Client] --> RID[RequestCorrelationFilter<br/>X-Request-Id + MDC]
   RID --> JWT[JwtAuthenticationFilter<br/>Bearer token → principal]
   JWT --> SEC{SecurityConfig<br/>permitAll or authenticated}
-  SEC -->|denied| E403[403]
+  SEC -->|no valid token| E401[401 ApiError<br/>ApiAuthenticationEntryPoint]
   SEC --> CTRL[Controller<br/>@Valid, DTO records]
   CTRL --> SVC[Service<br/>@Transactional, rules]
   SVC --> REPO[Spring Data repository]
@@ -32,7 +32,8 @@ filter).
 
 - **Access tokens** are HS256 JWTs (`auth/JwtService`) with the email as subject and a `role`
   claim, and are short-lived (15 min by default). An invalid or missing token leaves the
-  request anonymous, and the filter chain answers 403 for protected paths.
+  request anonymous, and `ApiAuthenticationEntryPoint` answers protected paths with 401 and an
+  `ApiError` body. A valid token whose user was deleted also gets 401.
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   Each refresh rotates the token (the old one is deleted under a row lock), and logout deletes
   it.
@@ -56,9 +57,10 @@ See [docs/database.md](database.md).
 
 ## Operations
 
-Actuator supplies health (with liveness/readiness probes) and info, both public for
-orchestrators. Production exposure excludes the general metrics endpoint but keeps Prometheus
-scraping at `/actuator/prometheus` (authenticated). The prod profile logs JSON to stdout via
+Actuator supplies health (with the `/actuator/health/liveness` and `/readiness` probes) and
+info, both public for orchestrators. Production exposure excludes the general metrics endpoint.
+`/actuator/prometheus` is public so scrapers need no token: **restrict it at the network or
+ingress level** (don't route it from the internet). The prod profile logs JSON to stdout via
 logstash-logback-encoder. Every request carries an `X-Request-Id`, also placed in the logging
 MDC.
 

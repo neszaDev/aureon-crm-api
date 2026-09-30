@@ -55,8 +55,12 @@ if printf '%s\n' "$logs" | grep -q 'ERROR in ch.qos.logback'; then fail "logback
 json_lines=$(printf '%s\n' "$logs" | grep -c '^{"@timestamp"' || true)
 [ "$json_lines" -gt 0 ] || fail "prod logs are not JSON"
 
-# Prod must not expose the generic metrics endpoint (Prometheus scraping stays available).
+# Prod must not expose the generic metrics endpoint, but Prometheus must be scrapable.
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/metrics")
 [ "$code" != 200 ] || fail "/actuator/metrics is publicly exposed in prod"
+code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/prometheus")
+[ "$code" = 200 ] || fail "/actuator/prometheus returned $code, scrapers need 200"
+code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/health/readiness")
+[ "$code" = 200 ] || fail "readiness probe returned $code"
 
-echo "smoke: OK - health UP, $json_lines JSON log lines, metrics endpoint not public"
+echo "smoke: OK - health+readiness UP, $json_lines JSON log lines, prometheus scrapable, metrics not public"

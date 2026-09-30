@@ -89,7 +89,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 - Skipping or weakening checks: `-DskipTests`, `@Disabled`, deleting assertions, loosening
   `-Werror`, or excluding files from Spotless to get a green build.
 - Editing an applied Flyway migration, or `ddl-auto` other than `validate`.
-- Widening `permitAll()` matchers or catching `JwtException` more broadly to "fix" a 403.
+- Widening `permitAll()` matchers or catching `JwtException` more broadly to "fix" a 401.
 - Committing secrets. `env/.env` is git-ignored; `env/.env.example` holds placeholders only.
 - Force-pushing `main`, or committing directly to `main`: use a branch and PR.
 - Adding a framework or tool because another repo has it.
