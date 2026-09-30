@@ -265,26 +265,38 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
   `/actuator/prometheus` is public (restrict it at the network level); `/actuator/health/**`
   is public so the liveness/readiness probes work (they previously required a token).
 
-## Status (2026-09-30)
+## Status: completed 2026-09-30
 
-| Phase | PR | State |
+| Phase | PR(s) | State |
 |---|---|---|
 | 1 Audit | — | done (this document) |
 | 2 Foundation | #25 | merged |
 | 3 Tests | #26 | merged |
-| 4 Agent instructions | #27 | open, CI green |
-| 5 Quality gates | #28 | open, CI green |
-| `docker/` move | #29 | open, CI green |
-| 6 Documentation + root/env tidy | #30 | open, CI green |
-| Auth status codes, probes, Prometheus, Docker auto-start | #31 | open |
+| 4 Agent instructions | #27 | merged |
+| 5 Quality gates | #28 | merged (landed on `main` via #32) |
+| `docker/` move | #29 | merged (via #32) |
+| 6 Documentation, root and `env/` tidy | #30 | merged (via #32) |
+| Auth status codes, probes, Prometheus, Docker auto-start | #31 | merged (via #32) |
+| CI/CD - dev / main, GHCR publishing, PR cache clean-up | #34 | merged |
+| Wrap-up: Java 21 images realigned, patch updates, Dependabot majors separated | this PR | into `dev` |
+
+Repository settings applied: branch protection on `main` and `dev` (PR + `verify` +
+`image-smoke`, no force-push/deletion), environments `dev` and `main` (approval), automatic
+head-branch deletion, CodeQL default setup, Copilot code review ruleset.
+
+Since #34 the delivery flow is **feature → `dev` → release PR → `main`** (see
+[docs/ci.md](../ci.md)); the "PR onto `main`" rule above describes how this plan itself was
+delivered.
 
 ## Remaining / explicitly out of scope
-- Spring Boot 4.x / jjwt 0.13 upgrades: separate PRs via Dependabot after gates exist.
-- Deployment pipeline: **decided** (user): publish the tested image to GHCR with `dev` and
-  `main` environments (`cd-dev.yml`, `cd-main.yml`, reusable `publish-image.yml`). Deploying
-  that image to a host (ECS, etc.) is still open.
-- Stale remote branches: the five fully contained in `backup/before-reset-20260930` were
-  deleted. The others have commits found nowhere else, or open PRs (#5, #16, #18–#22); the
-  owner decides (keep the backup either way).
-- Possible later additions once gates are stable: a coverage ratchet, Error Prone, and OpenAPI
-  contract snapshot tests.
+- **Major upgrades**, each a deliberate migration on its own branch rather than a Dependabot
+  merge: Spring Boot 4.x, jjwt 0.13, Java 25 LTS (change `<java.version>`, the Docker images
+  and CI together; the smoke test enforces that they match).
+- **Deploying the published image** to a host (ECS or similar): a job after `publish` once a
+  target is chosen.
+- **Old history**: branch `backup/before-reset-20260930` (the pre-reset `main`) and tags
+  `archive/*` (8 former debugging branches with unique commits) keep everything recoverable.
+  The pre-reset Dependabot PRs and #16 were closed.
+- **Next plan (proposed)**: `0002-business-app-foundation`: template repository + init
+  script, roles/permissions, enforced module boundaries, audit trail; and the regression
+  safety net (API contract snapshot, coverage gate, ArchUnit rules, migration guard).
