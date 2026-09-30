@@ -253,6 +253,11 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
 - **`docker/` adopted** (user request, after Phase 5): the Dockerfile and compose files moved
   to `docker/` for a tidier root. Compose runs with `--project-directory .`, so `.env`, the
   build context and volume names stay rooted at the repo; `make` hides the flags.
+- **Root tidied** (user request): `ARCHITECTURE.md` → `docs/architecture.md`,
+  `CONTRIBUTING.md` → `.github/CONTRIBUTING.md` (GitHub still surfaces it), `.dockerignore` →
+  `docker/Dockerfile.dockerignore` (BuildKit per-Dockerfile ignore, now an allowlist of
+  `pom.xml` + `src/main`). Everything left at the root is required there by Maven, git,
+  editors, GitHub, AI agents or Compose.
 - **403 for missing/invalid tokens kept** and pinned by `SecurityIT`. Switching to 401 is an
   API change for clients and needs a decision.
 

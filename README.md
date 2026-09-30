@@ -43,7 +43,7 @@ Run `make` to list them all. Each target is a one-line alias for `./mvnw` or `do
 src/main/java/.../boilerplate/  feature packages: auth, user, testresult (+ security, common)
 src/main/resources/             application*.yml profiles, db/migration (Flyway), logback
 src/test/java/                  *Test = unit, *IT = integration (Testcontainers PostgreSQL)
-docker/                         Dockerfile and compose files
+docker/                         Dockerfile (+ its .dockerignore) and compose files
 scripts/                        smoke-test.sh (prod-profile container check)
 docs/                           guides (below) and the repository plan
 .githooks/                      pre-commit (format) and commit-msg (Conventional Commits)
@@ -53,13 +53,13 @@ docs/                           guides (below) and the repository plan
 
 | Guide | Covers |
 |---|---|
-| [Architecture](ARCHITECTURE.md) | Request flow, feature layout, security model, persistence |
+| [Architecture](docs/architecture.md) | Request flow, feature layout, security model, persistence |
 | [API guide](docs/api.md) | Endpoints, error format, curl walkthrough |
 | [Configuration](docs/configuration.md) | Every environment variable and profile |
 | [Database](docs/database.md) | Flyway migrations: adding, naming, rules |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers, coverage |
 | [CI](docs/ci.md) | Pipeline, reproducing it locally, Dependabot, branch protection |
-| [Contributing](CONTRIBUTING.md) | Branches, commits, PR checklist |
+| [Contributing](.github/CONTRIBUTING.md) | Branches, commits, PR checklist |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents (also a good checklist for humans) |
 | [Repository plan](docs/plans/0001-repository-hardening.md) | Why the repo is set up this way |
 

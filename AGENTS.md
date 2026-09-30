@@ -7,7 +7,7 @@ Keep this file the single source of truth; `CLAUDE.md` only imports it.
 
 A Spring Boot 3.5 / Java 21 REST API on PostgreSQL: JWT access tokens + rotating refresh
 tokens, an owner-scoped `test-results` CRUD example, Flyway migrations, Actuator/Prometheus,
-Docker. Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md). Why the repo is set up
+Docker. Architecture overview: [docs/architecture.md](docs/architecture.md). Why the repo is set up
 this way: [docs/plans/0001-repository-hardening.md](docs/plans/0001-repository-hardening.md).
 
 Deeper guides, read the relevant one before changing that area:

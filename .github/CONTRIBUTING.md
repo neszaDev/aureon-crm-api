@@ -35,13 +35,13 @@ Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`
 
 - `make verify` passes.
 - New behaviour has tests: `*Test` for logic, `*IT` for HTTP, security or persistence
-  ([Testing](docs/testing.md)).
+  ([Testing](../docs/testing.md)).
 - Schema changes are a new Flyway migration; existing ones are never edited
-  ([Database](docs/database.md)).
-- New config is documented in [Configuration](docs/configuration.md) and `.env.example`.
+  ([Database](../docs/database.md)).
+- New config is documented in [Configuration](../docs/configuration.md) and `.env.example`.
 - No secrets, `.env`, logs or build output in the diff.
 
-The full set of conventions and the "don't do this" list are in [AGENTS.md](AGENTS.md). It
+The full set of conventions and the "don't do this" list are in [AGENTS.md](../AGENTS.md). It
 applies to humans too.
 
 ## Reviewing

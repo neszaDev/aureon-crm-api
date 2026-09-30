@@ -43,13 +43,13 @@ filter).
 
 `AuditableEntity` supplies database-assigned IDs, UTC audit timestamps and optimistic-locking
 versions. Flyway is the sole schema authority: JPA validates the schema and never alters it.
-See [docs/database.md](docs/database.md).
+See [docs/database.md](database.md).
 
 ## Configuration and errors
 
 - `app.security.*` and `app.cors.*` bind to validated `@ConfigurationProperties` records, so
   bad configuration fails at startup rather than on first use. See
-  [docs/configuration.md](docs/configuration.md).
+  [docs/configuration.md](configuration.md).
 - `GlobalExceptionHandler` maps domain exceptions and client mistakes to 4xx responses with
   the `ApiError` shape. Only genuinely unexpected errors become a 500, and those are logged
   with the method and path.
@@ -67,4 +67,4 @@ MDC.
 Unit tests (`*Test`) cover logic in isolation. Integration tests (`*IT`) run the full context
 against real PostgreSQL via Testcontainers and cover HTTP contracts, security rules,
 persistence and migrations. CI additionally starts the runtime image with the prod profile
-(`scripts/smoke-test.sh`). See [docs/testing.md](docs/testing.md).
+(`scripts/smoke-test.sh`). See [docs/testing.md](testing.md).
