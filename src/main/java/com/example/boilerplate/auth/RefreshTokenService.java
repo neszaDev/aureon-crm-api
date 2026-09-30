@@ -17,7 +17,9 @@ public class RefreshTokenService {
   private final Duration ttl;
   private final SecureRandom random = new SecureRandom();
 
-  public RefreshTokenService(RefreshTokenRepository tokens, JwtService jwt,
+  public RefreshTokenService(
+      RefreshTokenRepository tokens,
+      JwtService jwt,
       @Value("${app.security.refresh-token-ttl}") Duration ttl) {
     this.tokens = tokens;
     this.jwt = jwt;
@@ -32,7 +34,8 @@ public class RefreshTokenService {
   }
 
   public AuthTokensResponse rotate(String raw) {
-    RefreshToken token = tokens.findByTokenHashForUpdate(hash(raw)).orElseThrow(InvalidRefreshTokenException::new);
+    RefreshToken token =
+        tokens.findByTokenHashForUpdate(hash(raw)).orElseThrow(InvalidRefreshTokenException::new);
     if (token.getExpiresAt().isBefore(Instant.now())) {
       tokens.delete(token);
       throw new InvalidRefreshTokenException();
@@ -47,7 +50,8 @@ public class RefreshTokenService {
   }
 
   private AuthTokensResponse response(User user, String refresh) {
-    return new AuthTokensResponse(jwt.issue(user), "Bearer", jwt.expiresInSeconds(), refresh, ttl.toSeconds());
+    return new AuthTokensResponse(
+        jwt.issue(user), "Bearer", jwt.expiresInSeconds(), refresh, ttl.toSeconds());
   }
 
   private String generate() {
@@ -59,7 +63,8 @@ public class RefreshTokenService {
   private String hash(String value) {
     try {
       return java.util.HexFormat.of()
-          .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+          .formatHex(
+              MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 is unavailable", e);
     }

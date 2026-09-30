@@ -7,14 +7,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
-    private final UserService service;
+  private final UserService service;
 
-    public UserController(UserService service) {
-        this.service = service;
-    }
+  public UserController(UserService service) {
+    this.service = service;
+  }
 
-    @GetMapping("/me")
-    UserResponse me(Authentication authentication) {
-        return service.currentUser(authentication.getName());
-    }
+  @GetMapping("/me")
+  UserResponse me(Authentication authentication) {
+    return service.currentUser(authentication.getName());
+  }
 }

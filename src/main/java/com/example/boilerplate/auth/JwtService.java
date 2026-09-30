@@ -15,7 +15,8 @@ public class JwtService {
   private final SecretKey key;
   private final Duration ttl;
 
-  public JwtService(@Value("${app.security.jwt.secret}") String secret,
+  public JwtService(
+      @Value("${app.security.jwt.secret}") String secret,
       @Value("${app.security.jwt.access-token-ttl}") Duration ttl) {
     this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     this.ttl = ttl;
@@ -23,8 +24,13 @@ public class JwtService {
 
   public String issue(User user) {
     Instant now = Instant.now();
-    return Jwts.builder().subject(user.getEmail()).claim("role", user.getRole().name()).issuedAt(Date.from(now))
-        .expiration(Date.from(now.plus(ttl))).signWith(key).compact();
+    return Jwts.builder()
+        .subject(user.getEmail())
+        .claim("role", user.getRole().name())
+        .issuedAt(Date.from(now))
+        .expiration(Date.from(now.plus(ttl)))
+        .signWith(key)
+        .compact();
   }
 
   public long expiresInSeconds() {
