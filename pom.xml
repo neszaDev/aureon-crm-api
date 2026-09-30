@@ -62,6 +62,38 @@
           </execution>
         </executions>
       </plugin>
+      <!-- Formatting: `./mvnw spotless:apply` fixes, `spotless:check` (bound to verify) fails on drift. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>3.10.3</version>
+        <configuration>
+          <java>
+            <googleJavaFormat><version>1.36.1</version></googleJavaFormat>
+            <removeUnusedImports/>
+          </java>
+          <formats>
+            <format>
+              <includes>
+                <include>*.md</include>
+                <include>docs/**/*.md</include>
+                <include>*.yml</include>
+                <include>.github/**/*.yml</include>
+                <include>src/**/*.yml</include>
+                <include>src/**/*.xml</include>
+                <include>src/**/*.sql</include>
+              </includes>
+              <trimTrailingWhitespace/>
+              <endWithNewline/>
+            </format>
+          </formats>
+        </configuration>
+        <executions>
+          <execution>
+            <goals><goal>check</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
       <!-- Runs *IT classes (Testcontainers/PostgreSQL) in integration-test/verify.
            Executions and version come from spring-boot-starter-parent. -->
       <plugin>
