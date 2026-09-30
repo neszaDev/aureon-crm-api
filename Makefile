@@ -4,7 +4,7 @@
 PROJECT := $(notdir $(CURDIR))
 COMPOSE_ALL := docker compose --profile local --profile dev
 
-.PHONY: help setup fmt lint test verify watch up down db-reset
+.PHONY: help setup fmt lint test verify smoke watch up down db-reset
 
 help: ## List targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -24,6 +24,10 @@ test: ## Unit tests only (*Test, no Docker needed)
 
 verify: ## Everything CI runs: format, compile, unit + integration tests (needs Docker)
 	./mvnw verify
+
+smoke: ## Build the runtime image and smoke-test it with the prod profile (as CI does)
+	docker build --target runtime -t $(PROJECT):smoke .
+	scripts/smoke-test.sh $(PROJECT):smoke
 
 watch: ## Run locally with hot reload (compose local profile)
 	docker compose --profile local build app-local
