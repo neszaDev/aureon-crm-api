@@ -24,6 +24,7 @@ src/main/java/com/example/boilerplate/
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
+env/           .env.example (tracked); local .env (git-ignored), read by compose via make
 scripts/       smoke-test.sh (prod-profile container check, used by CI and `make smoke`)
 src/main/resources/
   application*.yml        profiles: local, dev, test, prod
@@ -51,7 +52,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 1. `./mvnw verify` passes: Spotless, `-Xlint:all -Werror`, unit tests, ITs against real Postgres.
 2. New or changed behaviour is covered by a test: a `*Test` for logic, a `*IT` for HTTP,
    security, persistence or migrations.
-3. `git status` shows only intended files. Never commit `target/`, logs, dumps, `.env`, zips,
+3. `git status` shows only intended files. Never commit `target/`, logs, dumps, `env/.env`, zips,
    jars or patches.
 4. Commit messages follow Conventional Commits (`fix(auth): ...`). The hooks in `.githooks/`
    check this once `make setup` has been run.
@@ -89,7 +90,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   `-Werror`, or excluding files from Spotless to get a green build.
 - Editing an applied Flyway migration, or `ddl-auto` other than `validate`.
 - Widening `permitAll()` matchers or catching `JwtException` more broadly to "fix" a 403.
-- Committing secrets. `.env` is git-ignored; `.env.example` holds placeholders only.
+- Committing secrets. `env/.env` is git-ignored; `env/.env.example` holds placeholders only.
 - Force-pushing `main`, or committing directly to `main`: use a branch and PR.
 - Adding a framework or tool because another repo has it.
 

@@ -32,10 +32,11 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 `app.security.*` and `app.cors.*` bind to validated records (`auth/AuthProperties`,
 `security/CorsProperties`). An invalid value stops the app at startup with the property name.
 
-## Local Docker variables (`.env`)
+## Local Docker variables (`env/.env`)
 
-`make setup` copies `.env.example` to `.env` (git-ignored). Compose reads it from the repo
-root.
+`make setup` (or the first `make watch` / `make up`) copies `env/.env.example` to `env/.env`,
+which is git-ignored. The `make` targets pass it to Compose with `--env-file env/.env`. A bare
+`docker compose` won't find it; use `make` or pass the flag yourself.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -44,5 +45,5 @@ root.
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
 | `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS` | as above | Passed through to the app container |
 
-When you add a variable, update `application*.yml`, this page and `.env.example` together.
+When you add a variable, update `application*.yml`, this page and `env/.env.example` together.
 Never commit real values.

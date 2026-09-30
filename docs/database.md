@@ -39,6 +39,6 @@ Migrations run automatically at application startup, in every profile.
 ## Local database
 
 - Connect with `psql -h localhost -p ${POSTGRES_PORT:-5432} -U boilerplate boilerplate`
-  (password from `.env`).
+  (password from `env/.env`).
 - `make db-reset` deletes the local volume. The next `make watch` or `make up` recreates the
   database and reapplies all migrations.

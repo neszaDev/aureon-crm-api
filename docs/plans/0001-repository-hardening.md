@@ -94,7 +94,6 @@ by Java-native equivalents or skipped.
 | pnpm, TypeScript, ESLint, Prettier, Jest, commitlint, Husky | Node ecosystem; replaced by Maven-native tools above |
 | `lib/` | Maven manages dependencies |
 | root `migrations/` | Flyway's convention is `src/main/resources/db/migration`; moving it adds config for no gain |
-| `env/` | Spring profiles plus `.env.example` already cover it |
 | `test-reports/`, `uploads/` | Generated output belongs in `target/`, and there is no upload feature |
 | `.aws/` | No AWS deployment target is defined. Add it when there is one. |
 | `GEMINI.md`, `.codex/`, `.agents/` | Only Claude Code is used, so these would duplicate `AGENTS.md` |
@@ -258,6 +257,9 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
   `docker/Dockerfile.dockerignore` (BuildKit per-Dockerfile ignore, now an allowlist of
   `pom.xml` + `src/main`). Everything left at the root is required there by Maven, git,
   editors, GitHub, AI agents or Compose.
+- **`env/` adopted** (user request): `env/.env.example` is tracked and `env/.env` is local
+  and git-ignored. Possible once all compose use went through `make`, which passes
+  `--env-file env/.env` and creates the file from the example on first use.
 - **403 for missing/invalid tokens kept** and pinned by `SecurityIT`. Switching to 401 is an
   API change for clients and needs a decision.
 

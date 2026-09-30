@@ -14,14 +14,14 @@ CRUD feature as a worked example.
 ## Quick start
 
 ```sh
-make setup   # enable git hooks, create .env from .env.example
+make setup   # enable git hooks, create env/.env from env/.env.example
 make watch   # Postgres + app with hot reload on http://localhost:8080
 ```
 
 Then open Swagger UI at `http://localhost:8080/swagger-ui/index.html`. Health is at
 `/actuator/health`. For a first request, see the [API guide](docs/api.md).
 
-If port 5432 is already taken by another database, set `POSTGRES_PORT=5433` in `.env`.
+If port 5432 is already taken by another database, set `POSTGRES_PORT=5433` in `env/.env`.
 
 ## Commands
 
@@ -46,6 +46,7 @@ src/test/java/                  *Test = unit, *IT = integration (Testcontainers 
 docker/                         Dockerfile (+ its .dockerignore) and compose files
 scripts/                        smoke-test.sh (prod-profile container check)
 docs/                           guides (below) and the repository plan
+env/                            .env.example (tracked) and your local .env (git-ignored)
 .githooks/                      pre-commit (format) and commit-msg (Conventional Commits)
 ```
 

@@ -3,7 +3,7 @@
 ## Setup
 
 ```sh
-make setup   # git hooks + .env
+make setup   # git hooks + env/.env
 make verify  # should pass before you change anything (Docker must be running)
 ```
 
@@ -38,8 +38,8 @@ Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`
   ([Testing](../docs/testing.md)).
 - Schema changes are a new Flyway migration; existing ones are never edited
   ([Database](../docs/database.md)).
-- New config is documented in [Configuration](../docs/configuration.md) and `.env.example`.
-- No secrets, `.env`, logs or build output in the diff.
+- New config is documented in [Configuration](../docs/configuration.md) and `env/.env.example`.
+- No secrets, `env/.env`, logs or build output in the diff.
 
 The full set of conventions and the "don't do this" list are in [AGENTS.md](../AGENTS.md). It
 applies to humans too.

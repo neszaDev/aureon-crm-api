@@ -53,5 +53,5 @@ CI uploads the same files as the `test-reports` artifact. They are never committ
 - **`No qualifying bean of type 'UserMapper'` locally but not in CI**: the VS Code Java
   extension rebuilds `target/classes` while Maven runs, and races the MapStruct-generated
   class. Re-run without `clean`, or run from a fresh clone. It is not a code problem.
-- **Port 5432 already allocated** (`make watch` / `make up`): set `POSTGRES_PORT` in `.env`.
+- **Port 5432 already allocated** (`make watch` / `make up`): set `POSTGRES_PORT` in `env/.env`.
   Tests are unaffected, because Testcontainers picks a random port.

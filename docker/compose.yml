@@ -1,6 +1,7 @@
 # Run via make (make watch / make up / make down), which passes:
-#   docker compose --project-directory . -f docker/compose.yml -f docker/compose.override.yml
-# --project-directory keeps paths, .env and volume names relative to the repo root.
+#   docker compose --project-directory . --env-file env/.env \
+#     -f docker/compose.yml -f docker/compose.override.yml
+# Variables come from env/.env; --project-directory keeps paths and volume names repo-rooted.
 services:
   postgres:
     profiles: [local, dev]
@@ -29,7 +30,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-boilerplate}
       DB_USERNAME: ${POSTGRES_USER:-boilerplate}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-boilerplate}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in env/.env}
       # Optional; defaults match application.yml.
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-P30D}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
@@ -60,7 +61,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-boilerplate}
       DB_USERNAME: ${POSTGRES_USER:-boilerplate}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-boilerplate}
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in env/.env}
       # Optional; defaults match application.yml.
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-P30D}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}

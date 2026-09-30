@@ -1,5 +1,5 @@
 # Allowlist: the build only needs pom.xml and the main sources (see docker/Dockerfile).
-# Everything else, including .env, target/ and tests, stays out of the build context.
+# Everything else, including env/, target/ and tests, stays out of the build context.
 *
 !pom.xml
 !src/main

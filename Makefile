@@ -2,8 +2,9 @@
 # CI calls the same underlying commands. Run `make` to list targets.
 .DEFAULT_GOAL := help
 PROJECT := $(notdir $(CURDIR))
-# Compose files live in docker/; the project directory stays the repo root (.env, build context).
-COMPOSE := docker compose --project-directory . -f docker/compose.yml -f docker/compose.override.yml
+# Compose files live in docker/, local variables in env/.env; the project directory stays the
+# repo root so the build context and volume names don't change.
+COMPOSE := docker compose --project-directory . --env-file env/.env -f docker/compose.yml -f docker/compose.override.yml
 COMPOSE_ALL := $(COMPOSE) --profile local --profile dev
 
 .PHONY: help setup fmt lint test verify smoke watch up down db-reset
@@ -11,9 +12,13 @@ COMPOSE_ALL := $(COMPOSE) --profile local --profile dev
 help: ## List targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## One-time: enable git hooks, create .env from .env.example
+setup: env/.env ## One-time: enable git hooks, create env/.env from env/.env.example
 	git config core.hooksPath .githooks
-	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
+
+# Created on first use by any compose target; never overwritten.
+env/.env:
+	cp env/.env.example env/.env
+	@echo "Created env/.env from env/.env.example"
 
 fmt: ## Format all sources (Spotless)
 	./mvnw -q spotless:apply
@@ -31,16 +36,16 @@ smoke: ## Build the runtime image and smoke-test it with the prod profile (as CI
 	docker build -f docker/Dockerfile --target runtime -t $(PROJECT):smoke .
 	scripts/smoke-test.sh $(PROJECT):smoke
 
-watch: ## Run locally with hot reload (compose local profile)
+watch: env/.env ## Run locally with hot reload (compose local profile)
 	$(COMPOSE) --profile local build app-local
 	$(COMPOSE) --profile local watch
 
-up: ## Run the packaged image with a local Postgres (compose dev profile)
+up: env/.env ## Run the packaged image with a local Postgres (compose dev profile)
 	$(COMPOSE) --profile dev up --build
 
-down: ## Stop local/dev containers (keeps data)
+down: env/.env ## Stop local/dev containers (keeps data)
 	$(COMPOSE_ALL) down
 
-db-reset: ## Stop containers and delete the local Postgres volume
+db-reset: env/.env ## Stop containers and delete the local Postgres volume
 	$(COMPOSE_ALL) down
 	docker volume rm -f $(PROJECT)_postgres-data
