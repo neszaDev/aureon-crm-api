@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.time.*;
 import java.util.Base64;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,12 +17,10 @@ public class RefreshTokenService {
   private final SecureRandom random = new SecureRandom();
 
   public RefreshTokenService(
-      RefreshTokenRepository tokens,
-      JwtService jwt,
-      @Value("${app.security.refresh-token-ttl}") Duration ttl) {
+      RefreshTokenRepository tokens, JwtService jwt, AuthProperties properties) {
     this.tokens = tokens;
     this.jwt = jwt;
-    this.ttl = ttl;
+    this.ttl = properties.refreshTokenTtl();
   }
 
   public AuthTokensResponse create(User user) {
