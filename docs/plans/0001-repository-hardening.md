@@ -280,7 +280,9 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
 
 ## Remaining / explicitly out of scope
 - Spring Boot 4.x / jjwt 0.13 upgrades: separate PRs via Dependabot after gates exist.
-- Deployment pipeline (registry push, environments). Needs a decision on the hosting target.
+- Deployment pipeline: **decided** (user): publish the tested image to GHCR with `dev` and
+  `main` environments (`cd-dev.yml`, `cd-main.yml`, reusable `publish-image.yml`). Deploying
+  that image to a host (ECS, etc.) is still open.
 - Stale remote branches: the five fully contained in `backup/before-reset-20260930` were
   deleted. The others have commits found nowhere else, or open PRs (#5, #16, #18–#22); the
   owner decides (keep the backup either way).

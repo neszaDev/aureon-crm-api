@@ -60,14 +60,16 @@ env/                            .env.example (tracked) and your local .env (git-
 | [Configuration](docs/configuration.md) | Every environment variable and profile |
 | [Database](docs/database.md) | Flyway migrations: adding, naming, rules |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers, coverage |
-| [CI](docs/ci.md) | Pipeline, reproducing it locally, Dependabot, branch protection |
+| [CI/CD](docs/ci.md) | Branches, environments, image publishing, releasing, Dependabot |
 | [Contributing](.github/CONTRIBUTING.md) | Branches, commits, PR checklist |
 | [AGENTS.md](AGENTS.md) | Rules for AI coding agents (also a good checklist for humans) |
 | [Repository plan](docs/plans/0001-repository-hardening.md) | Why the repo is set up this way |
 
 ## Deploying
 
-The runtime image is built with `docker build -f docker/Dockerfile --target runtime .`. Run it
+CI/CD publishes the tested runtime image to GitHub Container Registry: `:dev` from the `dev`
+branch, and `:latest` / `:1.2.3` from `main` and version tags after an approval. See
+[CI/CD](docs/ci.md). To build it yourself: `docker build -f docker/Dockerfile --target runtime .`. Run it
 with `SPRING_PROFILES_ACTIVE=prod` and set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
 `JWT_SECRET` and `CORS_ALLOWED_ORIGINS`; the prod profile has no defaults for them. Pass
 `APP_VERSION` (shown at `/actuator/info`) and tag releases with semantic versions

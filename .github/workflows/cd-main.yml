@@ -1,0 +1,24 @@
+# Every push to main or a v* tag: run CI, wait for approval on the `main` environment, then
+# publish ghcr.io/<repo>:main + :latest, or :1.2.3 + :1.2 for a tag (+ :sha-<short>).
+name: CI/CD - main
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    uses: ./.github/workflows/publish-image.yml
+    with:
+      environment: main
+    permissions:
+      contents: read
+      packages: write
