@@ -19,17 +19,25 @@ public class SecurityConfig {
   }
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwt) throws Exception {
-    return http.csrf(c -> c.disable()).cors(c -> {
-    }).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests(a -> a
-        .requestMatchers(
-            "/api/v1/auth/**",
-            "/actuator/health",
-            "/actuator/info",
-            "/swagger-ui/**",
-            "/v3/api-docs/**")
-        .permitAll().requestMatchers(HttpMethod.OPTIONS,
-        "/**").permitAll().anyRequest().authenticated())
-        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class).build();
+  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwt)
+      throws Exception {
+    return http.csrf(c -> c.disable())
+        .cors(c -> {})
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(
+            a ->
+                a.requestMatchers(
+                        "/api/v1/auth/**",
+                        "/actuator/health",
+                        "/actuator/info",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.OPTIONS, "/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+        .build();
   }
 }

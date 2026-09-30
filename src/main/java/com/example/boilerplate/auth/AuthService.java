@@ -15,7 +15,8 @@ public class AuthService {
   private final PasswordEncoder encoder;
   private final RefreshTokenService refreshTokens;
 
-  public AuthService(UserRepository users, PasswordEncoder encoder, RefreshTokenService refreshTokens) {
+  public AuthService(
+      UserRepository users, PasswordEncoder encoder, RefreshTokenService refreshTokens) {
     this.users = users;
     this.encoder = encoder;
     this.refreshTokens = refreshTokens;
@@ -28,8 +29,10 @@ public class AuthService {
   }
 
   public AuthTokensResponse login(LoginRequest r) {
-    User u = users.findByEmail(r.email().toLowerCase())
-        .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+    User u =
+        users
+            .findByEmail(r.email().toLowerCase())
+            .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
     if (!encoder.matches(r.password(), u.getPasswordHash()))
       throw new BadCredentialsException("Invalid email or password");
     return refreshTokens.create(u);

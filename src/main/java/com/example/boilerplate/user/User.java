@@ -8,14 +8,15 @@ import jakarta.persistence.*;
 public class User extends AuditableEntity {
   @Column(nullable = false, unique = true, length = 254)
   private String email;
+
   @Column(nullable = false)
   private String passwordHash;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private Role role = Role.USER;
 
-  protected User() {
-  }
+  protected User() {}
 
   public User(String email, String passwordHash) {
     this.email = email.toLowerCase();

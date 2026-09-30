@@ -1,0 +1,7 @@
+#!/bin/sh
+# Block commits with formatting drift. Fix with: ./mvnw spotless:apply
+# Installed by `make setup` (git config core.hooksPath .githooks).
+if ! ./mvnw -q -B spotless:check >/dev/null 2>&1; then
+  echo "pre-commit: formatting check failed. Run ./mvnw spotless:apply and re-stage." >&2
+  exit 1
+fi

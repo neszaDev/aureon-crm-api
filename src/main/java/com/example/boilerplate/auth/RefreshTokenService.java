@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.time.*;
 import java.util.Base64;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -17,11 +16,11 @@ public class RefreshTokenService {
   private final Duration ttl;
   private final SecureRandom random = new SecureRandom();
 
-  public RefreshTokenService(RefreshTokenRepository tokens, JwtService jwt,
-      @Value("${app.security.refresh-token-ttl}") Duration ttl) {
+  public RefreshTokenService(
+      RefreshTokenRepository tokens, JwtService jwt, AuthProperties properties) {
     this.tokens = tokens;
     this.jwt = jwt;
-    this.ttl = ttl;
+    this.ttl = properties.refreshTokenTtl();
   }
 
   public AuthTokensResponse create(User user) {
@@ -32,7 +31,8 @@ public class RefreshTokenService {
   }
 
   public AuthTokensResponse rotate(String raw) {
-    RefreshToken token = tokens.findByTokenHashForUpdate(hash(raw)).orElseThrow(InvalidRefreshTokenException::new);
+    RefreshToken token =
+        tokens.findByTokenHashForUpdate(hash(raw)).orElseThrow(InvalidRefreshTokenException::new);
     if (token.getExpiresAt().isBefore(Instant.now())) {
       tokens.delete(token);
       throw new InvalidRefreshTokenException();
@@ -47,7 +47,8 @@ public class RefreshTokenService {
   }
 
   private AuthTokensResponse response(User user, String refresh) {
-    return new AuthTokensResponse(jwt.issue(user), "Bearer", jwt.expiresInSeconds(), refresh, ttl.toSeconds());
+    return new AuthTokensResponse(
+        jwt.issue(user), "Bearer", jwt.expiresInSeconds(), refresh, ttl.toSeconds());
   }
 
   private String generate() {
@@ -59,7 +60,8 @@ public class RefreshTokenService {
   private String hash(String value) {
     try {
       return java.util.HexFormat.of()
-          .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+          .formatHex(
+              MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 is unavailable", e);
     }

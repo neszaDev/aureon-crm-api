@@ -1,0 +1,3 @@
+# Mechanical reformats. Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# style: apply google-java-format to all Java sources
+dd7aa7a70aba48704904a669b7b46be415ff0d15

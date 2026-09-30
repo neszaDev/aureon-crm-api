@@ -8,16 +8,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class UserService {
-    private final UserRepository users;
-    private final UserMapper mapper;
+  private final UserRepository users;
+  private final UserMapper mapper;
 
-    public UserService(UserRepository users, UserMapper mapper) {
-        this.users = users;
-        this.mapper = mapper;
-    }
+  public UserService(UserRepository users, UserMapper mapper) {
+    this.users = users;
+    this.mapper = mapper;
+  }
 
-    public UserResponse currentUser(String email) {
-        return users.findByEmail(email).map(mapper::toResponse)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-    }
+  public UserResponse currentUser(String email) {
+    return users
+        .findByEmail(email)
+        .map(mapper::toResponse)
+        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+  }
 }
