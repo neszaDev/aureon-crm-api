@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +33,12 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(BadCredentialsException.class)
   ResponseEntity<ApiError> unauthorized(BadCredentialsException e, HttpServletRequest r) {
     return error(HttpStatus.UNAUTHORIZED, e.getMessage(), r, Map.of());
+  }
+
+  /** A valid token whose user no longer exists (e.g. deleted account). */
+  @ExceptionHandler(UsernameNotFoundException.class)
+  ResponseEntity<ApiError> unknownUser(UsernameNotFoundException e, HttpServletRequest r) {
+    return error(HttpStatus.UNAUTHORIZED, "Authentication required", r, Map.of());
   }
 
   @ExceptionHandler(InvalidRefreshTokenException.class)

@@ -13,8 +13,7 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 | Status | When |
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
-| 401 | Wrong email/password, invalid or expired refresh token |
-| 403 | Missing or invalid access token on a protected endpoint |
+| 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
 | 409 | Email already registered |
 
