@@ -1,12 +1,13 @@
-# The only CI workflow. Each job runs the same command a developer runs locally:
+# CI checks. Each job runs the same command a developer runs locally:
 #   verify      -> make verify  (./mvnw verify: Spotless, -Werror compile, unit + integration tests)
 #   image-smoke -> make smoke   (runtime image started with the prod profile)
+# Runs on every PR, and is called by cd-dev.yml / cd-main.yml before anything is published,
+# so pushes to dev/main are checked there (no separate push trigger here).
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read

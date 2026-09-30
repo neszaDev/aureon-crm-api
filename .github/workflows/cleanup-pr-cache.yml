@@ -1,0 +1,25 @@
+# When a PR closes, delete the Actions caches created for its merge ref (Maven dependencies,
+# Docker layers). They can never be reused and otherwise count against the 10 GB repo limit.
+name: Cleanup PR branch cache
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete caches for refs/pull/${{ github.event.pull_request.number }}/merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          ids=$(gh cache list --repo "$REPO" --ref "$REF" --limit 100 --json id --jq '.[].id')
+          for id in $ids; do gh cache delete "$id" --repo "$REPO"; done
+          echo "Deleted $(printf '%s\n' "$ids" | grep -c . || true) cache(s) for $REF"
