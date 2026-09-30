@@ -19,7 +19,7 @@ updates:
     commit-message: { prefix: ci }
     groups:
       actions:
-        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: docker
     directory: /docker
@@ -28,4 +28,8 @@ updates:
     commit-message: { prefix: build, include: scope }
     groups:
       docker-images:
-        patterns: ["*"]
+        update-types: [minor, patch]
+    # The JDK/JRE major is a project decision (pom.xml <java.version>), never a routine bump.
+    ignore:
+      - dependency-name: eclipse-temurin
+        update-types: ["version-update:semver-major"]
