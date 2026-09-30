@@ -1,3 +1,6 @@
+# Run via make (make watch / make up / make down), which passes:
+#   docker compose --project-directory . -f docker/compose.yml -f docker/compose.override.yml
+# --project-directory keeps paths, .env and volume names relative to the repo root.
 services:
   postgres:
     profiles: [local, dev]
@@ -19,6 +22,7 @@ services:
     profiles: [local]
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: local
     environment:
       SPRING_PROFILES_ACTIVE: local
@@ -46,6 +50,7 @@ services:
     profiles: [dev]
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: runtime
     environment:
       SPRING_PROFILES_ACTIVE: dev
@@ -62,6 +67,7 @@ services:
     profiles: [prod]
     build:
       context: .
+      dockerfile: docker/Dockerfile
       target: runtime
     environment:
       # List syntax passes these through only when defined by the deployment.

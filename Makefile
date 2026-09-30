@@ -2,7 +2,9 @@
 # CI calls the same underlying commands. Run `make` to list targets.
 .DEFAULT_GOAL := help
 PROJECT := $(notdir $(CURDIR))
-COMPOSE_ALL := docker compose --profile local --profile dev
+# Compose files live in docker/; the project directory stays the repo root (.env, build context).
+COMPOSE := docker compose --project-directory . -f docker/compose.yml -f docker/compose.override.yml
+COMPOSE_ALL := $(COMPOSE) --profile local --profile dev
 
 .PHONY: help setup fmt lint test verify smoke watch up down db-reset
 
@@ -26,15 +28,15 @@ verify: ## Everything CI runs: format, compile, unit + integration tests (needs 
 	./mvnw verify
 
 smoke: ## Build the runtime image and smoke-test it with the prod profile (as CI does)
-	docker build --target runtime -t $(PROJECT):smoke .
+	docker build -f docker/Dockerfile --target runtime -t $(PROJECT):smoke .
 	scripts/smoke-test.sh $(PROJECT):smoke
 
 watch: ## Run locally with hot reload (compose local profile)
-	docker compose --profile local build app-local
-	docker compose --profile local watch
+	$(COMPOSE) --profile local build app-local
+	$(COMPOSE) --profile local watch
 
 up: ## Run the packaged image with a local Postgres (compose dev profile)
-	docker compose --profile dev up --build
+	$(COMPOSE) --profile dev up --build
 
 down: ## Stop local/dev containers (keeps data)
 	$(COMPOSE_ALL) down

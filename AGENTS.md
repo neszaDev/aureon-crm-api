@@ -19,6 +19,8 @@ src/main/java/com/example/boilerplate/
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
+docker/        Dockerfile (local/build/runtime stages), compose.yml + override
+scripts/       smoke-test.sh (prod-profile container check, used by CI and `make smoke`)
 src/main/resources/
   application*.yml        profiles: local, dev, test, prod
   db/migration/V*__*.sql  Flyway, the only schema authority
@@ -73,7 +75,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 | `security/SecurityConfig.java`, `auth/` | Any change to access rules or token handling needs an IT (`SecurityIT`, `AuthFlowIT`). |
 | `application-prod.yml` | No default values for secrets (`DB_*`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`). |
 | `logback-spring.xml` | Prod must emit JSON to stdout. Confirm by starting the jar with `SPRING_PROFILES_ACTIVE=prod`. |
-| `Dockerfile`, `docker-compose*.yml` | Keep the runtime image non-root. Check with `docker build --target runtime .`. |
+| `docker/` (Dockerfile, compose files) | Keep the runtime image non-root. Check with `make smoke`. Compose must run with `--project-directory .` (the `make` targets do this). |
 | `.github/workflows/` | One CI workflow. Don't add debug or duplicate workflows. |
 | `pom.xml` | Every new dependency needs a stated reason in the commit message. Prefer Spring Boot–managed versions. |
 

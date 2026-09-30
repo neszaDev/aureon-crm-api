@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - run: docker build --target runtime -t spring-postgres-boilerplate:${{ github.sha }} .
+      - run: docker build -f docker/Dockerfile --target runtime -t spring-postgres-boilerplate:${{ github.sha }} .
       - run: scripts/smoke-test.sh spring-postgres-boilerplate:${{ github.sha }}
       - name: Upload app log
         if: failure()

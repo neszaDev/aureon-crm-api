@@ -95,7 +95,6 @@ by Java-native equivalents or skipped.
 | `lib/` | Maven manages dependencies |
 | root `migrations/` | Flyway's convention is `src/main/resources/db/migration`; moving it adds config for no gain |
 | `env/` | Spring profiles plus `.env.example` already cover it |
-| `docker/` | One Dockerfile and one compose file. Revisit only if more images appear. |
 | `test-reports/`, `uploads/` | Generated output belongs in `target/`, and there is no upload feature |
 | `.aws/` | No AWS deployment target is defined. Add it when there is one. |
 | `GEMINI.md`, `.codex/`, `.agents/` | Only Claude Code is used, so these would duplicate `AGENTS.md` |
@@ -249,6 +248,13 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
    `git ls-files | grep -E '\.(log|zip|jar|patch)$|^target/'` and confirm it returns nothing.
 6. Push the branch, confirm GitHub Actions is green, and open the PR.
 7. Report at the end of each phase in the format above.
+
+## Decisions made during implementation
+- **`docker/` adopted** (user request, after Phase 5): the Dockerfile and compose files moved
+  to `docker/` for a tidier root. Compose runs with `--project-directory .`, so `.env`, the
+  build context and volume names stay rooted at the repo; `make` hides the flags.
+- **403 for missing/invalid tokens kept** and pinned by `SecurityIT`. Switching to 401 is an
+  API change for clients and needs a decision.
 
 ## Remaining / explicitly out of scope
 - Spring Boot 4.x / jjwt 0.13 upgrades: separate PRs via Dependabot after gates exist.

@@ -7,9 +7,11 @@ A production-oriented Spring Boot 3 / Java 21 starter using PostgreSQL, Flyway, 
 1. Copy `.env.example` to `.env` and set a strong `JWT_SECRET` (at least 32 bytes).
 2. Choose one Docker profile:
 
-   - Local hot reload: `docker compose --profile local build app-local && docker compose --profile local watch`
-   - Development image: `docker compose --profile dev up --build`
-   - Production image: `docker compose --profile prod up --build`
+   - Local hot reload: `make watch`
+   - Development image: `make up`
+   - Production image: `docker compose --project-directory . -f docker/compose.yml --profile prod up --build`
+
+   Docker files live in `docker/`; the `make` targets pass the compose file paths for you.
 
    The `local` profile runs Maven and enables Spring DevTools. Changes under `src/` sync into the container, then Maven restarts and recompiles the application automatically. `dev` and `prod` run the packaged, non-root JRE image. Production requires real `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, and `CORS_ALLOWED_ORIGINS` values in its deployment environment.
 
