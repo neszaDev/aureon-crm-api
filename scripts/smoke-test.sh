@@ -23,6 +23,12 @@ fail() {
   exit 1
 }
 
+# The runtime JRE must be the Java major the project targets (pom.xml <java.version>).
+expected_java=$(sed -n 's:.*<java.version>\([0-9]*\)</java.version>.*:\1:p' pom.xml)
+runtime_java=$(docker run --rm --entrypoint java "$IMAGE" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)
+[ -n "$expected_java" ] && [ "$runtime_java" = "$expected_java" ] ||
+  { echo "smoke: FAIL - runtime Java ${runtime_java:-?} != pom.xml java.version ${expected_java:-?}" >&2; exit 1; }
+
 docker network create "$RUN" >/dev/null
 docker run -d --name "$RUN-db" --network "$RUN" \
   -e POSTGRES_DB=app -e POSTGRES_USER=app -e POSTGRES_PASSWORD=smoke \
@@ -63,4 +69,4 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/p
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/health/readiness")
 [ "$code" = 200 ] || fail "readiness probe returned $code"
 
-echo "smoke: OK - health+readiness UP, $json_lines JSON log lines, prometheus scrapable, metrics not public"
+echo "smoke: OK - Java $runtime_java, health+readiness UP, $json_lines JSON log lines, prometheus scrapable, metrics not public"
