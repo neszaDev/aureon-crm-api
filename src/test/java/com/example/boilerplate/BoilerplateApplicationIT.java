@@ -1,25 +1,23 @@
 package com.example.boilerplate;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.example.boilerplate.support.AbstractIntegrationTest;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationState;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.*;
+import org.springframework.beans.factory.annotation.Autowired;
 
-@Testcontainers
-@SpringBootTest
-class BoilerplateApplicationIT {
-  @Container
-  static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
-
-  @DynamicPropertySource
-  static void database(DynamicPropertyRegistry r) {
-    r.add("spring.datasource.url", postgres::getJdbcUrl);
-    r.add("spring.datasource.username", postgres::getUsername);
-    r.add("spring.datasource.password", postgres::getPassword);
-  }
+/** Context starts against real PostgreSQL: Flyway migrates and Hibernate validates the schema. */
+class BoilerplateApplicationIT extends AbstractIntegrationTest {
+  @Autowired Flyway flyway;
 
   @Test
-  void contextLoads() {}
+  void allMigrationsAppliedAndNonePending() {
+    var info = flyway.info();
+    assertThat(info.pending()).isEmpty();
+    assertThat(info.applied())
+        .isNotEmpty()
+        .allSatisfy(m -> assertThat(m.getState()).isEqualTo(MigrationState.SUCCESS));
+  }
 }
