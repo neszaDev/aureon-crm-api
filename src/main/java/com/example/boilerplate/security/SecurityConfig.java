@@ -19,7 +19,8 @@ public class SecurityConfig {
   }
 
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwt)
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http, JwtAuthenticationFilter jwt, ApiAuthenticationEntryPoint entryPoint)
       throws Exception {
     return http.csrf(c -> c.disable())
         .cors(c -> {})
@@ -28,8 +29,11 @@ public class SecurityConfig {
             a ->
                 a.requestMatchers(
                         "/api/v1/auth/**",
-                        "/actuator/health",
+                        // /** also covers the liveness/readiness probe groups.
+                        "/actuator/health/**",
                         "/actuator/info",
+                        // Public for scrapers; restrict at the network/ingress level in prod.
+                        "/actuator/prometheus",
                         "/swagger-ui/**",
                         "/v3/api-docs/**")
                     .permitAll()
@@ -37,6 +41,7 @@ public class SecurityConfig {
                     .permitAll()
                     .anyRequest()
                     .authenticated())
+        .exceptionHandling(e -> e.authenticationEntryPoint(entryPoint))
         .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
         .build();
   }

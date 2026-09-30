@@ -2,16 +2,23 @@
 # CI calls the same underlying commands. Run `make` to list targets.
 .DEFAULT_GOAL := help
 PROJECT := $(notdir $(CURDIR))
-COMPOSE_ALL := docker compose --profile local --profile dev
+# Compose files live in docker/, local variables in env/.env; the project directory stays the
+# repo root so the build context and volume names don't change.
+COMPOSE := docker compose --project-directory . --env-file env/.env -f docker/compose.yml -f docker/compose.override.yml
+COMPOSE_ALL := $(COMPOSE) --profile local --profile dev
 
-.PHONY: help setup fmt lint test verify watch up down db-reset
+.PHONY: help setup fmt lint test verify smoke watch up down db-reset docker-ready
 
 help: ## List targets
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-10s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-setup: ## One-time: enable git hooks, create .env from .env.example
+setup: env/.env docker-ready ## One-time: enable git hooks, create env/.env from env/.env.example
 	git config core.hooksPath .githooks
-	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
+
+# Created on first use by any compose target; never overwritten.
+env/.env:
+	cp env/.env.example env/.env
+	@echo "Created env/.env from env/.env.example"
 
 fmt: ## Format all sources (Spotless)
 	./mvnw -q spotless:apply
@@ -22,19 +29,26 @@ lint: ## Formatting check + compile with -Xlint -Werror
 test: ## Unit tests only (*Test, no Docker needed)
 	./mvnw test
 
-verify: ## Everything CI runs: format, compile, unit + integration tests (needs Docker)
+verify: docker-ready ## Everything CI runs: format, compile, unit + integration tests (needs Docker)
 	./mvnw verify
 
-watch: ## Run locally with hot reload (compose local profile)
-	docker compose --profile local build app-local
-	docker compose --profile local watch
+smoke: docker-ready ## Build the runtime image and smoke-test it with the prod profile (as CI does)
+	docker build -f docker/Dockerfile --target runtime -t $(PROJECT):smoke .
+	scripts/smoke-test.sh $(PROJECT):smoke
 
-up: ## Run the packaged image with a local Postgres (compose dev profile)
-	docker compose --profile dev up --build
+watch: env/.env docker-ready ## Run locally with hot reload (compose local profile)
+	$(COMPOSE) --profile local build app-local
+	$(COMPOSE) --profile local watch
 
-down: ## Stop local/dev containers (keeps data)
+up: env/.env docker-ready ## Run the packaged image with a local Postgres (compose dev profile)
+	$(COMPOSE) --profile dev up --build
+
+down: env/.env docker-ready ## Stop local/dev containers (keeps data)
 	$(COMPOSE_ALL) down
 
-db-reset: ## Stop containers and delete the local Postgres volume
+db-reset: env/.env docker-ready ## Stop containers and delete the local Postgres volume
 	$(COMPOSE_ALL) down
 	docker volume rm -f $(PROJECT)_postgres-data
+
+docker-ready: ## Check Docker is running; on macOS start Docker Desktop and wait
+	@scripts/ensure-docker.sh

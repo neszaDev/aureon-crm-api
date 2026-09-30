@@ -94,8 +94,6 @@ by Java-native equivalents or skipped.
 | pnpm, TypeScript, ESLint, Prettier, Jest, commitlint, Husky | Node ecosystem; replaced by Maven-native tools above |
 | `lib/` | Maven manages dependencies |
 | root `migrations/` | Flyway's convention is `src/main/resources/db/migration`; moving it adds config for no gain |
-| `env/` | Spring profiles plus `.env.example` already cover it |
-| `docker/` | One Dockerfile and one compose file. Revisit only if more images appear. |
 | `test-reports/`, `uploads/` | Generated output belongs in `target/`, and there is no upload feature |
 | `.aws/` | No AWS deployment target is defined. Add it when there is one. |
 | `GEMINI.md`, `.codex/`, `.agents/` | Only Claude Code is used, so these would duplicate `AGENTS.md` |
@@ -250,10 +248,41 @@ smoke    compose prod profile + postgres → wait for /actuator/health UP → do
 6. Push the branch, confirm GitHub Actions is green, and open the PR.
 7. Report at the end of each phase in the format above.
 
+## Decisions made during implementation
+- **`docker/` adopted** (user request, after Phase 5): the Dockerfile and compose files moved
+  to `docker/` for a tidier root. Compose runs with `--project-directory .`, so `.env`, the
+  build context and volume names stay rooted at the repo; `make` hides the flags.
+- **Root tidied** (user request): `ARCHITECTURE.md` → `docs/architecture.md`,
+  `CONTRIBUTING.md` → `.github/CONTRIBUTING.md` (GitHub still surfaces it), `.dockerignore` →
+  `docker/Dockerfile.dockerignore` (BuildKit per-Dockerfile ignore, now an allowlist of
+  `pom.xml` + `src/main`). Everything left at the root is required there by Maven, git,
+  editors, GitHub, AI agents or Compose.
+- **`env/` adopted** (user request): `env/.env.example` is tracked and `env/.env` is local
+  and git-ignored. Possible once all compose use went through `make`, which passes
+  `--env-file env/.env` and creates the file from the example on first use.
+- **Auth/ops decisions resolved** (user accepted the recommendations): missing or invalid
+  tokens now return 401 with an `ApiError` body; a deleted user's token returns 401;
+  `/actuator/prometheus` is public (restrict it at the network level); `/actuator/health/**`
+  is public so the liveness/readiness probes work (they previously required a token).
+
+## Status (2026-09-30)
+
+| Phase | PR | State |
+|---|---|---|
+| 1 Audit | — | done (this document) |
+| 2 Foundation | #25 | merged |
+| 3 Tests | #26 | merged |
+| 4 Agent instructions | #27 | open, CI green |
+| 5 Quality gates | #28 | open, CI green |
+| `docker/` move | #29 | open, CI green |
+| 6 Documentation + root/env tidy | #30 | open, CI green |
+| Auth status codes, probes, Prometheus, Docker auto-start | #31 | open |
+
 ## Remaining / explicitly out of scope
 - Spring Boot 4.x / jjwt 0.13 upgrades: separate PRs via Dependabot after gates exist.
 - Deployment pipeline (registry push, environments). Needs a decision on the hosting target.
-- Delete the stale remote branches from the old history (keep `backup/before-reset-20260930`)
-  once the user confirms.
+- Stale remote branches: the five fully contained in `backup/before-reset-20260930` were
+  deleted. The others have commits found nowhere else, or open PRs (#5, #16, #18–#22); the
+  owner decides (keep the backup either way).
 - Possible later additions once gates are stable: a coverage ratchet, Error Prone, and OpenAPI
   contract snapshot tests.
