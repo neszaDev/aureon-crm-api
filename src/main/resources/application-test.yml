@@ -2,3 +2,16 @@ spring:
   config.activate.on-profile: test
   jpa.hibernate.ddl-auto: validate
 logging.level.root: WARN
+spring.servlet.multipart:
+  max-file-size: 64KB
+  max-request-size: 64KB
+app:
+  # ITs register many users from one address; ratelimit/RateLimitIT turns this on.
+  rate-limit.enabled: false
+  files:
+    storage-dir: ${java.io.tmpdir}/boilerplate-it-files/${random.uuid}
+    max-size: 64KB
+  # AbstractIntegrationTest#adminAccessToken signs in with this account.
+  admin:
+    email: admin@boilerplate.test
+    password: test-admin-password

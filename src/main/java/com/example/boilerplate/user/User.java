@@ -23,6 +23,14 @@ public class User extends AuditableEntity {
     this.passwordHash = passwordHash;
   }
 
+  public void changeEmail(String email) {
+    this.email = email.toLowerCase();
+  }
+
+  public void changeRole(Role role) {
+    this.role = role;
+  }
+
   public String getEmail() {
     return email;
   }

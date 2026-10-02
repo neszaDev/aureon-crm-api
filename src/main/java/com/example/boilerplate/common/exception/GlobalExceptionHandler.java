@@ -6,8 +6,11 @@ import java.time.Instant;
 import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.ErrorResponse;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -23,6 +27,51 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
     return error(HttpStatus.CONFLICT, e.getMessage(), r, Map.of());
+  }
+
+  /** A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
+    log.warn("Constraint violation on {} {}", r.getMethod(), r.getRequestURI());
+    return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
+  }
+
+  @ExceptionHandler(OptimisticLockingFailureException.class)
+  ResponseEntity<ApiError> staleUpdate(OptimisticLockingFailureException e, HttpServletRequest r) {
+    return error(
+        HttpStatus.CONFLICT, "Changed by another request; reload and try again", r, Map.of());
+  }
+
+  /** Thrown by services that re-check a role (e.g. UserAdminService). */
+  @ExceptionHandler(AccessDeniedException.class)
+  ResponseEntity<ApiError> forbidden(AccessDeniedException e, HttpServletRequest r) {
+    return error(HttpStatus.FORBIDDEN, e.getMessage(), r, Map.of());
+  }
+
+  @ExceptionHandler(RateLimitExceededException.class)
+  ResponseEntity<ApiError> tooManyRequests(RateLimitExceededException e, HttpServletRequest r) {
+    HttpStatus s = HttpStatus.TOO_MANY_REQUESTS;
+    return ResponseEntity.status(s)
+        .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
+        .body(
+            new ApiError(
+                Instant.now(),
+                s.value(),
+                s.getReasonPhrase(),
+                e.getMessage(),
+                r.getRequestURI(),
+                Map.of()));
+  }
+
+  @ExceptionHandler(FileRejectedException.class)
+  ResponseEntity<ApiError> fileRejected(FileRejectedException e, HttpServletRequest r) {
+    return error(e.getStatus(), e.getMessage(), r, Map.of());
+  }
+
+  /** Over spring.servlet.multipart limits, before the controller runs. */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException e, HttpServletRequest r) {
+    return error(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large", r, Map.of());
   }
 
   @ExceptionHandler(NotFoundException.class)

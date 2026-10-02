@@ -34,6 +34,12 @@ services:
       # Optional; defaults match application.yml.
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-P30D}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_LOGIN_PER_IP: ${RATE_LIMIT_LOGIN_PER_IP:-20}
+      RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL: ${RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL:-10}
+      RATE_LIMIT_REGISTER_PER_IP: ${RATE_LIMIT_REGISTER_PER_IP:-10}
     depends_on:
       postgres: { condition: service_healthy }
     ports: ["8080:8080"]
@@ -65,11 +71,18 @@ services:
       # Optional; defaults match application.yml.
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-P30D}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_LOGIN_PER_IP: ${RATE_LIMIT_LOGIN_PER_IP:-20}
+      RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL: ${RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL:-10}
+      RATE_LIMIT_REGISTER_PER_IP: ${RATE_LIMIT_REGISTER_PER_IP:-10}
     depends_on:
       postgres: { condition: service_healthy }
     ports: ["8080:8080"]
     restart: on-failure:5
     networks: [boilerplate-network]
+    volumes: ["files-data:/app/data/files"]
   app-prod:
     profiles: [prod]
     build:
@@ -85,11 +98,20 @@ services:
       - DB_PASSWORD
       - JWT_SECRET
       - CORS_ALLOWED_ORIGINS
+      - ADMIN_EMAIL
+      - ADMIN_PASSWORD
+      - RATE_LIMIT_ENABLED
+      - RATE_LIMIT_LOGIN_PER_IP
+      - RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL
+      - RATE_LIMIT_REGISTER_PER_IP
+      - SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES
     ports: ["8080:8080"]
     restart: unless-stopped
     networks: [boilerplate-network]
+    volumes: ["files-data:/app/data/files"]
 volumes:
   postgres-data: {}
+  files-data: {}
   maven-cache: {}
 networks:
   boilerplate-network:

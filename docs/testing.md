@@ -22,7 +22,11 @@ Extend `support/AbstractIntegrationTest`. It provides:
 - `MockMvc` (`mvc`) and `ObjectMapper` (`json`)
 - a real `postgres:17-alpine` from `support/PostgresTestcontainersConfig`, connected via
   `@ServiceConnection`, with Flyway migrations applied
-- helpers: `uniqueEmail()`, `register(email)`, `registerAndGetAccessToken()`, `bearer(token)`
+- helpers: `uniqueEmail()`, `register(email)`, `login(email, password)`,
+  `registerAndGetAccessToken()`, `adminAccessToken()`, `bearer(token)`
+- rate limits **off** (`application-test.yml`), since every IT registers from one address
+- an admin account (`ADMIN_EMAIL`), created by `AdminBootstrap` from `application-test.yml`;
+  never change or delete it in a test
 
 All IT classes share **one** Spring context and one database, and nothing is cleaned between
 tests. Isolate tests with fresh users (`uniqueEmail()`), and never assert on global counts.
@@ -35,6 +39,9 @@ What the existing ITs cover:
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
 | `security/SecurityIT` | Public vs protected endpoints, `X-Request-Id` |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
+| `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For` |
+| `file/FileIT` | Upload, download headers, owner isolation, type/size rejection, blob cleanup |
+| `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
 
 ## Reports
