@@ -22,6 +22,12 @@ BACKEND_APP="ca-boilerplate-$ENV-api"
 FRONTEND_APP="ca-boilerplate-$ENV-web"
 here="$(cd "$(dirname "$0")" && pwd)"
 
+# Numeric IDs for the GitHub OIDC subject (public, no token needed).
+github_id() {
+  curl -fsS "https://api.github.com/repos/$OWNER/$1" |
+    python3 -c "import json, sys; d = json.load(sys.stdin); print(d['$2'] if '$2' == 'id' else d['owner']['id'])"
+}
+
 step() { printf '\n==> %s\n' "$*"; }
 
 step "Subscription"
@@ -62,6 +68,12 @@ current_image() {
 BACKEND_IMAGE="$(current_image "$BACKEND_APP")"
 FRONTEND_IMAGE="$(current_image "$FRONTEND_APP")"
 
+step "GitHub IDs"
+OWNER_ID="$(github_id spring-postgres-boilerplate owner)"
+BACKEND_REPO_ID="$(github_id spring-postgres-boilerplate id)"
+FRONTEND_REPO_ID="$(github_id nextjs-boilerplate id)"
+echo "owner $OWNER_ID, backend $BACKEND_REPO_ID, frontend $FRONTEND_REPO_ID"
+
 step "Deploy infra/main.bicep"
 params="$(mktemp)"
 trap 'rm -f "$params"' EXIT
@@ -73,6 +85,9 @@ cat > "$params" <<JSON
   "parameters": {
     "env": { "value": "$ENV" },
     "githubOwner": { "value": "$OWNER" },
+    "githubOwnerId": { "value": "$OWNER_ID" },
+    "backendRepoId": { "value": "$BACKEND_REPO_ID" },
+    "frontendRepoId": { "value": "$FRONTEND_REPO_ID" },
     "backendImage": { "value": "${BACKEND_IMAGE:-$DEFAULT_BACKEND}" },
     "frontendImage": { "value": "${FRONTEND_IMAGE:-$DEFAULT_FRONTEND}" },
     "adminEmail": { "value": "$ADMIN_EMAIL" },
