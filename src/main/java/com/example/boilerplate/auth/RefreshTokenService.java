@@ -3,10 +3,12 @@ package com.example.boilerplate.auth;
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
 import com.example.boilerplate.user.User;
+import com.example.boilerplate.user.UserAccessChangedEvent;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.time.*;
 import java.util.Base64;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -44,6 +46,12 @@ public class RefreshTokenService {
 
   public void revoke(String raw) {
     tokens.findByTokenHashForUpdate(hash(raw)).ifPresent(tokens::delete);
+  }
+
+  /** A changed email or role signs the user out everywhere (runs in the caller's transaction). */
+  @EventListener
+  void revokeAll(UserAccessChangedEvent event) {
+    tokens.deleteByUserId(event.userId());
   }
 
   private AuthTokensResponse response(User user, String refresh) {

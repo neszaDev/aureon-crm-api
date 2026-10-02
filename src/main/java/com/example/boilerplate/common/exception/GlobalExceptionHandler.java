@@ -6,8 +6,11 @@ import java.time.Instant;
 import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.ErrorResponse;
@@ -23,6 +26,25 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
     return error(HttpStatus.CONFLICT, e.getMessage(), r, Map.of());
+  }
+
+  /** A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
+    log.warn("Constraint violation on {} {}", r.getMethod(), r.getRequestURI());
+    return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
+  }
+
+  @ExceptionHandler(OptimisticLockingFailureException.class)
+  ResponseEntity<ApiError> staleUpdate(OptimisticLockingFailureException e, HttpServletRequest r) {
+    return error(
+        HttpStatus.CONFLICT, "Changed by another request; reload and try again", r, Map.of());
+  }
+
+  /** Thrown by services that re-check a role (e.g. UserAdminService). */
+  @ExceptionHandler(AccessDeniedException.class)
+  ResponseEntity<ApiError> forbidden(AccessDeniedException e, HttpServletRequest r) {
+    return error(HttpStatus.FORBIDDEN, e.getMessage(), r, Map.of());
   }
 
   @ExceptionHandler(NotFoundException.class)

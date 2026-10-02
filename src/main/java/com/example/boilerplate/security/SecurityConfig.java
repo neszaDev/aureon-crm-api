@@ -20,7 +20,10 @@ public class SecurityConfig {
 
   @Bean
   SecurityFilterChain securityFilterChain(
-      HttpSecurity http, JwtAuthenticationFilter jwt, ApiAuthenticationEntryPoint entryPoint)
+      HttpSecurity http,
+      JwtAuthenticationFilter jwt,
+      ApiAuthenticationEntryPoint entryPoint,
+      ApiAccessDeniedHandler accessDenied)
       throws Exception {
     return http.csrf(c -> c.disable())
         .cors(c -> {})
@@ -39,9 +42,15 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
+                    .requestMatchers("/api/v1/users/me")
+                    .authenticated()
+                    // User management; UserAdminService re-checks the role in the database.
+                    .requestMatchers("/api/v1/users", "/api/v1/users/**")
+                    .hasRole("ADMIN")
                     .anyRequest()
                     .authenticated())
-        .exceptionHandling(e -> e.authenticationEntryPoint(entryPoint))
+        .exceptionHandling(
+            e -> e.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDenied))
         .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
         .build();
   }

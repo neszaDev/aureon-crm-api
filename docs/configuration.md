@@ -28,9 +28,24 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `REFRESH_TOKEN_TTL` | `P30D` | no | ISO-8601 duration, must be positive |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | yes | Comma-separated; must not be empty |
 | `APP_VERSION` | `dev` | recommended | Shown at `/actuator/info` |
+| `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
+| `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
 
-`app.security.*` and `app.cors.*` bind to validated records (`auth/AuthProperties`,
-`security/CorsProperties`). An invalid value stops the app at startup with the property name.
+`app.security.*`, `app.cors.*` and `app.admin.*` bind to validated records
+(`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`). An invalid value
+stops the app at startup with the property name.
+
+### First admin
+
+With `ADMIN_EMAIL` and `ADMIN_PASSWORD` set, `user/AdminBootstrap` creates that account with the
+`ADMIN` role at startup, unless the email is already registered. An existing account is
+**never** promoted: there is no email verification, so whoever registered the address first
+would become admin. To promote an existing account, use `PATCH /api/v1/users/{id}` as another
+admin, or the database:
+
+```sql
+UPDATE users SET role = 'ADMIN' WHERE email = 'me@example.com';
+```
 
 ## Local Docker variables (`env/.env`)
 
@@ -43,7 +58,7 @@ which is git-ignored. The `make` targets pass it to Compose with `--env-file env
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `boilerplate` | Used by the Postgres container and passed to the app as `DB_*` |
 | `POSTGRES_PORT` | `5432` | Host port only; change it if 5432 is taken |
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
-| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS` | as above | Passed through to the app container |
+| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | as above | Passed through to the app container |
 
 When you add a variable, update `application*.yml`, this page and `env/.env.example` together.
 Never commit real values.

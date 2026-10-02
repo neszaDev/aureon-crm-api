@@ -19,7 +19,7 @@ Deeper guides, read the relevant one before changing that area:
 ```
 src/main/java/com/example/boilerplate/
   auth/        register/login/refresh/logout, JwtService, RefreshToken*, AuthProperties
-  user/        User entity, /api/v1/users/me, MapStruct UserMapper
+  user/        User entity, /api/v1/users/me, admin user management, AdminBootstrap
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter

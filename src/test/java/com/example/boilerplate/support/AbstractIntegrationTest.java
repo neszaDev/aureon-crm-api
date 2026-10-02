@@ -26,6 +26,11 @@ import org.springframework.test.web.servlet.MockMvc;
 public abstract class AbstractIntegrationTest {
   protected static final String PASSWORD = "a-secure-password";
 
+  /** Created by AdminBootstrap from application-test.yml. */
+  protected static final String ADMIN_EMAIL = "admin@boilerplate.test";
+
+  protected static final String ADMIN_PASSWORD = "test-admin-password";
+
   @Autowired protected MockMvc mvc;
   @Autowired protected ObjectMapper json;
 
@@ -45,6 +50,24 @@ public abstract class AbstractIntegrationTest {
             .getResponse()
             .getContentAsString();
     return json.readTree(body);
+  }
+
+  /** Signs in and returns the token response body. */
+  protected JsonNode login(String email, String password) throws Exception {
+    String body =
+        mvc.perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(new Credentials(email, password))))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(body);
+  }
+
+  protected String adminAccessToken() throws Exception {
+    return login(ADMIN_EMAIL, ADMIN_PASSWORD).get("accessToken").asText();
   }
 
   protected String registerAndGetAccessToken() throws Exception {

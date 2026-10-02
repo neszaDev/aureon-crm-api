@@ -14,8 +14,9 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
+| 403 | Valid token without the required role (admin endpoints) |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
-| 409 | Email already registered |
+| 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
 
 ## Quick start
 
@@ -95,3 +96,33 @@ curl --request PATCH 'http://localhost:8080/api/v1/test-results/<id>' \
 curl --request DELETE 'http://localhost:8080/api/v1/test-results/<id>' \
   --header "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+## User management (admins)
+
+Every `/api/v1/users` endpoint except `/me` needs the `ADMIN` role. The first admin comes from
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` (see [configuration](configuration.md#first-admin)); admins can
+then promote others.
+
+```sh
+export ADMIN_TOKEN='<accessToken of an admin>'
+
+# List, newest first; q matches part of the email (case-insensitive)
+curl 'http://localhost:8080/api/v1/users?page=0&size=20&q=example' \
+  --header "Authorization: Bearer $ADMIN_TOKEN"
+
+curl 'http://localhost:8080/api/v1/users/<id>' --header "Authorization: Bearer $ADMIN_TOKEN"
+
+# Change role and/or email (omit a field to keep it)
+curl --request PATCH 'http://localhost:8080/api/v1/users/<id>' \
+  --header "Authorization: Bearer $ADMIN_TOKEN" --header 'Content-Type: application/json' \
+  --data-raw '{"role":"ADMIN"}'
+
+# Delete, with their test results and sessions
+curl --request DELETE 'http://localhost:8080/api/v1/users/<id>' \
+  --header "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+- Changing a user's email or role signs them out: their refresh tokens are deleted. Their current
+  access token keeps working until it expires (15 minutes by default), but the admin endpoints
+  check the role in the database, so a demoted admin loses admin access immediately.
+- An admin can't change or delete their own account here (409), so there is always one admin.

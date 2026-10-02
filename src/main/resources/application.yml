@@ -25,5 +25,9 @@ app:
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
   security.refresh-token-ttl: ${REFRESH_TOKEN_TTL:P30D}
   cors.allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+  # Optional first admin, created at startup if that account doesn't exist yet.
+  admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
 info.app.name: ${spring.application.name}
 info.app.version: ${APP_VERSION:dev}
