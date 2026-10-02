@@ -51,7 +51,8 @@ After `make verify`:
 - `target/surefire-reports/`, `target/failsafe-reports/`: per-class results
 - `target/site/jacoco/index.html`: coverage for unit + integration tests combined
 
-CI uploads the same files as the `test-reports` artifact. They are never committed.
+CI uploads them as the `unit-test-reports` and `integration-test-reports` artifacts (each
+with the JaCoCo report of its own tests). They are never committed.
 
 ## Troubleshooting
 

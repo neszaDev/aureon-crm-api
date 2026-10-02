@@ -30,7 +30,7 @@ If port 5432 is already taken by another database, set `POSTGRES_PORT=5433` in `
 | `make fmt` | Format all sources (Spotless / google-java-format) |
 | `make lint` | Formatting check + compile with `-Xlint -Werror` |
 | `make test` | Unit tests (`*Test`, no Docker) |
-| `make verify` | Everything CI's `verify` job runs, including integration tests (needs Docker) |
+| `make verify` | Everything CI's lint, unit and integration jobs run (needs Docker) |
 | `make smoke` | Build the runtime image and start it with the prod profile, as CI does |
 | `make watch` / `make up` | Run locally with hot reload / run the packaged image |
 | `make down` / `make db-reset` | Stop containers / also delete the local database |
