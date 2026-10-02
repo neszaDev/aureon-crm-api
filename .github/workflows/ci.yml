@@ -1,6 +1,13 @@
-# CI checks. Each job runs the same command a developer runs locally:
-#   verify      -> make verify  (./mvnw verify: Spotless, -Werror compile, unit + integration tests)
-#   image-smoke -> make smoke   (runtime image started with the prod profile)
+# CI checks. Each job runs the same command a developer runs locally (see docs/ci.md):
+#   changes      -> docs-only pull requests skip the build and test jobs
+#   deps         -> resolve Maven dependencies and plugins once, into the cache the others restore
+#   audit        -> known vulnerabilities in the resolved dependencies (Trivy), dependency review
+#   lint         -> commit subjects, formatting, compile main + test code with -Xlint -Werror  (make lint)
+#   unit         -> *Test (Surefire), no Spring context, no Docker                             (make test)
+#   integration  -> *IT (Failsafe) against PostgreSQL in Testcontainers                       (make verify)
+#   docker       -> build the runtime image and scan it (Trivy); hands the image to `boot`
+#   boot         -> start that image with the prod profile: health, JSON logs, uploads         (make smoke)
+#   gate         -> "CI Gate", the single required check: fails if any job above failed
 # Runs on every PR, and is called by cd-dev.yml / cd-main.yml before anything is published,
 # so pushes to dev/main are checked there (no separate push trigger here).
 name: CI
@@ -16,8 +23,153 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # Read by Maven 3.9+, so every ./mvnw call below is non-interactive and quiet about downloads.
+  MAVEN_ARGS: --batch-mode --no-transfer-progress
+  # Pinned by digest: the trivy-action tags were hijacked in 2026, so no third-party action and
+  # no mutable tag runs here.
+  TRIVY: aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e
+  IMAGE: spring-postgres-boilerplate:ci
+
 jobs:
-  verify:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Docs-only pull requests skip the build and test jobs. Pushes (dev/main) run everything.
+      - id: diff
+        name: Code changed?
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qvE '(\.md$|^docs/)'; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+  deps:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # The cache is keyed on pom.xml and saved when this job ends, so the parallel jobs below
+      # restore it instead of each downloading the same artifacts.
+      - run: ./mvnw dependency:go-offline
+
+  audit:
+    name: Security audit
+    needs: deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Scans the resolved jars rather than pom.xml: versions inherited from the Spring Boot
+      # parent (Tomcat, Jackson, ...) only show up once Maven has resolved them. `rootfs`, not
+      # `fs`: Trivy only looks inside jar files in rootfs and image mode.
+      - name: Resolve runtime and test dependencies
+        run: |
+          ./mvnw -q dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/audit/runtime
+          ./mvnw -q dependency:copy-dependencies -DincludeScope=test -DoutputDirectory=target/audit/test
+      - name: No fixable high or critical vulnerabilities in what ships
+        run: |
+          docker run --rm -v "$PWD/target/audit/runtime:/scan:ro" "$TRIVY" rootfs \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-version-check --no-progress /scan
+      # Test-only libraries (Testcontainers, JUnit, ...) never ship; their advisories are
+      # reported, not blocking.
+      - name: Vulnerabilities in test-only dependencies (report only)
+        run: |
+          docker run --rm -v "$PWD/target/audit/test:/scan:ro" "$TRIVY" rootfs \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-version-check --no-progress /scan \
+            || echo "::warning title=Test dependency advisories::Trivy found high or critical advisories in test-scoped dependencies (not blocking)"
+      - if: github.event_name == 'pull_request'
+        name: New dependencies have no known vulnerabilities or disallowed licences
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
+  lint:
+    name: Lint, format & types
+    needs: deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the commit-subject check reads the PR's commits
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # The same rule as the local commit-msg hook, run on every commit of the pull request.
+      - if: github.event_name == 'pull_request'
+        name: Commit messages follow Conventional Commits
+        run: |
+          status=0
+          for sha in $(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA"); do
+            git log -1 --format=%s "$sha" > "$RUNNER_TEMP/subject"
+            .githooks/commit-msg "$RUNNER_TEMP/subject" || status=1
+          done
+          exit "$status"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      # Enforcer (toolchain), Spotless, then main and test sources with -Xlint:all -Werror.
+      - run: ./mvnw spotless:check test-compile
+
+  unit:
+    name: Unit tests
+    needs: [changes, deps]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: ./mvnw test jacoco:report
+      - name: Upload test and coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-reports
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  integration:
+    name: Integration tests (PostgreSQL)
+    needs: [changes, deps]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -27,26 +179,69 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: ./mvnw --batch-mode verify
+      # Only the *IT classes: unit tests run in their own job. Failsafe uses the compiled classes
+      # (configured by spring-boot-starter-parent), and Testcontainers starts postgres:17-alpine.
+      - run: ./mvnw jacoco:prepare-agent test-compile failsafe:integration-test failsafe:verify jacoco:report
       - name: Upload test and coverage reports
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports
+          name: integration-test-reports
           path: |
-            target/surefire-reports/
             target/failsafe-reports/
             target/site/jacoco/
           retention-days: 14
           if-no-files-found: ignore
 
-  image-smoke:
+  docker:
+    name: Docker build test
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - run: docker build -f docker/Dockerfile --target runtime -t spring-postgres-boilerplate:${{ github.sha }} .
-      - run: scripts/smoke-test.sh spring-postgres-boilerplate:${{ github.sha }}
+      - uses: docker/setup-buildx-action@v4
+      # Same Dockerfile target and layer cache as publish-image.yml, so this is the image that
+      # would be published.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: runtime
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=runtime
+          cache-to: type=gha,scope=runtime,mode=max
+      - name: Hand the image to the boot test
+        run: docker save "$IMAGE" | gzip > "$RUNNER_TEMP/image.tar.gz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runtime-image
+          path: ${{ runner.temp }}/image.tar.gz
+          retention-days: 1
+          compression-level: 0 # already gzipped
+      - name: Image has no fixable high or critical vulnerabilities
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            --skip-version-check --no-progress "$IMAGE"
+
+  boot:
+    name: App boot test
+    needs: [changes, docker]
+    # Runs when only the image scan failed, so a vulnerable image still gets a boot verdict.
+    if: ${{ !cancelled() && needs.changes.outputs.app == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: runtime-image
+          path: ${{ runner.temp }}
+      - run: gunzip -c "$RUNNER_TEMP/image.tar.gz" | docker load
+      - run: scripts/smoke-test.sh "$IMAGE"
       - name: Upload app log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -54,3 +249,21 @@ jobs:
           name: smoke-app-log
           path: target/smoke-app.log
           retention-days: 14
+
+  gate:
+    name: CI Gate
+    # The one required status check: add, split or skip jobs without touching branch protection.
+    needs: [changes, deps, audit, lint, unit, integration, docker, boot]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed (or was skipped for a docs-only change)
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -qE '"result": "(failure|cancelled)"'; then
+            echo "::error::A required CI job failed or was cancelled."
+            exit 1
+          fi
+        env:
+          RESULTS: ${{ toJSON(needs) }}
