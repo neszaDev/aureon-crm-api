@@ -20,6 +20,18 @@ param githubOwner string = 'neszaDev'
 param backendRepo string = 'spring-postgres-boilerplate'
 param frontendRepo string = 'nextjs-boilerplate'
 
+// GitHub's OIDC subject names the owner and repositories by their immutable IDs as well
+// (repo:<owner>@<id>/<repo>@<id>:environment:<env>), so a renamed or re-created repository
+// can't take over the credential. deploy.sh looks them up.
+@description('Numeric GitHub ID of the owner.')
+param githubOwnerId string
+
+@description('Numeric GitHub ID of the backend repository.')
+param backendRepoId string
+
+@description('Numeric GitHub ID of the frontend repository.')
+param frontendRepoId string
+
 @description('Bootstrap admin created at first start; empty for none.')
 param adminEmail string = ''
 
@@ -315,7 +327,7 @@ resource backendCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/fed
   name: 'github-${backendRepo}-${env}'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubOwner}/${backendRepo}:environment:${env}'
+    subject: 'repo:${githubOwner}@${githubOwnerId}/${backendRepo}@${backendRepoId}:environment:${env}'
     audiences: ['api://AzureADTokenExchange']
   }
 }
@@ -325,7 +337,7 @@ resource frontendCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/fe
   name: 'github-${frontendRepo}-${env}'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubOwner}/${frontendRepo}:environment:${env}'
+    subject: 'repo:${githubOwner}@${githubOwnerId}/${frontendRepo}@${frontendRepoId}:environment:${env}'
     audiences: ['api://AzureADTokenExchange']
   }
   dependsOn: [backendCredential]
