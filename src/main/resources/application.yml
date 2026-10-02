@@ -34,9 +34,26 @@ app:
     storage-dir: ${FILES_DIR:data/files}
     max-size: ${FILES_MAX_SIZE:10MB}
     allowed-types: ${FILES_ALLOWED_TYPES:image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    login-per-ip:
+      capacity: ${RATE_LIMIT_LOGIN_PER_IP:20}
+      period: PT1M
+    login-failures-per-email:
+      capacity: ${RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL:10}
+      period: PT15M
+    register-per-ip:
+      capacity: ${RATE_LIMIT_REGISTER_PER_IP:10}
+      period: PT1H
+    max-tracked-keys: 100000
   # Optional first admin, created at startup if that account doesn't exist yet.
   admin:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+server:
+  # Behind a proxy (e.g. the Next.js server) take the client IP from X-Forwarded-For, but only
+  # when the connection comes from a trusted proxy: by default private and loopback addresses,
+  # override with SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES (a regex). Rate limits key on this IP.
+  forward-headers-strategy: native
 info.app.name: ${spring.application.name}
 info.app.version: ${APP_VERSION:dev}

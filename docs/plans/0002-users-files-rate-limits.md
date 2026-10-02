@@ -1,6 +1,6 @@
 # User management, file uploads and login rate limiting
 
-Status: in progress (2026-10-02). Branch `feat/users-files-rate-limits`, one PR into `dev`, one
+Status: backend done (2026-10-02). Branch `feat/users-files-rate-limits`, one PR into `dev`, one
 commit per feature. The frontend follows in its own PR once the `:dev` image is published.
 
 ## Why

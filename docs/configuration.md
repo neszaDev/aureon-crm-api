@@ -31,12 +31,32 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `FILES_DIR` | `data/files` | recommended | Upload storage; relative to the working directory (`/app` in the image, which has a volume there in compose). Must be writable. One instance only: use shared storage before scaling out. |
 | `FILES_MAX_SIZE` | `10MB` | no | Largest upload (`KB`/`MB`); also sets Spring's multipart limits |
 | `FILES_ALLOWED_TYPES` | `image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv` | no | Comma-separated media types. Don't add `text/html` or `image/svg+xml` unless downloads stay attachments. |
+| `RATE_LIMIT_ENABLED` | `true` | no | Turn sign-in/registration limits off (the `test` profile does) |
+| `RATE_LIMIT_LOGIN_PER_IP` | `20` | no | Sign-in attempts per client IP per minute |
+| `RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL` | `10` | no | Failed sign-ins per email per 15 minutes |
+| `RATE_LIMIT_REGISTER_PER_IP` | `10` | no | Registrations per client IP per hour |
+| `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` | private + loopback ranges | if the proxy has a public IP | Regex of proxies whose `X-Forwarded-For` is trusted (see below) |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
 
-`app.security.*`, `app.cors.*`, `app.admin.*` and `app.files.*` bind to validated records
-(`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`, `file/FileProperties`). An invalid value
+`app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*` and `app.rate-limit.*` bind to
+validated records (`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`,
+`file/FileProperties`, `ratelimit/RateLimitProperties`). An invalid value
 stops the app at startup with the property name.
+
+### Rate limits
+
+Limits live in memory (`ratelimit/RateLimiter`), so each instance counts on its own and a
+restart resets them. They key on the client IP, which Tomcat takes from `X-Forwarded-For` only
+when the connection comes from a trusted proxy (`server.forward-headers-strategy: native`). By
+default that's any private or loopback address, which covers the Next.js server and most load
+balancers. If the API is reachable directly from untrusted machines on a private network, or
+your proxy has a public IP, set `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` to exactly your
+proxies. Without a trusted proxy in front, every client is its own IP and the header is
+ignored.
+
+End-to-end suites that register many users from one machine should raise
+`RATE_LIMIT_REGISTER_PER_IP` and `RATE_LIMIT_LOGIN_PER_IP` instead of turning limits off.
 
 ### First admin
 
@@ -61,7 +81,7 @@ which is git-ignored. The `make` targets pass it to Compose with `--env-file env
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `boilerplate` | Used by the Postgres container and passed to the app as `DB_*` |
 | `POSTGRES_PORT` | `5432` | Host port only; change it if 5432 is taken |
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
-| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | as above | Passed through to the app container |
+| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `RATE_LIMIT_*` | as above | Passed through to the app container |
 
 When you add a variable, update `application*.yml`, this page and `env/.env.example` together.
 Never commit real values.

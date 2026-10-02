@@ -48,6 +48,21 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.FORBIDDEN, e.getMessage(), r, Map.of());
   }
 
+  @ExceptionHandler(RateLimitExceededException.class)
+  ResponseEntity<ApiError> tooManyRequests(RateLimitExceededException e, HttpServletRequest r) {
+    HttpStatus s = HttpStatus.TOO_MANY_REQUESTS;
+    return ResponseEntity.status(s)
+        .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
+        .body(
+            new ApiError(
+                Instant.now(),
+                s.value(),
+                s.getReasonPhrase(),
+                e.getMessage(),
+                r.getRequestURI(),
+                Map.of()));
+  }
+
   @ExceptionHandler(FileRejectedException.class)
   ResponseEntity<ApiError> fileRejected(FileRejectedException e, HttpServletRequest r) {
     return error(e.getStatus(), e.getMessage(), r, Map.of());

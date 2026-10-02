@@ -6,6 +6,8 @@ spring.servlet.multipart:
   max-file-size: 64KB
   max-request-size: 64KB
 app:
+  # ITs register many users from one address; ratelimit/RateLimitIT turns this on.
+  rate-limit.enabled: false
   files:
     storage-dir: ${java.io.tmpdir}/boilerplate-it-files/${random.uuid}
     max-size: 64KB

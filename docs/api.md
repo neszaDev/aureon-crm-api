@@ -19,6 +19,7 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 | 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
 | 413 | Upload larger than `FILES_MAX_SIZE` |
 | 415 | Upload type not in `FILES_ALLOWED_TYPES`, or its content doesn't match the type; wrong request `Content-Type` |
+| 429 | Too many sign-in or registration attempts; wait `Retry-After` seconds |
 
 ## Quick start
 
@@ -31,6 +32,20 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 ```
 
 The response contains a Bearer token. Pass it as `Authorization: Bearer <token>` to secured endpoints; `GET /api/v1/users/me` is included as a protected example.
+
+## Rate limits
+
+| Endpoint | Limit (default) | Key |
+|---|---|---|
+| `POST /auth/login` | 20 per minute | client IP |
+| `POST /auth/login` | 10 **failed** attempts per 15 minutes | email |
+| `POST /auth/register` | 10 per hour | client IP |
+
+Over a limit the API answers 429 with `Retry-After` (seconds). Buckets refill gradually, not
+all at once. Once an email is blocked, even the right password gets 429 until it refills: that
+is what makes password guessing slow from many IPs, at the cost of letting someone delay a
+victim's sign-in. Behind a proxy the client IP comes from `X-Forwarded-For` (see
+[configuration](configuration.md#rate-limits)).
 
 ## Refresh tokens and logout
 

@@ -43,6 +43,9 @@ filter).
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   Each refresh rotates the token (the old one is deleted under a row lock), and logout deletes
   it.
+- **Rate limits** (`ratelimit/RateLimiter`): Bucket4j buckets in a bounded Caffeine cache, per
+  client IP for sign-in and registration, and per email for failed sign-ins. In-memory, so per
+  instance. The client IP comes from `X-Forwarded-For` of trusted proxies only.
 - **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` from the token, and
   `UserAdminService` re-checks it in the database. `ApiAccessDeniedHandler` answers 403 with an
   `ApiError` body.
