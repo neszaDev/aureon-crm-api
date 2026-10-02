@@ -18,6 +18,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -45,6 +46,17 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ApiError> forbidden(AccessDeniedException e, HttpServletRequest r) {
     return error(HttpStatus.FORBIDDEN, e.getMessage(), r, Map.of());
+  }
+
+  @ExceptionHandler(FileRejectedException.class)
+  ResponseEntity<ApiError> fileRejected(FileRejectedException e, HttpServletRequest r) {
+    return error(e.getStatus(), e.getMessage(), r, Map.of());
+  }
+
+  /** Over spring.servlet.multipart limits, before the controller runs. */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException e, HttpServletRequest r) {
+    return error(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large", r, Map.of());
   }
 
   @ExceptionHandler(NotFoundException.class)

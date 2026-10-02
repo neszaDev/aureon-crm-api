@@ -74,6 +74,7 @@ services:
     ports: ["8080:8080"]
     restart: on-failure:5
     networks: [boilerplate-network]
+    volumes: ["files-data:/app/data/files"]
   app-prod:
     profiles: [prod]
     build:
@@ -94,8 +95,10 @@ services:
     ports: ["8080:8080"]
     restart: unless-stopped
     networks: [boilerplate-network]
+    volumes: ["files-data:/app/data/files"]
 volumes:
   postgres-data: {}
+  files-data: {}
   maven-cache: {}
 networks:
   boilerplate-network:

@@ -21,6 +21,7 @@ src/main/java/com/example/boilerplate/
   auth/        register/login/refresh/logout, JwtService, RefreshToken*, AuthProperties
   user/        User entity, /api/v1/users/me, admin user management, AdminBootstrap
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
+  file/        owner-scoped uploads (/api/v1/files), FileStorage + LocalFileStorage
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override

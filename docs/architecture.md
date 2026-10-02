@@ -17,7 +17,7 @@ flowchart LR
 
 ## Feature layout
 
-The code is organized by feature. `auth`, `user` and `testresult` each own their controller,
+The code is organized by feature. `auth`, `user`, `testresult` and `file` each own their controller,
 service, repository, entity and `dto/` records. Cross-cutting code lives in `security`
 (filter chain, JWT filter, CORS) and `common` (base entity, error handling, request-id
 filter).
@@ -25,8 +25,14 @@ filter).
 - **Controllers** only deserialize, validate (`@Valid`) and return API contracts. They never
   return JPA entities.
 - **Services** own transactions and business rules.
-- **Owner scoping** (`testresult`): every query filters by the authenticated user's email, and
-  another user's row is reported as 404, so its existence isn't revealed.
+- **Owner scoping** (`testresult`, `file`): every query filters by the authenticated user's
+  email, and another user's row is reported as 404, so its existence isn't revealed.
+- **Cross-feature events**: `user` publishes `UserDeletionEvent` and `UserAccessChangedEvent`
+  inside its transaction. `file` deletes the user's stored bytes after commit; `auth` revokes
+  refresh tokens. `user` doesn't depend on either.
+- **Files** (`file`): metadata in `stored_files`, bytes behind the `FileStorage` interface
+  (`LocalFileStorage`: one file per random key in `FILES_DIR`). Bytes are deleted only after
+  the database change commits.
 
 ## Security
 
@@ -37,6 +43,9 @@ filter).
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   Each refresh rotates the token (the old one is deleted under a row lock), and logout deletes
   it.
+- **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` from the token, and
+  `UserAdminService` re-checks it in the database. `ApiAccessDeniedHandler` answers 403 with an
+  `ApiError` body.
 - For a production deployment, supply `JWT_SECRET` from a secret manager. Replace this module
   with an OIDC resource server when centralized identity or SSO is needed.
 

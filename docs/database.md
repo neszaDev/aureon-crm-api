@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V5__add_user_display_name.sql`. Note the **two**
+   highest existing version + 1. Example: `V6__add_user_display_name.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -35,6 +35,7 @@ Migrations run automatically at application startup, in every profile.
 | `V2__add_refresh_tokens.sql` | `refresh_tokens` (SHA-256 hash only, FK to users, expiry index) |
 | `V3__make_refresh_token_hash_varchar.sql` | `token_hash` CHAR(64) → VARCHAR(64) |
 | `V4__add_test_results.sql` | `test_results` (owner FK, score check 0–100, owner/date index) |
+| `V5__add_stored_files.sql` | `stored_files` (file metadata; owner FK cascades; the bytes live in `FILES_DIR`) |
 
 ## Local database
 

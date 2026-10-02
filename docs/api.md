@@ -17,6 +17,8 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 | 403 | Valid token without the required role (admin endpoints) |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
 | 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
+| 413 | Upload larger than `FILES_MAX_SIZE` |
+| 415 | Upload type not in `FILES_ALLOWED_TYPES`, or its content doesn't match the type; wrong request `Content-Type` |
 
 ## Quick start
 
@@ -117,7 +119,7 @@ curl --request PATCH 'http://localhost:8080/api/v1/users/<id>' \
   --header "Authorization: Bearer $ADMIN_TOKEN" --header 'Content-Type: application/json' \
   --data-raw '{"role":"ADMIN"}'
 
-# Delete, with their test results and sessions
+# Delete, with their test results, files and sessions
 curl --request DELETE 'http://localhost:8080/api/v1/users/<id>' \
   --header "Authorization: Bearer $ADMIN_TOKEN"
 ```
@@ -126,3 +128,27 @@ curl --request DELETE 'http://localhost:8080/api/v1/users/<id>' \
   access token keeps working until it expires (15 minutes by default), but the admin endpoints
   check the role in the database, so a demoted admin loses admin access immediately.
 - An admin can't change or delete their own account here (409), so there is always one admin.
+
+## Files
+
+Each user uploads, lists, downloads and deletes their own files. Another user's file is a 404.
+
+```sh
+# Upload (multipart field "file"): 201 with id, name, contentType, size, createdAt
+curl --request POST 'http://localhost:8080/api/v1/files' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" --form 'file=@report.pdf'
+
+curl 'http://localhost:8080/api/v1/files?page=0&size=20' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl 'http://localhost:8080/api/v1/files/<id>' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl -OJ 'http://localhost:8080/api/v1/files/<id>/content' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl --request DELETE 'http://localhost:8080/api/v1/files/<id>' --header "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+- Only types in `FILES_ALLOWED_TYPES` are accepted (default: PNG, JPEG, GIF, WebP, PDF, plain
+  text, CSV). PNG, JPEG, GIF, WebP and PDF must also start with that format's signature, and text
+  must not contain NUL bytes; anything else is a 415.
+- Only the base name of the client's file name is kept (no paths or control characters). Bytes
+  are stored under a random key in `FILES_DIR`, never under that name.
+- Downloads are always `Content-Disposition: attachment` with `X-Content-Type-Options: nosniff`
+  and `Content-Security-Policy: sandbox`, so an uploaded file can't run as a page.
+- Deleting a file, or its owner, removes the stored bytes after the database change commits.

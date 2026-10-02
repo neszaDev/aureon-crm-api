@@ -28,11 +28,14 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `REFRESH_TOKEN_TTL` | `P30D` | no | ISO-8601 duration, must be positive |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | yes | Comma-separated; must not be empty |
 | `APP_VERSION` | `dev` | recommended | Shown at `/actuator/info` |
+| `FILES_DIR` | `data/files` | recommended | Upload storage; relative to the working directory (`/app` in the image, which has a volume there in compose). Must be writable. One instance only: use shared storage before scaling out. |
+| `FILES_MAX_SIZE` | `10MB` | no | Largest upload (`KB`/`MB`); also sets Spring's multipart limits |
+| `FILES_ALLOWED_TYPES` | `image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv` | no | Comma-separated media types. Don't add `text/html` or `image/svg+xml` unless downloads stay attachments. |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
 
-`app.security.*`, `app.cors.*` and `app.admin.*` bind to validated records
-(`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`). An invalid value
+`app.security.*`, `app.cors.*`, `app.admin.*` and `app.files.*` bind to validated records
+(`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`, `file/FileProperties`). An invalid value
 stops the app at startup with the property name.
 
 ### First admin

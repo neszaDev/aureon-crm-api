@@ -69,4 +69,12 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/p
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/health/readiness")
 [ "$code" = 200 ] || fail "readiness probe returned $code"
 
-echo "smoke: OK - Java $runtime_java, health+readiness UP, $json_lines JSON log lines, prometheus scrapable, metrics not public"
+# The non-root runtime user must be able to write uploads (FILES_DIR in the image).
+token=$(curl -fsS -X POST "http://localhost:$PORT/api/v1/auth/register" -H 'Content-Type: application/json' \
+  -d '{"email":"smoke@example.com","password":"smoke-password"}' | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+[ -n "$token" ] || fail "could not register a smoke user"
+code=$(printf 'smoke' | curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:$PORT/api/v1/files" \
+  -H "Authorization: Bearer $token" -F 'file=@-;filename=smoke.txt;type=text/plain')
+[ "$code" = 201 ] || fail "file upload returned $code, the runtime user can't write FILES_DIR?"
+
+echo "smoke: OK - Java $runtime_java, health+readiness UP, $json_lines JSON log lines, prometheus scrapable, metrics not public, uploads writable"

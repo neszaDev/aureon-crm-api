@@ -38,6 +38,7 @@ What the existing ITs cover:
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
 | `security/SecurityIT` | Public vs protected endpoints, `X-Request-Id` |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
+| `file/FileIT` | Upload, download headers, owner isolation, type/size rejection, blob cleanup |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
 
