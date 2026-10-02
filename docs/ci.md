@@ -14,7 +14,7 @@ feature/* ──PR──▶ dev ──PR (release)──▶ main ──tag v1.2.
 | `ci.yml` (**CI**) | every pull request | the jobs below, summed up by **CI Gate**, the one required check |
 | `cd-dev.yml` (**CI/CD - dev**) | push to `dev` | CI, then publish `ghcr.io/<repo>:dev` |
 | `cd-main.yml` (**CI/CD - main**) | push to `main`, tags `v*` | CI, **approval** on the `main` environment, then publish `:main` + `:latest`, or `:1.2.3` + `:1.2` for tags |
-| `publish-image.yml` | called by the two above | the only place image build + push is defined |
+| `publish-image.yml` | called by the two above | the only place image build + push is defined; then rolls the image out to Azure Container Apps when the environment has `AZURE_*` variables ([deployment](deployment.md)) |
 | `cleanup-pr-cache.yml` | PR closed | delete that PR's Actions caches |
 
 Every published image also gets `:sha-<short>`, so a deployment can pin an exact commit.

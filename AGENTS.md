@@ -13,7 +13,7 @@ overview: [docs/architecture.md](docs/architecture.md). Why the repo is set up t
 
 Deeper guides, read the relevant one before changing that area:
 [configuration](docs/configuration.md) · [database/migrations](docs/database.md) ·
-[testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md)
+[testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md) · [deployment](docs/deployment.md)
 
 ## Layout
 
@@ -27,6 +27,7 @@ src/main/java/com/example/boilerplate/
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
+infra/         Azure: main.bicep (one environment of both apps) + deploy.sh, docs/deployment.md
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make
 scripts/       smoke-test.sh (prod-profile container check, CI + `make smoke`),
                ensure-docker.sh (make targets: start Docker Desktop if needed)
