@@ -6,24 +6,28 @@ Keep this file the single source of truth; `CLAUDE.md` only imports it.
 ## What this is
 
 A Spring Boot 3.5 / Java 21 REST API on PostgreSQL: JWT access tokens + rotating refresh
-tokens, an owner-scoped `test-results` CRUD example, Flyway migrations, Actuator/Prometheus,
-Docker. Architecture overview: [docs/architecture.md](docs/architecture.md). Why the repo is set up
-this way: [docs/plans/0001-repository-hardening.md](docs/plans/0001-repository-hardening.md).
+tokens, sign-in rate limits, admin user management, owner-scoped file uploads and a
+`test-results` CRUD example, Flyway migrations, Actuator/Prometheus, Docker. Architecture
+overview: [docs/architecture.md](docs/architecture.md). Why the repo is set up this way:
+[docs/plans/0001-repository-hardening.md](docs/plans/0001-repository-hardening.md).
 
 Deeper guides, read the relevant one before changing that area:
 [configuration](docs/configuration.md) · [database/migrations](docs/database.md) ·
-[testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md)
+[testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md) · [deployment](docs/deployment.md)
 
 ## Layout
 
 ```
 src/main/java/com/example/boilerplate/
   auth/        register/login/refresh/logout, JwtService, RefreshToken*, AuthProperties
-  user/        User entity, /api/v1/users/me, MapStruct UserMapper
+  user/        User entity, /api/v1/users/me, admin user management, AdminBootstrap
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
+  ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService
+  file/        owner-scoped uploads (/api/v1/files), FileStorage + LocalFileStorage
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
+infra/         Azure: main.bicep (one environment of both apps) + deploy.sh, docs/deployment.md
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make
 scripts/       smoke-test.sh (prod-profile container check, CI + `make smoke`),
                ensure-docker.sh (make targets: start Docker Desktop if needed)

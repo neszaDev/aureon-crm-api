@@ -1,4 +1,5 @@
-# Reusable: build the runtime image and push it to GitHub Container Registry.
+# Reusable: build the runtime image, push it to GitHub Container Registry and, once the
+# environment exists on Azure, roll it out there (docs/deployment.md in the backend repo).
 # Called only by cd-dev.yml and cd-main.yml, after CI has passed for the same commit.
 name: Publish image
 
@@ -20,6 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # Azure sign-in (OIDC)
     concurrency:
       group: publish-${{ inputs.environment }}
       cancel-in-progress: false
@@ -42,7 +44,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
@@ -52,3 +55,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=runtime
           cache-to: type=gha,scope=runtime,mode=max
+      # Skipped until infra/deploy.sh (backend repo) has created this environment on Azure and
+      # its variables are set on the GitHub environment. Signs in with OIDC: no stored secret.
+      - if: vars.AZURE_CLIENT_ID != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - if: vars.AZURE_CLIENT_ID != ''
+        name: Deploy to Azure Container Apps
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt -o none
+          # By digest: exactly the image just pushed, whatever the tags point at later.
+          image="ghcr.io/${GITHUB_REPOSITORY,,}@${DIGEST}"
+          az containerapp update -n "$APP" -g "$RESOURCE_GROUP" --image "$image" -o none
+          echo "Deployed \`$image\` to \`$APP\`" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          APP: ${{ vars.AZURE_CONTAINER_APP }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}

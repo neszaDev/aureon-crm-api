@@ -14,8 +14,12 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
+| 403 | Valid token without the required role (admin endpoints) |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
-| 409 | Email already registered |
+| 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
+| 413 | Upload larger than `FILES_MAX_SIZE` |
+| 415 | Upload type not in `FILES_ALLOWED_TYPES`, or its content doesn't match the type; wrong request `Content-Type` |
+| 429 | Too many sign-in or registration attempts; wait `Retry-After` seconds |
 
 ## Quick start
 
@@ -28,6 +32,20 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 ```
 
 The response contains a Bearer token. Pass it as `Authorization: Bearer <token>` to secured endpoints; `GET /api/v1/users/me` is included as a protected example.
+
+## Rate limits
+
+| Endpoint | Limit (default) | Key |
+|---|---|---|
+| `POST /auth/login` | 20 per minute | client IP |
+| `POST /auth/login` | 10 **failed** attempts per 15 minutes | email |
+| `POST /auth/register` | 10 per hour | client IP |
+
+Over a limit the API answers 429 with `Retry-After` (seconds). Buckets refill gradually, not
+all at once. Once an email is blocked, even the right password gets 429 until it refills: that
+is what makes password guessing slow from many IPs, at the cost of letting someone delay a
+victim's sign-in. Behind a proxy the client IP comes from `X-Forwarded-For` (see
+[configuration](configuration.md#rate-limits)).
 
 ## Refresh tokens and logout
 
@@ -95,3 +113,57 @@ curl --request PATCH 'http://localhost:8080/api/v1/test-results/<id>' \
 curl --request DELETE 'http://localhost:8080/api/v1/test-results/<id>' \
   --header "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+## User management (admins)
+
+Every `/api/v1/users` endpoint except `/me` needs the `ADMIN` role. The first admin comes from
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` (see [configuration](configuration.md#first-admin)); admins can
+then promote others.
+
+```sh
+export ADMIN_TOKEN='<accessToken of an admin>'
+
+# List, newest first; q matches part of the email (case-insensitive)
+curl 'http://localhost:8080/api/v1/users?page=0&size=20&q=example' \
+  --header "Authorization: Bearer $ADMIN_TOKEN"
+
+curl 'http://localhost:8080/api/v1/users/<id>' --header "Authorization: Bearer $ADMIN_TOKEN"
+
+# Change role and/or email (omit a field to keep it)
+curl --request PATCH 'http://localhost:8080/api/v1/users/<id>' \
+  --header "Authorization: Bearer $ADMIN_TOKEN" --header 'Content-Type: application/json' \
+  --data-raw '{"role":"ADMIN"}'
+
+# Delete, with their test results, files and sessions
+curl --request DELETE 'http://localhost:8080/api/v1/users/<id>' \
+  --header "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+- Changing a user's email or role signs them out: their refresh tokens are deleted. Their current
+  access token keeps working until it expires (15 minutes by default), but the admin endpoints
+  check the role in the database, so a demoted admin loses admin access immediately.
+- An admin can't change or delete their own account here (409), so there is always one admin.
+
+## Files
+
+Each user uploads, lists, downloads and deletes their own files. Another user's file is a 404.
+
+```sh
+# Upload (multipart field "file"): 201 with id, name, contentType, size, createdAt
+curl --request POST 'http://localhost:8080/api/v1/files' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" --form 'file=@report.pdf'
+
+curl 'http://localhost:8080/api/v1/files?page=0&size=20' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl 'http://localhost:8080/api/v1/files/<id>' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl -OJ 'http://localhost:8080/api/v1/files/<id>/content' --header "Authorization: Bearer $ACCESS_TOKEN"
+curl --request DELETE 'http://localhost:8080/api/v1/files/<id>' --header "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+- Only types in `FILES_ALLOWED_TYPES` are accepted (default: PNG, JPEG, GIF, WebP, PDF, plain
+  text, CSV). PNG, JPEG, GIF, WebP and PDF must also start with that format's signature, and text
+  must not contain NUL bytes; anything else is a 415.
+- Only the base name of the client's file name is kept (no paths or control characters). Bytes
+  are stored under a random key in `FILES_DIR`, never under that name.
+- Downloads are always `Content-Disposition: attachment` with `X-Content-Type-Options: nosniff`
+  and `Content-Security-Policy: sandbox`, so an uploaded file can't run as a page.
+- Deleting a file, or its owner, removes the stored bytes after the database change commits.

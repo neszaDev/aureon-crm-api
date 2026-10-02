@@ -13,6 +13,8 @@ RUN mvn -B -DskipTests package
 FROM eclipse-temurin:21-jre-alpine AS runtime
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
+# Uploaded files (FILES_DIR defaults to data/files); compose mounts a volume here.
+RUN mkdir -p /app/data/files && chown -R app:app /app/data
 COPY --from=build /workspace/target/*.jar app.jar
 USER app
 EXPOSE 8080

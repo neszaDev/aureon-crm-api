@@ -16,7 +16,7 @@ make verify  # should pass before you change anything (Docker must be running)
    commits.
 3. Before pushing, run `make verify`, and also `make smoke` if you touched Docker, config or
    logging.
-4. Open a PR and fill in the template checklist. CI (`verify` + `image-smoke`) must pass.
+4. Open a PR and fill in the template checklist. CI must pass (the **CI Gate** check).
 
 ## Commit messages
 
