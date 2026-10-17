@@ -1,14 +1,10 @@
 package com.example.boilerplate.workspace;
 
 import com.example.boilerplate.common.entity.Versions;
-import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.dto.*;
-import java.time.DateTimeException;
-import java.time.ZoneId;
-import java.util.Currency;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +35,6 @@ public class WorkspaceService {
 
   /** The workspace and its owner membership commit together. */
   public WorkspaceResponse create(String email, CreateWorkspaceRequest r) {
-    validate(r.defaultCurrency(), r.timezone());
     User user = users.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
     Workspace w =
         workspaces.save(new Workspace(r.name().strip(), r.defaultCurrency(), r.timezone()));
@@ -56,7 +51,6 @@ public class WorkspaceService {
 
   public WorkspaceResponse update(UpdateWorkspaceRequest r) {
     Membership m = access.require(Permission.WORKSPACE_MANAGE);
-    validate(r.defaultCurrency(), r.timezone());
     Workspace w = workspace(m.workspaceId());
     Versions.check(w, r.version());
     w.update(r.name().strip(), r.defaultCurrency(), r.timezone());
@@ -66,18 +60,6 @@ public class WorkspaceService {
 
   private void seedDefaults(long id) {
     // Task 4 adds WorkspaceDefaults.seed(id): default pipeline stages and lead sources.
-  }
-
-  private static void validate(String currency, String timezone) {
-    if (Currency.getAvailableCurrencies().stream()
-        .noneMatch(c -> c.getCurrencyCode().equals(currency))) {
-      throw new FieldValidationException("defaultCurrency", "is not an ISO 4217 currency");
-    }
-    try {
-      ZoneId.of(timezone);
-    } catch (DateTimeException e) {
-      throw new FieldValidationException("timezone", "is not a known time zone");
-    }
   }
 
   private Workspace workspace(long id) {

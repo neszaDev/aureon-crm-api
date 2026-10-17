@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.security.Principal;
 import java.util.Map;
-import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
 /**
@@ -13,7 +13,7 @@ import org.springframework.web.servlet.HandlerMapping;
  * workspace (or no such workspace, or an id that isn't one) is a 404, so ids can't be probed. The
  * membership is read from the database on every request, so role changes apply at once.
  */
-class WorkspaceAccessInterceptor implements HandlerInterceptor {
+class WorkspaceAccessInterceptor implements AsyncHandlerInterceptor {
   private final WorkspaceMemberRepository members;
 
   WorkspaceAccessInterceptor(WorkspaceMemberRepository members) {
@@ -33,6 +33,13 @@ class WorkspaceAccessInterceptor implements HandlerInterceptor {
   @Override
   public void afterCompletion(
       HttpServletRequest req, HttpServletResponse res, Object handler, Exception ex) {
+    WorkspaceContext.clear();
+  }
+
+  /** Async work (e.g. a streamed body) runs elsewhere; don't leave this request on the thread. */
+  @Override
+  public void afterConcurrentHandlingStarted(
+      HttpServletRequest req, HttpServletResponse res, Object handler) {
     WorkspaceContext.clear();
   }
 

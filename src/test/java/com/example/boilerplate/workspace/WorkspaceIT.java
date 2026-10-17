@@ -68,22 +68,28 @@ class WorkspaceIT extends WorkspaceTestSupport {
   void invalidCurrencyAndTimezoneAre400() throws Exception {
     String token = tokenFor(uniqueEmail());
 
-    create(token, workspace("Acme", "XYZ", "Europe/Paris"))
+    create(token, workspace("Acme", "XYZ", "Mars/Base"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists());
-    create(token, workspace("Acme", "EUR", "Mars/Base"))
-        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists())
         .andExpect(jsonPath("$.fieldErrors.timezone").exists());
+    create(token, workspace(" ", "XYZ", "Europe/Paris"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.name").exists())
+        .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists());
+    // Offsets are valid for java.time but are not IANA time zones.
+    for (String zone : List.of("UTC+7", "+05:00")) {
+      create(token, workspace("Acme", "EUR", zone))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.fieldErrors.timezone").exists());
+    }
     create(token, workspace("Acme", "eur", "Europe/Paris"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists());
 
     long id = createWorkspace(token, "Acme");
-    update(token, id, workspace("Acme", "XYZ", "Europe/Paris"), 0L)
+    update(token, id, workspace("Acme", "XYZ", "Mars/Base"), 0L)
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists());
-    update(token, id, workspace("Acme", "EUR", "Mars/Base"), 0L)
-        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.defaultCurrency").exists())
         .andExpect(jsonPath("$.fieldErrors.timezone").exists());
   }
 
