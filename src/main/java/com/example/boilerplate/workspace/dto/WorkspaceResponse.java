@@ -2,6 +2,7 @@ package com.example.boilerplate.workspace.dto;
 
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.WorkspaceRole;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 
@@ -10,11 +11,11 @@ import java.util.List;
  */
 public record WorkspaceResponse(
     long id,
-    String name,
-    String defaultCurrency,
-    String timezone,
-    WorkspaceRole role,
-    List<Permission> permissions,
+    @NotNull String name,
+    @NotNull String defaultCurrency,
+    @NotNull String timezone,
+    @NotNull WorkspaceRole role,
+    @NotNull List<Permission> permissions,
     long version,
-    Instant createdAt,
-    Instant updatedAt) {}
+    @NotNull Instant createdAt,
+    @NotNull Instant updatedAt) {}

@@ -2,6 +2,7 @@ package com.example.boilerplate.crm.deal.dto;
 
 import com.example.boilerplate.crm.common.MoneyTotal;
 import com.example.boilerplate.crm.settings.dto.StageResponse;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -9,4 +10,7 @@ import java.util.List;
  * the stage; {@code deals} lists the most recently updated of them, at most 50.
  */
 public record BoardColumn(
-    StageResponse stage, long count, List<MoneyTotal> totals, List<DealSummary> deals) {}
+    @NotNull StageResponse stage,
+    long count,
+    @NotNull List<MoneyTotal> totals,
+    @NotNull List<DealSummary> deals) {}

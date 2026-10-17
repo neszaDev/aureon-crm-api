@@ -1,8 +1,10 @@
 package com.example.boilerplate.auth.dto;
 
+import jakarta.validation.constraints.NotNull;
+
 public record AuthTokensResponse(
-    String accessToken,
-    String tokenType,
+    @NotNull String accessToken,
+    @NotNull String tokenType,
     long expiresIn,
-    String refreshToken,
+    @NotNull String refreshToken,
     long refreshExpiresIn) {}

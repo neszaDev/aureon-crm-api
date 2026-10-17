@@ -473,16 +473,15 @@ class TaskIT extends WorkspaceTestSupport {
             AuditAction.COMPLETE,
             AuditAction.CREATE);
     assertThat(trail).allSatisfy(e -> assertThat(e.getEntityLabel()).isEqualTo("Send the invoice"));
+    // Stored fields only: overdue follows from the status and the due time, so it is left out.
     assertThat(trail.get(4).getChanges())
-        .containsOnlyKeys("status", "completedAt", "overdue")
-        .containsEntry("status", Map.of("from", "OPEN", "to", "COMPLETED"))
-        .containsEntry("overdue", Map.of("from", true, "to", false));
+        .containsOnlyKeys("status", "completedAt")
+        .containsEntry("status", Map.of("from", "OPEN", "to", "COMPLETED"));
     assertThat(trail.get(3).getChanges())
-        .containsOnlyKeys("status", "completedAt", "overdue")
-        .containsEntry("status", Map.of("from", "COMPLETED", "to", "OPEN"))
-        .containsEntry("overdue", Map.of("from", false, "to", true));
+        .containsOnlyKeys("status", "completedAt")
+        .containsEntry("status", Map.of("from", "COMPLETED", "to", "OPEN"));
     assertThat(trail.get(2).getChanges())
-        .containsOnlyKeys("status", "overdue")
+        .containsOnlyKeys("status")
         .containsEntry("status", Map.of("from", "OPEN", "to", "CANCELLED"));
     assertThat(trail.get(5).getChanges()).isEmpty();
   }

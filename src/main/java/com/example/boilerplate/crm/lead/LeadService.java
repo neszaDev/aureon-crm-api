@@ -12,6 +12,7 @@ import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.common.Currencies;
 import com.example.boilerplate.crm.common.ListParams;
+import com.example.boilerplate.crm.common.PersonRef;
 import com.example.boilerplate.crm.common.Priority;
 import com.example.boilerplate.crm.common.RecordLinks;
 import com.example.boilerplate.crm.common.Ref;
@@ -243,7 +244,7 @@ public class LeadService {
       Map<Long, MemberRef> owners,
       Map<Long, Ref> sources,
       Map<Long, Ref> convertedCompanies,
-      Map<Long, Ref> convertedContacts,
+      Map<Long, PersonRef> convertedContacts,
       Map<Long, Ref> convertedDeals) {
     MemberRef owner(Lead l) {
       return l.getOwnerId() == null ? null : owners.get(l.getOwnerId());
@@ -259,7 +260,7 @@ public class LeadService {
           : convertedCompanies.get(l.getConvertedCompanyId());
     }
 
-    Ref convertedContact(Lead l) {
+    PersonRef convertedContact(Lead l) {
       return l.getConvertedContactId() == null
           ? null
           : convertedContacts.get(l.getConvertedContactId());
@@ -279,7 +280,8 @@ public class LeadService {
         companies.findAllById(ids(page, Lead::getConvertedCompanyId)).stream()
             .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getName()))),
         contacts.findAllById(ids(page, Lead::getConvertedContactId)).stream()
-            .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getFullName()))),
+            .collect(
+                Collectors.toMap(c -> c.getId(), c -> new PersonRef(c.getId(), c.getFullName()))),
         deals.findAllById(ids(page, Lead::getConvertedDealId)).stream()
             .collect(Collectors.toMap(d -> d.getId(), d -> new Ref(d.getId(), d.getName()))));
   }

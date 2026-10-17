@@ -17,6 +17,8 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditEvent;
 import com.example.boilerplate.audit.AuditEventRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.example.boilerplate.workspace.Membership;
+import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
@@ -42,6 +44,7 @@ class DealIT extends WorkspaceTestSupport {
 
   @Autowired AuditEventRepository events;
   @Autowired JdbcTemplate jdbc;
+  @Autowired DealStageChangeRepository history;
 
   @Test
   void createDefaultsToFirstOpenStageAndWorkspaceCurrency() throws Exception {
@@ -197,10 +200,10 @@ class DealIT extends WorkspaceTestSupport {
     assertThat(trail)
         .extracting(AuditEvent::getAction)
         .containsExactly(AuditAction.UPDATE, AuditAction.CREATE);
+    // The deal's own probability (probabilityOverride), not the effective one that follows it.
     assertThat(trail.get(0).getChanges())
         .containsOnlyKeys(
             "currency",
-            "probability",
             "probabilityOverride",
             "expectedCloseDate",
             "company",
@@ -335,10 +338,10 @@ class DealIT extends WorkspaceTestSupport {
     assertThat(trail.get(0).getChanges())
         .containsEntry("stage", Map.of("from", "Proposal", "to", "Won"))
         .containsEntry("status", Map.of("from", "OPEN", "to", "WON"))
-        .containsEntry("probability", Map.of("from", 50, "to", 100))
         .containsKey("closedAt");
+    // The probability that only follows the stage, and the time it was entered, are left out.
     assertThat(trail.get(1).getChanges())
-        .containsOnlyKeys("stage", "probability")
+        .containsOnlyKeys("stage")
         .containsEntry("stage", Map.of("from", "Qualification", "to", "Proposal"));
     assertThat(trail.get(0).getEntityLabel()).isEqualTo("Deal");
 
@@ -347,6 +350,63 @@ class DealIT extends WorkspaceTestSupport {
     move(token, w, fixed, stage.get("Negotiation"), null, 0)
         .andExpect(jsonPath("$.probability").value(30))
         .andExpect(jsonPath("$.probabilityOverride").value(30));
+  }
+
+  /**
+   * When the deal entered its current stage: the time of its newest history entry, on the deal, the
+   * list's rows and the board's cards. A new lost reason is no move: the time stays.
+   */
+  @Test
+  void stageEnteredAtIsTheNewestHistoryEntry() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    Map<String, Long> stage = stages(token, w);
+    long id = create(token, w, Map.of("name", "Moved", "amount", "10"));
+    long stays = create(token, w, Map.of("name", "Stays", "amount", "1"));
+    String created = newestChange(token, w, id);
+    send(token, get(DEAL, w, id)).andExpect(jsonPath("$.stageEnteredAt").value(created));
+
+    String moved =
+        body(move(token, w, id, stage.get("Lost"), "Too expensive", 0).andExpect(status().isOk()))
+            .get("stageEnteredAt")
+            .asText();
+    assertThat(moved).isEqualTo(newestChange(token, w, id)).isNotEqualTo(created);
+    move(token, w, id, stage.get("Lost"), "Went with a rival", 1)
+        .andExpect(jsonPath("$.lostReason").value("Went with a rival"))
+        .andExpect(jsonPath("$.stageEnteredAt").value(moved));
+    send(token, get(DEAL, w, id)).andExpect(jsonPath("$.stageEnteredAt").value(moved));
+
+    list(token, w, "sort", "NAME")
+        .andExpect(names("Moved", "Stays"))
+        .andExpect(
+            jsonPath(
+                "$.content[*].stageEnteredAt", contains(moved, newestChange(token, w, stays))));
+    JsonNode board = body(send(token, get(DEALS + "/board", w)));
+    Map<String, String> cards = new HashMap<>();
+    for (JsonNode column : board.get("stages")) {
+      for (JsonNode card : column.get("deals")) {
+        cards.put(card.get("name").asText(), card.get("stageEnteredAt").asText());
+      }
+    }
+    assertThat(cards).isEqualTo(Map.of("Moved", moved, "Stays", newestChange(token, w, stays)));
+  }
+
+  /** The page's query goes through the tenant filter: another workspace's history is never read. */
+  @Test
+  void stageEnteredAtReadsOnlyTheWorkspacesHistory() throws Exception {
+    String a = tokenFor(uniqueEmail());
+    long wa = createWorkspace(a, "A");
+    long theirs = create(a, wa, Map.of("name", "Theirs", "amount", "1"));
+    String bEmail = uniqueEmail();
+    String b = tokenFor(bEmail);
+    long wb = createWorkspace(b, "B");
+    long own = create(b, wb, Map.of("name", "Own", "amount", "1"));
+    Membership inB = new Membership(wb, userId(bEmail), bEmail, WorkspaceRole.OWNER);
+
+    List<Object[]> rows =
+        WorkspaceContext.runAs(inB, () -> history.stageEnteredAt(List.of(theirs, own)));
+
+    assertThat(rows).extracting(row -> row[0]).containsExactly(own);
   }
 
   @Test
@@ -574,7 +634,7 @@ class DealIT extends WorkspaceTestSupport {
         .isInstanceOf(DataIntegrityViolationException.class);
     send(a, get(DEAL, wa, own))
         .andExpect(jsonPath("$.lead.id").value(ownLead))
-        .andExpect(jsonPath("$.lead.name").value("Ada L"));
+        .andExpect(jsonPath("$.lead.fullName").value("Ada L"));
   }
 
   @Test
@@ -1027,6 +1087,11 @@ class DealIT extends WorkspaceTestSupport {
 
   private static ResultMatcher namesAnyOrder(String... names) {
     return jsonPath("$.content[*].name", containsInAnyOrder(names));
+  }
+
+  /** The {@code changedAt} of the deal's newest history entry. */
+  private String newestChange(String token, long w, long id) throws Exception {
+    return body(send(token, get(DEAL + "/history", w, id))).get(0).get("changedAt").asText();
   }
 
   /** The deal's audit events, newest first. */

@@ -497,12 +497,12 @@ class LeadIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.convertedCompany.id").value(acme))
         .andExpect(jsonPath("$.convertedCompany.name").value("Acme"))
         .andExpect(jsonPath("$.convertedContact.id").value(contact))
-        .andExpect(jsonPath("$.convertedContact.name").value("Ada L"))
+        .andExpect(jsonPath("$.convertedContact.fullName").value("Ada L"))
         .andExpect(jsonPath("$.convertedDeal").doesNotExist())
         .andExpect(jsonPath("$.version").value(2));
     list(token, w)
         .andExpect(jsonPath("$.content[0].convertedCompany.name").value("Acme"))
-        .andExpect(jsonPath("$.content[0].convertedContact.name").value("Ada L"));
+        .andExpect(jsonPath("$.content[0].convertedContact.fullName").value("Ada L"));
     list(token, w, "status", "CONVERTED").andExpect(names("Ada"));
 
     send(token, put(LEAD, w, id), edit("Edited", userId(email), 2))

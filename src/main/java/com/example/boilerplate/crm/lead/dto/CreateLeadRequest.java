@@ -2,6 +2,7 @@ package com.example.boilerplate.crm.lead.dto;
 
 import com.example.boilerplate.crm.common.Priority;
 import com.example.boilerplate.crm.contact.dto.ContactInput;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -17,7 +18,10 @@ public record CreateLeadRequest(
     Long ownerId,
     Priority priority,
     LocalDate followUpDate,
-    @Digits(integer = 13, fraction = 2) @PositiveOrZero BigDecimal estimatedValue,
+    @Digits(integer = 13, fraction = 2)
+        @PositiveOrZero
+        @Schema(type = "string", example = "1250.00")
+        BigDecimal estimatedValue,
     @Size(max = 3) String currency,
     @Size(max = 5000) String notes)
     implements LeadInput {}

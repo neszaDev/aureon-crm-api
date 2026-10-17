@@ -74,6 +74,21 @@ class AuditChangesTest {
         .isEmpty();
   }
 
+  record Person(String firstName, String lastName, @Derived String fullName) {}
+
+  @Test
+  void recordDiffLeavesDerivedFieldsOut() {
+    AuditChanges changes = new AuditChanges(new ObjectMapper());
+
+    assertThat(
+            changes.recordDiff(
+                new Person("Ada", "Lovelace", "Ada Lovelace"), new Person("Ada", null, "Ada")))
+        .containsOnlyKeys("lastName");
+    // A record's last state too.
+    assertThat(changes.recordDiff(new Person("Ada", "L", "Ada L"), Map.of()))
+        .containsOnlyKeys("firstName", "lastName");
+  }
+
   record Priced(String name, BigDecimal amount) {}
 
   @Test

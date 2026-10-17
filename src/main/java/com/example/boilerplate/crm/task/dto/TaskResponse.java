@@ -1,10 +1,12 @@
 package com.example.boilerplate.crm.task.dto;
 
+import com.example.boilerplate.audit.Derived;
 import com.example.boilerplate.crm.common.PersonRef;
 import com.example.boilerplate.crm.common.Priority;
 import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.task.TaskStatus;
 import com.example.boilerplate.workspace.dto.MemberRef;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 
 /**
@@ -13,19 +15,19 @@ import java.time.Instant;
  */
 public record TaskResponse(
     long id,
-    String title,
+    @NotNull String title,
     String description,
     Instant dueAt,
-    Priority priority,
+    @NotNull Priority priority,
     MemberRef assignee,
     MemberRef createdBy,
-    TaskStatus status,
-    boolean overdue,
+    @NotNull TaskStatus status,
+    @Derived boolean overdue,
     Instant completedAt,
     Ref company,
     PersonRef contact,
     PersonRef lead,
     Ref deal,
-    Instant createdAt,
-    Instant updatedAt,
+    @NotNull Instant createdAt,
+    @NotNull Instant updatedAt,
     long version) {}

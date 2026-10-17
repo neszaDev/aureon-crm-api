@@ -97,7 +97,7 @@ class LeadConversionIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.convertedCompany.id").value(company))
         .andExpect(jsonPath("$.convertedCompany.name").value("Analytical Engines"))
         .andExpect(jsonPath("$.convertedContact.id").value(contact))
-        .andExpect(jsonPath("$.convertedContact.name").value("Ada Lovelace"))
+        .andExpect(jsonPath("$.convertedContact.fullName").value("Ada Lovelace"))
         .andExpect(jsonPath("$.convertedDeal.id").value(deal))
         .andExpect(jsonPath("$.convertedDeal.name").value("Engines"))
         .andExpect(jsonPath("$.owner.userId").value(repId))
@@ -127,7 +127,7 @@ class LeadConversionIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.contact.id").value(contact))
         .andExpect(jsonPath("$.source.id").value(source.get("id").asLong()))
         .andExpect(jsonPath("$.lead.id").value(lead))
-        .andExpect(jsonPath("$.lead.name").value("Ada Lovelace"))
+        .andExpect(jsonPath("$.lead.fullName").value("Ada Lovelace"))
         .andExpect(jsonPath("$.owner.userId").value(repId));
     // The deal's first history entry, written by the one who converted.
     send(owner, get(DEALS + "/{id}/history", w, deal))

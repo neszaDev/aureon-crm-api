@@ -26,6 +26,7 @@ import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRepository;
 import com.example.boilerplate.workspace.dto.MemberRef;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -191,10 +192,11 @@ public class DealService {
     PipelineStage from = stages.findById(deal.getStageId()).orElseThrow();
     DealResponse before = response(deal);
     deal.moveTo(target.getId(), from.getKind(), target.getKind(), reason);
+    // Before the response: its stageEnteredAt is this entry's time.
+    if (!sameStage) history.save(new DealStageChange(id, from, target, caller()));
     DealResponse after = response(deals.saveAndFlush(deal));
     Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!sameStage) {
-      history.save(new DealStageChange(id, from, target, caller()));
       // The names, not the stage references: what a reader of the trail needs.
       changes.put("stage", Map.<String, Object>of("from", from.getName(), "to", target.getName()));
     }
@@ -295,7 +297,8 @@ public class DealService {
       Map<Long, MemberRef> owners,
       Map<Long, Ref> companies,
       Map<Long, PersonRef> contacts,
-      Map<Long, PipelineStage> stages) {
+      Map<Long, PipelineStage> stages,
+      Map<Long, Instant> stageEnteredAt) {
     MemberRef owner(Deal d) {
       return d.getOwnerId() == null ? null : owners.get(d.getOwnerId());
     }
@@ -311,10 +314,14 @@ public class DealService {
     PipelineStage stage(Deal d) {
       return stages.get(d.getStageId());
     }
+
+    Instant stageEnteredAt(Deal d) {
+      return stageEnteredAt.get(d.getId());
+    }
   }
 
   private Related related(List<Deal> page) {
-    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of());
+    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
     return new Related(
         directory.refs(page.stream().map(Deal::getOwnerId).toList()),
         companies.findAllById(ids(page, Deal::getCompanyId)).stream()
@@ -323,7 +330,9 @@ public class DealService {
             .collect(
                 Collectors.toMap(c -> c.getId(), c -> new PersonRef(c.getId(), c.getFullName()))),
         stages.findAllById(ids(page, Deal::getStageId)).stream()
-            .collect(Collectors.toMap(s -> s.getId(), Function.identity())));
+            .collect(Collectors.toMap(s -> s.getId(), Function.identity())),
+        history.stageEnteredAt(ids(page, Deal::getId)).stream()
+            .collect(Collectors.toMap(row -> (Long) row[0], row -> (Instant) row[1])));
   }
 
   private static List<Long> ids(List<Deal> page, Function<Deal, Long> link) {
@@ -338,6 +347,7 @@ public class DealService {
         d.getAmount(),
         d.getCurrency(),
         new StageRef(stage.getId(), stage.getName(), stage.getKind()),
+        r.stageEnteredAt(d),
         DealStatus.of(stage.getKind()),
         probability(d, stage),
         d.getExpectedCloseDate(),
@@ -360,12 +370,12 @@ public class DealService {
                 .findById(d.getSourceId())
                 .map(s -> new Ref(s.getId(), s.getName()))
                 .orElse(null);
-    Ref lead =
+    PersonRef lead =
         d.getLeadId() == null
             ? null
             : leads
                 .findById(d.getLeadId())
-                .map(l -> new Ref(l.getId(), l.getFullName()))
+                .map(l -> new PersonRef(l.getId(), l.getFullName()))
                 .orElse(null);
     return new DealResponse(
         d.getId(),
@@ -373,6 +383,7 @@ public class DealService {
         d.getAmount(),
         d.getCurrency(),
         new StageRef(stage.getId(), stage.getName(), stage.getKind()),
+        r.stageEnteredAt(d),
         DealStatus.of(stage.getKind()),
         probability(d, stage),
         d.getExpectedCloseDate(),

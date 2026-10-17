@@ -1,15 +1,16 @@
 package com.example.boilerplate.testresult.dto;
 
 import com.example.boilerplate.testresult.TestStatus;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 
 public record TestResultResponse(
-    Long id,
-    String testName,
-    TestStatus status,
-    BigDecimal score,
-    Instant testedAt,
+    @NotNull Long id,
+    @NotNull String testName,
+    @NotNull TestStatus status,
+    @NotNull BigDecimal score,
+    @NotNull Instant testedAt,
     String notes,
-    Instant createdAt,
-    Instant updatedAt) {}
+    @NotNull Instant createdAt,
+    @NotNull Instant updatedAt) {}

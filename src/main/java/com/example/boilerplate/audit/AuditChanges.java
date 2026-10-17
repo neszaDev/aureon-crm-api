@@ -2,6 +2,7 @@ package com.example.boilerplate.audit;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.RecordComponent;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -30,11 +31,17 @@ public class AuditChanges {
 
   /**
    * What an edit changed in a response DTO: the diff of both snapshots without the bookkeeping that
-   * every edit bumps and that says nothing about what was edited. Empty when nothing was edited.
+   * every edit bumps and that says nothing about what was edited, nor the {@link Derived} fields of
+   * {@code before}'s record type. Empty when nothing was edited.
    */
   public Map<String, Map<String, Object>> recordDiff(Object before, Object after) {
     Map<String, Map<String, Object>> changes = diff(snapshot(before), snapshot(after));
     changes.keySet().removeAll(BOOKKEEPING);
+    if (before.getClass().isRecord()) {
+      for (RecordComponent c : before.getClass().getRecordComponents()) {
+        if (c.isAnnotationPresent(Derived.class)) changes.remove(c.getName());
+      }
+    }
     return changes;
   }
 

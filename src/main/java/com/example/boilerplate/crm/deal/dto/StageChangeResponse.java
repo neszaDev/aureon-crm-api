@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.deal.dto;
 
 import com.example.boilerplate.workspace.dto.MemberRef;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 
 /**
@@ -8,4 +9,7 @@ import java.time.Instant;
  * changedBy} once that person is no longer a member.
  */
 public record StageChangeResponse(
-    HistoryStageRef fromStage, HistoryStageRef toStage, MemberRef changedBy, Instant changedAt) {}
+    HistoryStageRef fromStage,
+    @NotNull HistoryStageRef toStage,
+    MemberRef changedBy,
+    @NotNull Instant changedAt) {}

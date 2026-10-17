@@ -120,17 +120,10 @@ class ContactIT extends WorkspaceTestSupport {
         .containsExactly(AuditAction.UPDATE, AuditAction.CREATE);
     assertThat(trail.get(1).getEntityLabel()).isEqualTo("Ada Lovelace");
     assertThat(trail.get(0).getEntityLabel()).isEqualTo("Ada");
+    // fullName follows from the names: not a change of its own.
     assertThat(trail.get(0).getChanges())
         .containsOnlyKeys(
-            "lastName",
-            "fullName",
-            "email",
-            "phone",
-            "jobTitle",
-            "company",
-            "source",
-            "tags",
-            "notes");
+            "lastName", "email", "phone", "jobTitle", "company", "source", "tags", "notes");
   }
 
   @Test

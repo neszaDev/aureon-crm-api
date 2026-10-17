@@ -133,16 +133,15 @@ class PipelineStageIT extends WorkspaceTestSupport {
                 "name", Map.of("from", "Demo", "to", "Product demo"),
                 "probability", Map.of("from", 40, "to", 45)));
     assertThat(trail).extracting(AuditEvent::getEntityLabel).first().isEqualTo("Product demo");
-    // The DELETE keeps the stage's last state, every field as a "from".
+    // The DELETE keeps the stage's last state, every stored field as a "from" (dealCount is
+    // counted, not stored).
     Map<String, Object> deleted = trail.get(0).getChanges();
-    assertThat(deleted)
-        .containsOnlyKeys("id", "name", "position", "probability", "kind", "dealCount");
+    assertThat(deleted).containsOnlyKeys("id", "name", "position", "probability", "kind");
     assertThat(deleted.get("id")).isEqualTo(gone((int) demo));
     assertThat(deleted.get("name")).isEqualTo(gone("Product demo"));
     assertThat(deleted.get("position")).isEqualTo(gone(1));
     assertThat(deleted.get("probability")).isEqualTo(gone(45));
     assertThat(deleted.get("kind")).isEqualTo(gone("OPEN"));
-    assertThat(deleted.get("dealCount")).isEqualTo(gone(0));
   }
 
   @Test

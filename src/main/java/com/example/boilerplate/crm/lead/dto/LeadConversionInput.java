@@ -1,5 +1,6 @@
 package com.example.boilerplate.crm.lead.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
@@ -20,7 +21,11 @@ public record LeadConversionInput(
    */
   public record DealDraft(
       @NotBlank @Size(max = 200) String name,
-      @NotNull @Digits(integer = 13, fraction = 2) @PositiveOrZero BigDecimal amount,
+      @NotNull
+          @Digits(integer = 13, fraction = 2)
+          @PositiveOrZero
+          @Schema(type = "string", example = "1250.00")
+          BigDecimal amount,
       @Size(max = 3) String currency,
       Long stageId,
       LocalDate expectedCloseDate) {}
