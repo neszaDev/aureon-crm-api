@@ -2,6 +2,12 @@ package com.example.boilerplate.crm.settings.dto;
 
 import com.example.boilerplate.crm.settings.StageKind;
 
-// dealCount arrives with deals (B2).
+/** A pipeline stage; {@code dealCount} counts its active deals. */
 public record StageResponse(
-    long id, String name, int position, int probability, StageKind kind, long version) {}
+    long id,
+    String name,
+    int position,
+    int probability,
+    StageKind kind,
+    long dealCount,
+    long version) {}

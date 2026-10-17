@@ -9,6 +9,8 @@ import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
+import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.deal.DealStageChangeRepository;
 import com.example.boilerplate.crm.settings.dto.*;
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -26,16 +28,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class PipelineStageService {
   private final PipelineStageRepository stages;
+  private final DealRepository deals;
+  private final DealStageChangeRepository stageChanges;
   private final WorkspaceAccess access;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
 
   public PipelineStageService(
       PipelineStageRepository stages,
+      DealRepository deals,
+      DealStageChangeRepository stageChanges,
       WorkspaceAccess access,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.stages = stages;
+    this.deals = deals;
+    this.stageChanges = stageChanges;
     this.access = access;
     this.audit = audit;
     this.auditChanges = auditChanges;
@@ -43,8 +51,9 @@ public class PipelineStageService {
 
   @Transactional(readOnly = true)
   public List<StageResponse> list() {
+    Map<Long, Long> dealCounts = dealCounts();
     return stages.findAllByOrderByPositionAscIdAsc().stream()
-        .map(PipelineStageService::response)
+        .map(s -> response(s, dealCounts))
         .toList();
   }
 
@@ -63,7 +72,7 @@ public class PipelineStageService {
         stage.getId(),
         stage.getName(),
         Map.of());
-    return response(stage);
+    return response(stage, Map.of());
   }
 
   public StageResponse update(long id, UpdateStageRequest r) {
@@ -71,10 +80,11 @@ public class PipelineStageService {
     PipelineStage stage = stage(id);
     Versions.check(stage, r.version());
     String name = uniqueName(r.name(), id);
-    StageResponse before = response(stage);
+    Map<Long, Long> dealCounts = dealCounts();
+    StageResponse before = response(stage, dealCounts);
     stage.update(name, r.probability());
     // Flush so the response carries the new version.
-    StageResponse after = response(stages.saveAndFlush(stage));
+    StageResponse after = response(stages.saveAndFlush(stage), dealCounts);
     auditUpdate(before, after);
     return after;
   }
@@ -89,11 +99,12 @@ public class PipelineStageService {
     if (ids.size() != open.size() || !open.keySet().equals(new HashSet<>(ids))) {
       throw new FieldValidationException("stageIds", "must list every open stage exactly once");
     }
+    Map<Long, Long> dealCounts = dealCounts();
     Map<Long, StageResponse> before = new HashMap<>();
-    for (PipelineStage s : all) before.put(s.getId(), response(s));
+    for (PipelineStage s : all) before.put(s.getId(), response(s, dealCounts));
     List<PipelineStage> ordered = renumber(ids.stream().map(open::get).toList(), all);
     stages.flush();
-    List<StageResponse> after = ordered.stream().map(PipelineStageService::response).toList();
+    List<StageResponse> after = ordered.stream().map(s -> response(s, dealCounts)).toList();
     for (StageResponse s : after) auditUpdate(before.get(s.id()), s);
     return after;
   }
@@ -107,7 +118,11 @@ public class PipelineStageService {
     List<PipelineStage> all = stages.findAllByOrderByPositionAscIdAsc();
     List<PipelineStage> open = open(all);
     if (open.size() == 1) throw new ConflictException("The pipeline needs an open stage");
-    // B2 adds: 409 while a deal is in this stage.
+    // Archived deals too: their foreign key holds the stage.
+    if (deals.existsByStageId(id)) throw new ConflictException("Stage has deals; move them first");
+    if (stageChanges.existsByFromStageIdOrToStageId(id, id)) {
+      throw new ConflictException("Stage is in the history of deals; it can't be deleted");
+    }
     stages.delete(stage);
     renumber(open.stream().filter(s -> s != stage).toList(), all);
     audit.record(AuditAction.DELETE, AuditEntityType.PIPELINE_STAGE, id, stage.getName(), Map.of());
@@ -149,8 +164,20 @@ public class PipelineStageService {
     return ordered;
   }
 
-  private static StageResponse response(PipelineStage s) {
+  /** Active deals per stage id, for the stages that have any: one grouped query. */
+  private Map<Long, Long> dealCounts() {
+    return deals.countActiveByStage().stream()
+        .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+  }
+
+  private static StageResponse response(PipelineStage s, Map<Long, Long> dealCounts) {
     return new StageResponse(
-        s.getId(), s.getName(), s.getPosition(), s.getProbability(), s.getKind(), s.getVersion());
+        s.getId(),
+        s.getName(),
+        s.getPosition(),
+        s.getProbability(),
+        s.getKind(),
+        dealCounts.getOrDefault(s.getId(), 0L),
+        s.getVersion());
   }
 }

@@ -8,6 +8,9 @@ import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
+import com.example.boilerplate.crm.contact.ContactRepository;
+import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.lead.LeadRepository;
 import com.example.boilerplate.crm.settings.dto.*;
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -21,16 +24,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class LeadSourceService {
   private final LeadSourceRepository sources;
+  private final LeadRepository leads;
+  private final ContactRepository contacts;
+  private final DealRepository deals;
   private final WorkspaceAccess access;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
 
   public LeadSourceService(
       LeadSourceRepository sources,
+      LeadRepository leads,
+      ContactRepository contacts,
+      DealRepository deals,
       WorkspaceAccess access,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.sources = sources;
+    this.leads = leads;
+    this.contacts = contacts;
+    this.deals = deals;
     this.access = access;
     this.audit = audit;
     this.auditChanges = auditChanges;
@@ -72,7 +84,10 @@ public class LeadSourceService {
   public void delete(long id) {
     access.require(Permission.SETTINGS_MANAGE);
     LeadSource source = source(id);
-    // B2 adds: 409 while a lead, contact or deal uses it (archive it instead).
+    // Archived records too: their foreign keys hold the source.
+    if (leads.existsBySourceId(id) || contacts.existsBySourceId(id) || deals.existsBySourceId(id)) {
+      throw new ConflictException("Lead source is in use; archive it instead");
+    }
     sources.delete(source);
     audit.record(AuditAction.DELETE, AuditEntityType.LEAD_SOURCE, id, source.getName(), Map.of());
   }

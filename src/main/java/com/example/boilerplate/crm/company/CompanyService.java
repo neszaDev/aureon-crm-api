@@ -10,6 +10,7 @@ import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.company.dto.*;
 import com.example.boilerplate.crm.contact.ContactRepository;
+import com.example.boilerplate.crm.deal.DealRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.dto.MemberRef;
@@ -35,6 +36,7 @@ public class CompanyService {
 
   private final CompanyRepository companies;
   private final ContactRepository contacts;
+  private final DealRepository deals;
   private final WorkspaceAccess access;
   private final MemberDirectory directory;
   private final AuditTrail audit;
@@ -43,12 +45,14 @@ public class CompanyService {
   public CompanyService(
       CompanyRepository companies,
       ContactRepository contacts,
+      DealRepository deals,
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.companies = companies;
     this.contacts = contacts;
+    this.deals = deals;
     this.access = access;
     this.directory = directory;
     this.audit = audit;
@@ -217,9 +221,11 @@ public class CompanyService {
         .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
   }
 
-  // Task 5 (deals) replaces this with one grouped count of their active deals in OPEN stages.
+  /** Active deals in an open stage, per company of the page. */
   private Map<Long, Long> openDealCounts(List<Long> companyIds) {
-    return Map.of();
+    if (companyIds.isEmpty()) return Map.of();
+    return deals.countOpenByCompany(companyIds).stream()
+        .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
   }
 
   private CompanyResponse response(Company c) {

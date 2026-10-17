@@ -85,15 +85,15 @@ Invitation rules:
 
 | Method and path | Body → response | Permission |
 |---|---|---|
-| `GET /workspaces/{w}/pipeline-stages` | → `Stage[]` (`id, name, position, probability, kind, dealCount (from B2), version`), by position | member |
+| `GET /workspaces/{w}/pipeline-stages` | → `Stage[]` (`id, name, position, probability, kind, dealCount, version`; `dealCount`: its active deals), by position | member |
 | `POST /workspaces/{w}/pipeline-stages` | `{ name (1-60), probability (0-100) }` → 201 `Stage` (an `OPEN` stage, placed after the open ones) | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/{id}` | `{ name, probability, version }` → `Stage` | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/order` | `{ stageIds: [...] }` all `OPEN` stage ids in the new order → `Stage[]` | `SETTINGS_MANAGE` |
-| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 used by a deal, `WON`/`LOST`, or the last open stage | `SETTINGS_MANAGE` |
+| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, a deal in it (archived ones too: `Stage has deals; move them first`), or a deal's stage history naming it | `SETTINGS_MANAGE` |
 | `GET /workspaces/{w}/lead-sources` | `?includeArchived` → `LeadSource[]` (`id, name, archived, version`) | member |
 | `POST /workspaces/{w}/lead-sources` | `{ name (1-60) }` → 201 | `SETTINGS_MANAGE`; 409 duplicate name |
 | `PUT /workspaces/{w}/lead-sources/{id}` | `{ name, archived, version }` | `SETTINGS_MANAGE` |
-| `DELETE /workspaces/{w}/lead-sources/{id}` | → 204; 409 in use (archive it instead) | `SETTINGS_MANAGE` |
+| `DELETE /workspaces/{w}/lead-sources/{id}` | → 204; 409 while a lead, contact or deal uses it, archived ones too (archive it instead) | `SETTINGS_MANAGE` |
 
 ## Companies
 
@@ -176,17 +176,24 @@ LeadConversion = { leadId, company?: Ref, contact: Ref, deal?: Ref, alreadyConve
 List filters: `q` (name, company name), `stageId`, `status` (`OPEN`, `WON`, `LOST`), `ownerId`,
 `companyId`, `contactId`, `closeFrom` / `closeTo` (expected close date), `archived`; `sort`:
 `UPDATED_AT` (default, `DESC`), `NAME`, `AMOUNT`, `EXPECTED_CLOSE_DATE`, `CREATED_AT`.
+The list returns `DealSummary`s. Without `direction`, `UPDATED_AT`, `CREATED_AT` and `AMOUNT`
+descend, `NAME` (ignoring case) and `EXPECTED_CLOSE_DATE` ascend; deals without an expected close
+date come last in both directions, and `closeFrom` / `closeTo` are inclusive and never match them.
+`q` matches the name or the company's name. A `PUT` has no `stageId`: only a move changes the stage.
+Every create and every move to another stage adds a history entry (the first one without
+`fromStage`).
 
 | Method and path | Body → response |
 |---|---|
-| `GET /board` | `?q&ownerId&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order, up to 50 deals each, most recently updated first |
-| `POST /{id}/move` | `{ stageId, version, lostReason? (required for LOST) }` → `Deal` |
+| `GET /board` | `?q&ownerId&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage |
+| `POST /{id}/move` | `{ stageId, version, lostReason? (≤500, required for LOST, dropped for the others) }` → `Deal`; a stage of another workspace is a 400 (field `stageId`), LOST without a reason a 400 (field `lostReason`), both before the version is compared. Entering `WON` or `LOST` from another kind sets `closedAt`; an open stage clears it and the reason. The current stage again is a 200 that changes nothing, except LOST with a different reason, which saves the reason (new version, `STAGE_CHANGE` audit, no history entry) |
 | `GET /{id}/history` | → `StageChange[]` (`fromStage?: Ref, toStage: Ref, changedBy?: MemberRef, changedAt`), newest first |
 
 ```ts
-DealInput   = { name (1-200), amount, currency?, stageId? (create only; an OPEN stage, default the
-                first), probability? (0-100), expectedCloseDate?, ownerId?, companyId?, contactId?,
-                sourceId?, notes? }
+DealInput   = { name (1-200), amount (≥ 0), currency? (default the workspace's, on a PUT too),
+                stageId? (create only; an OPEN stage (400 otherwise), default the open stage with
+                the lowest position), probability? (0-100), expectedCloseDate?, ownerId?,
+                companyId?, contactId?, sourceId?, notes? (≤5000) }
 DealSummary = { id, name, amount, currency, stage: Stage-ref { id, name, kind }, status,
                 probability, expectedCloseDate?, owner?: MemberRef, company?: Ref,
                 contact?: { id, fullName }, closedAt?, archived, updatedAt, version }

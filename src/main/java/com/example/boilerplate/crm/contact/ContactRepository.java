@@ -34,6 +34,9 @@ public interface ContactRepository
       group by c.companyId""")
   List<Object[]> countActiveByCompany(Collection<Long> companyIds);
 
+  /** Archived contacts included. */
+  boolean existsBySourceId(long sourceId);
+
   /**
    * The distinct tags of the workspace's active contacts in code point order. Native SQL is not
    * tenant-filtered: the workspace is bound here.
