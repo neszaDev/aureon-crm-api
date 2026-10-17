@@ -49,4 +49,26 @@ class AuditChangesTest {
     assertThat(new AuditChanges(new ObjectMapper()).snapshot(new Row("Acme", 3)))
         .containsExactlyInAnyOrderEntriesOf(Map.of("name", "Acme", "size", 3));
   }
+
+  record Row(String name, String note, long version, String createdAt, String updatedAt) {}
+
+  @Test
+  void recordDiffListsEditedFieldsWithoutBookkeeping() {
+    Row before = new Row("Acme", "x", 1, "t0", "t1");
+    Row after = new Row("Acme Ltd", null, 2, "t0-changed", "t2");
+
+    assertThat(new AuditChanges(new ObjectMapper()).recordDiff(before, after))
+        .containsOnlyKeys("name", "note")
+        .containsEntry("name", Map.of("from", "Acme", "to", "Acme Ltd"));
+  }
+
+  @Test
+  void recordDiffIsEmptyWhenOnlyBookkeepingChanged() {
+    Row before = new Row("Acme", "x", 1, "t0", "t1");
+
+    assertThat(
+            new AuditChanges(new ObjectMapper())
+                .recordDiff(before, new Row("Acme", "x", 2, "t0", "t2")))
+        .isEmpty();
+  }
 }

@@ -13,7 +13,6 @@ import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.dto.*;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,14 +80,11 @@ public class WorkspaceService {
     Membership m = access.require(Permission.WORKSPACE_MANAGE);
     Workspace w = workspace(m.workspaceId());
     Versions.check(w, r.version());
-    Map<String, Object> before = auditChanges.snapshot(response(w, m.role()));
+    WorkspaceResponse before = response(w, m.role());
     w.update(Texts.required("name", r.name()), r.defaultCurrency(), r.timezone());
     // Flush so the response carries the new version and updatedAt.
     WorkspaceResponse after = response(workspaces.saveAndFlush(w), m.role());
-    Map<String, Map<String, Object>> changes =
-        AuditChanges.diff(before, auditChanges.snapshot(after));
-    // Every edit bumps these; they say nothing about what was edited.
-    changes.keySet().removeAll(Set.of("version", "updatedAt"));
+    Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!changes.isEmpty()) {
       audit.record(AuditAction.UPDATE, AuditEntityType.WORKSPACE, w.getId(), w.getName(), changes);
     }

@@ -71,7 +71,7 @@ public class PipelineStageService {
     PipelineStage stage = stage(id);
     Versions.check(stage, r.version());
     String name = uniqueName(r.name(), id);
-    Map<String, Object> before = auditChanges.snapshot(response(stage));
+    StageResponse before = response(stage);
     stage.update(name, r.probability());
     // Flush so the response carries the new version.
     StageResponse after = response(stages.saveAndFlush(stage));
@@ -89,8 +89,8 @@ public class PipelineStageService {
     if (ids.size() != open.size() || !open.keySet().equals(new HashSet<>(ids))) {
       throw new FieldValidationException("stageIds", "must list every open stage exactly once");
     }
-    Map<Long, Map<String, Object>> before = new HashMap<>();
-    for (PipelineStage s : all) before.put(s.getId(), auditChanges.snapshot(response(s)));
+    Map<Long, StageResponse> before = new HashMap<>();
+    for (PipelineStage s : all) before.put(s.getId(), response(s));
     List<PipelineStage> ordered = renumber(ids.stream().map(open::get).toList(), all);
     stages.flush();
     List<StageResponse> after = ordered.stream().map(PipelineStageService::response).toList();
@@ -126,11 +126,8 @@ public class PipelineStageService {
     return stripped;
   }
 
-  private void auditUpdate(Map<String, Object> before, StageResponse after) {
-    Map<String, Map<String, Object>> changes =
-        AuditChanges.diff(before, auditChanges.snapshot(after));
-    // Every edit bumps it; it says nothing about what was edited.
-    changes.remove("version");
+  private void auditUpdate(StageResponse before, StageResponse after) {
+    Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!changes.isEmpty()) {
       audit.record(
           AuditAction.UPDATE, AuditEntityType.PIPELINE_STAGE, after.id(), after.name(), changes);

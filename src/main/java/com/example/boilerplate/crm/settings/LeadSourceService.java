@@ -58,13 +58,11 @@ public class LeadSourceService {
     LeadSource source = source(id);
     Versions.check(source, r.version());
     String name = uniqueName(r.name(), id);
-    Map<String, Object> before = auditChanges.snapshot(response(source));
+    LeadSourceResponse before = response(source);
     source.update(name, r.archived());
     // Flush so the response carries the new version.
     LeadSourceResponse after = response(sources.saveAndFlush(source));
-    Map<String, Map<String, Object>> changes =
-        AuditChanges.diff(before, auditChanges.snapshot(after));
-    changes.remove("version");
+    Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!changes.isEmpty()) {
       audit.record(AuditAction.UPDATE, AuditEntityType.LEAD_SOURCE, id, name, changes);
     }

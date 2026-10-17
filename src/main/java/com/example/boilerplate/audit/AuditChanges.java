@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 /** Builds the {@code changes} of an audit event: {@code {field: {"from": x, "to": y}}}. */
 @Component
 public class AuditChanges {
+  private static final Set<String> BOOKKEEPING = Set.of("version", "createdAt", "updatedAt");
+
   private final ObjectMapper json;
 
   public AuditChanges(ObjectMapper json) {
@@ -24,6 +26,16 @@ public class AuditChanges {
    */
   public Map<String, Object> snapshot(Object record) {
     return json.convertValue(record, new TypeReference<>() {});
+  }
+
+  /**
+   * What an edit changed in a response DTO: the diff of both snapshots without the bookkeeping that
+   * every edit bumps and that says nothing about what was edited. Empty when nothing was edited.
+   */
+  public Map<String, Map<String, Object>> recordDiff(Object before, Object after) {
+    Map<String, Map<String, Object>> changes = diff(snapshot(before), snapshot(after));
+    changes.keySet().removeAll(BOOKKEEPING);
+    return changes;
   }
 
   /** Changed keys only; a key missing on one side counts as null there. */
