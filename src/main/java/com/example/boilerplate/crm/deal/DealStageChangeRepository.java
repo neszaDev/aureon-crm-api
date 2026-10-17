@@ -6,6 +6,4 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Scoped to the current workspace by {@code @TenantId}. */
 public interface DealStageChangeRepository extends JpaRepository<DealStageChange, Long> {
   List<DealStageChange> findByDealIdOrderByChangedAtDescIdDesc(long dealId);
-
-  boolean existsByFromStageIdOrToStageId(long fromStageId, long toStageId);
 }

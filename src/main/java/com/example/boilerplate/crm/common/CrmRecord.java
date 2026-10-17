@@ -3,6 +3,7 @@ package com.example.boilerplate.crm.common;
 import com.example.boilerplate.common.entity.WorkspaceOwnedEntity;
 import jakarta.persistence.MappedSuperclass;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 /**
  * What companies, contacts, leads and deals share: an owner (a member's user id, null once they
@@ -26,9 +27,12 @@ public abstract class CrmRecord extends WorkspaceOwnedEntity {
     return archivedAt != null;
   }
 
-  /** Archiving twice keeps the first archive time. */
+  /**
+   * Archiving twice keeps the first archive time, in microseconds as stored, so the answer equals a
+   * later read.
+   */
   public void archive() {
-    if (archivedAt == null) archivedAt = Instant.now();
+    if (archivedAt == null) archivedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   public void restore() {

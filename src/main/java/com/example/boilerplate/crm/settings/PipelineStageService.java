@@ -10,7 +10,6 @@ import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.deal.DealRepository;
-import com.example.boilerplate.crm.deal.DealStageChangeRepository;
 import com.example.boilerplate.crm.settings.dto.*;
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -29,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class PipelineStageService {
   private final PipelineStageRepository stages;
   private final DealRepository deals;
-  private final DealStageChangeRepository stageChanges;
   private final WorkspaceAccess access;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
@@ -37,13 +35,11 @@ public class PipelineStageService {
   public PipelineStageService(
       PipelineStageRepository stages,
       DealRepository deals,
-      DealStageChangeRepository stageChanges,
       WorkspaceAccess access,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.stages = stages;
     this.deals = deals;
-    this.stageChanges = stageChanges;
     this.access = access;
     this.audit = audit;
     this.auditChanges = auditChanges;
@@ -118,11 +114,8 @@ public class PipelineStageService {
     List<PipelineStage> all = stages.findAllByOrderByPositionAscIdAsc();
     List<PipelineStage> open = open(all);
     if (open.size() == 1) throw new ConflictException("The pipeline needs an open stage");
-    // Archived deals too: their foreign key holds the stage.
+    // Archived deals too: their foreign key holds the stage. Their history keeps its name.
     if (deals.existsByStageId(id)) throw new ConflictException("Stage has deals; move them first");
-    if (stageChanges.existsByFromStageIdOrToStageId(id, id)) {
-      throw new ConflictException("Stage is in the history of deals; it can't be deleted");
-    }
     stages.delete(stage);
     renumber(open.stream().filter(s -> s != stage).toList(), all);
     audit.record(AuditAction.DELETE, AuditEntityType.PIPELINE_STAGE, id, stage.getName(), Map.of());

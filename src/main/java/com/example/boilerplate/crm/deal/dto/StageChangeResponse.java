@@ -1,6 +1,5 @@
 package com.example.boilerplate.crm.deal.dto;
 
-import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.workspace.dto.MemberRef;
 import java.time.Instant;
 
@@ -9,4 +8,4 @@ import java.time.Instant;
  * changedBy} once that person is no longer a member.
  */
 public record StageChangeResponse(
-    Ref fromStage, Ref toStage, MemberRef changedBy, Instant changedAt) {}
+    HistoryStageRef fromStage, HistoryStageRef toStage, MemberRef changedBy, Instant changedAt) {}

@@ -89,7 +89,7 @@ Invitation rules:
 | `POST /workspaces/{w}/pipeline-stages` | `{ name (1-60), probability (0-100) }` → 201 `Stage` (an `OPEN` stage, placed after the open ones) | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/{id}` | `{ name, probability, version }` → `Stage` | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/order` | `{ stageIds: [...] }` all `OPEN` stage ids in the new order → `Stage[]` | `SETTINGS_MANAGE` |
-| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, a deal in it (archived ones too: `Stage has deals; move them first`), or a deal's stage history naming it | `SETTINGS_MANAGE` |
+| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, or a deal in it (archived ones too: `Stage has deals; move them first`). Deals' stage history keeps the stage's name; its id there becomes null | `SETTINGS_MANAGE` |
 | `GET /workspaces/{w}/lead-sources` | `?includeArchived` → `LeadSource[]` (`id, name, archived, version`) | member |
 | `POST /workspaces/{w}/lead-sources` | `{ name (1-60) }` → 201 | `SETTINGS_MANAGE`; 409 duplicate name |
 | `PUT /workspaces/{w}/lead-sources/{id}` | `{ name, archived, version }` | `SETTINGS_MANAGE` |
@@ -187,7 +187,7 @@ Every create and every move to another stage adds a history entry (the first one
 |---|---|
 | `GET /board` | `?q&ownerId&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage |
 | `POST /{id}/move` | `{ stageId, version, lostReason? (≤500, required for LOST, dropped for the others) }` → `Deal`; a stage of another workspace is a 400 (field `stageId`), LOST without a reason a 400 (field `lostReason`), both before the version is compared. Entering `WON` or `LOST` from another kind sets `closedAt`; an open stage clears it and the reason. The current stage again is a 200 that changes nothing, except LOST with a different reason, which saves the reason (new version, `STAGE_CHANGE` audit, no history entry) |
-| `GET /{id}/history` | → `StageChange[]` (`fromStage?: Ref, toStage: Ref, changedBy?: MemberRef, changedAt`), newest first |
+| `GET /{id}/history` | → `StageChange[]` (`fromStage?: HistoryStageRef, toStage: HistoryStageRef, changedBy?: MemberRef, changedAt`), newest first; `HistoryStageRef = { id?, name }` is the stage as it was at the change: its name then (a later rename doesn't change it), its id until the stage is deleted. `fromStage` is null for the first entry, `changedBy` once that person is no member |
 
 ```ts
 DealInput   = { name (1-200), amount (≥ 0), currency? (default the workspace's, on a PUT too),

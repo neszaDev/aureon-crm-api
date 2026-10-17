@@ -45,23 +45,28 @@ CREATE INDEX idx_deals_contact ON deals(workspace_id, contact_id);
 CREATE INDEX idx_deals_source ON deals(workspace_id, source_id);
 CREATE INDEX idx_deals_closed_at ON deals(workspace_id, closed_at);
 
--- Every stage a deal entered, the first one included (from_stage_id null). Rows are only inserted.
+-- Every stage a deal entered, the first one included (from_* null). Stage names are snapshots, as
+-- they were at the change; the ids go null when a stage is deleted (SET NULL updates these rows, so
+-- never put an append-only trigger on this table).
 CREATE TABLE deal_stage_changes (
   id BIGSERIAL PRIMARY KEY,
   workspace_id BIGINT NOT NULL REFERENCES workspaces(id),
   deal_id BIGINT NOT NULL,
   from_stage_id BIGINT,
-  to_stage_id BIGINT NOT NULL,
+  from_stage_name VARCHAR(60),
+  to_stage_id BIGINT,
+  to_stage_name VARCHAR(60) NOT NULL,
   -- The member's user id, without a foreign key: the history outlives memberships and accounts
   -- (as audit_events.actor_id). The API shows null once the user is no member.
   changed_by BIGINT,
   changed_at TIMESTAMP WITH TIME ZONE NOT NULL,
   FOREIGN KEY (workspace_id, deal_id) REFERENCES deals (workspace_id, id) ON DELETE RESTRICT,
-  -- A stage named in any deal's history can't be deleted: that would rewrite the history.
+  -- Deleting a stage keeps its history rows, by name. The column lists matter: a plain SET NULL
+  -- would null workspace_id too.
   FOREIGN KEY (workspace_id, from_stage_id) REFERENCES pipeline_stages (workspace_id, id)
-    ON DELETE RESTRICT,
+    ON DELETE SET NULL (from_stage_id),
   FOREIGN KEY (workspace_id, to_stage_id) REFERENCES pipeline_stages (workspace_id, id)
-    ON DELETE RESTRICT
+    ON DELETE SET NULL (to_stage_id)
 );
 -- A deal's history, newest first, and the stage foreign keys.
 CREATE INDEX idx_deal_stage_changes_deal ON deal_stage_changes(workspace_id, deal_id, changed_at);

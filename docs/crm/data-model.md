@@ -89,14 +89,14 @@ Referral, Event, Outbound, Partner, Other) in the transaction that creates it.
 | `contacts` | `first_name varchar(100)`, `last_name varchar(100)?`, `email varchar(254)?`, `phone varchar(50)?`, `job_title varchar(100)?`, `company_id?`, `owner_id?`, `source_id?`, `tags text[]` (lower case, ≤ 20 of ≤ 40 chars), `notes?`, `archived_at?` |
 | `leads` | `first_name`, `last_name?`, `company_name varchar(200)?`, `email?`, `phone?`, `job_title?`, `source_id?`, `owner_id?`, `status varchar(16)`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `follow_up_date date?`, `estimated_value numeric(15,2)?` + `currency char(3)?`, `unqualified_reason varchar(500)?`, `notes?`, `converted_at?`, `converted_company_id?`, `converted_contact_id?`, `converted_deal_id?`, `archived_at?` |
 | `deals` | `name varchar(200)`, `amount numeric(15,2) ≥ 0`, `currency char(3)`, `stage_id`, `probability smallint?` (override), `expected_close_date date?`, `owner_id?`, `company_id?`, `contact_id?`, `source_id?`, `lead_id?` (`UNIQUE`: one deal per converted lead), `lost_reason varchar(500)?`, `closed_at?`, `notes?`, `archived_at?` |
-| `deal_stage_changes` | `deal_id`, `from_stage_id?` (null for the first entry), `to_stage_id`, `changed_by?` (user id, no FK: history outlives memberships and accounts), `changed_at`; insert-only, no `updated_at` or `version` |
+| `deal_stage_changes` | `deal_id`, `from_stage_id?` + `from_stage_name varchar(60)?` (both null for the first entry), `to_stage_id?` + `to_stage_name varchar(60)`, `changed_by?` (user id, no FK: history outlives memberships and accounts), `changed_at`; the names are snapshots taken at the change, the ids `ON DELETE SET NULL (column)` so deleting a stage keeps the rows; the app only inserts, no `updated_at` or `version`, and no append-only trigger (SET NULL updates rows) |
 | `tasks` | `title varchar(200)`, `description varchar(5000)?`, `due_at timestamptz?`, `priority`, `status varchar(16)` (`OPEN`, `COMPLETED`, `CANCELLED`), `assignee_id?`, `created_by?` (user id), `completed_at?`, `company_id?`, `contact_id?`, `lead_id?`, `deal_id?` |
 | `activities` | `type varchar(16)` (`CALL`, `EMAIL`, `MEETING`, `NOTE`), `subject varchar(200)`, `body varchar(5000)?`, `occurred_at`, `author_id?`, `company_id?`, `contact_id?`, `lead_id?`, `deal_id?`; `CHECK` at least one link |
 
-Foreign keys between records use `ON DELETE RESTRICT` (records are archived, never deleted), except
-`deal_stage_changes → deals` which is also `RESTRICT`. Removing a pipeline stage or lead source in
-use fails with a foreign-key error, which the API reports as 409 before it gets that far; a stage
-named in a deal's stage history counts as in use.
+Foreign keys use `ON DELETE RESTRICT` (records are archived, never deleted; `deal_stage_changes →
+deals` too), except `deal_stage_changes → pipeline_stages`, which is `SET NULL` on the stage id
+column: the history keeps the stage's name. Removing a pipeline stage or lead source in use fails
+with a foreign-key error, which the API reports as 409 before it gets that far.
 
 Indexes: every foreign key; `(workspace_id, lower(name))` on companies;
 `(workspace_id, lower(email))` on contacts and leads; `GIN (tags)` on contacts;

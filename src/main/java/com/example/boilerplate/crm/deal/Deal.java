@@ -9,6 +9,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -106,7 +107,8 @@ public class Deal extends CrmRecord {
   public void moveTo(long stageId, StageKind from, StageKind to, String lostReason) {
     this.stageId = stageId;
     if (to == StageKind.OPEN) closedAt = null;
-    else if (to != from) closedAt = Instant.now();
+    // Microseconds, as stored, so this answer equals a later read.
+    else if (to != from) closedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     this.lostReason = to == StageKind.LOST ? lostReason : null;
   }
 

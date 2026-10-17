@@ -362,15 +362,16 @@ class DealIT extends WorkspaceTestSupport {
     move(token, w, id, stage.get("Lost"), "　 ", 0)
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.fieldErrors.lostReason").exists());
-    move(token, w, id, stage.get("Lost"), "  Too expensive　", 0)
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("LOST"))
-        .andExpect(jsonPath("$.lostReason").value("Too expensive"))
-        .andExpect(jsonPath("$.probability").value(0))
-        .andExpect(jsonPath("$.closedAt").exists())
-        .andExpect(jsonPath("$.version").value(1));
-    // As stored (microseconds), to compare with the next answer, which is read back too.
-    String lostAt = body(send(token, get(DEAL, w, id))).get("closedAt").asText();
+    String lostAt =
+        body(move(token, w, id, stage.get("Lost"), "  Too expensive　", 0)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOST"))
+                .andExpect(jsonPath("$.lostReason").value("Too expensive"))
+                .andExpect(jsonPath("$.probability").value(0))
+                .andExpect(jsonPath("$.closedAt").exists())
+                .andExpect(jsonPath("$.version").value(1)))
+            .get("closedAt")
+            .asText();
 
     // The same Lost stage with a different reason saves the reason: a new version, an audit event
     // with only the reason, no history row, the close time kept.
@@ -418,11 +419,27 @@ class DealIT extends WorkspaceTestSupport {
             .get("closedAt")
             .asText();
     assertThat(Instant.parse(wonAt)).isAfter(Instant.parse(lostAgain));
+
+    // Won to Lost needs a reason too, and is a new close.
+    move(token, w, id, stage.get("Lost"), null, 5)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.lostReason").exists());
+    String lostAfterWin =
+        body(move(token, w, id, stage.get("Lost"), "Changed their mind", 5)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LOST"))
+                .andExpect(jsonPath("$.lostReason").value("Changed their mind"))
+                .andExpect(jsonPath("$.version").value(6)))
+            .get("closedAt")
+            .asText();
+    assertThat(Instant.parse(lostAfterWin)).isAfter(Instant.parse(wonAt));
+    // The close time a move answers is the one stored (microseconds), not a finer one.
+    send(token, get(DEAL, w, id)).andExpect(jsonPath("$.closedAt").value(lostAfterWin));
     send(token, get(DEAL + "/history", w, id))
         .andExpect(
             jsonPath(
                 "$[*].toStage.name",
-                contains("Won", "Lost", "Negotiation", "Lost", "Qualification")));
+                contains("Lost", "Won", "Lost", "Negotiation", "Lost", "Qualification")));
 
     // The same open stage again changes nothing either.
     long other = create(token, w, Map.of("name", "Other", "amount", "1"));
@@ -746,11 +763,16 @@ class DealIT extends WorkspaceTestSupport {
     long a = create(token, w, Map.of("name", "A", "amount", "1"));
     create(token, w, Map.of("name", "B", "amount", "1"));
 
-    send(token, post(DEAL + "/archive", w, a))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.archived").value(true))
-        .andExpect(jsonPath("$.archivedAt").exists())
-        .andExpect(jsonPath("$.version").value(1));
+    String archivedAt =
+        body(send(token, post(DEAL + "/archive", w, a))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(true))
+                .andExpect(jsonPath("$.archivedAt").exists())
+                .andExpect(jsonPath("$.version").value(1)))
+            .get("archivedAt")
+            .asText();
+    // As stored: a later read answers the same time.
+    send(token, get(DEAL, w, a)).andExpect(jsonPath("$.archivedAt").value(archivedAt));
     send(token, post(DEAL + "/archive", w, a)).andExpect(jsonPath("$.version").value(1));
     list(token, w).andExpect(names("B"));
     list(token, w, "archived", "true").andExpect(names("A"));
@@ -826,19 +848,59 @@ class DealIT extends WorkspaceTestSupport {
     send(token, delete(STAGES + "/{id}", w, demo))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.message").value("Stage has deals; move them first"));
-    // Once no deal is in it, the history still names it: deleting would rewrite that history.
+    // Once no deal is in it, it can go; the history keeps its name, without the id.
     move(token, w, second, stage.get("Qualification"), null, 1).andExpect(status().isOk());
-    send(token, delete(STAGES + "/{id}", w, demo))
-        .andExpect(status().isConflict())
-        .andExpect(
-            jsonPath("$.message").value("Stage is in the history of deals; it can't be deleted"));
+    send(token, delete(STAGES + "/{id}", w, demo)).andExpect(status().isNoContent());
     send(token, get(STAGES, w))
-        .andExpect(jsonPath("$[0].dealCount").value(2))
-        .andExpect(jsonPath("$[4].name").value("Demo"));
+        .andExpect(jsonPath("$.length()").value(6))
+        .andExpect(jsonPath("$[0].dealCount").value(2));
+    for (long deal : List.of(first, second)) {
+      send(token, get(DEAL + "/history", w, deal))
+          .andExpect(jsonPath("$.length()").value(2))
+          .andExpect(jsonPath("$[0].fromStage.name").value("Demo"))
+          .andExpect(jsonPath("$[0].fromStage.id").doesNotExist())
+          .andExpect(jsonPath("$[0].toStage.id").value(stage.get("Qualification")))
+          .andExpect(jsonPath("$[1].fromStage").doesNotExist())
+          .andExpect(jsonPath("$[1].toStage.name").value("Demo"))
+          .andExpect(jsonPath("$[1].toStage.id").doesNotExist());
+    }
 
-    // A stage no deal ever entered can still go.
-    long unused = id(send(token, post(STAGES, w), Map.of("name", "Unused", "probability", 1)));
-    send(token, delete(STAGES + "/{id}", w, unused)).andExpect(status().isNoContent());
+    // A renamed stage: old entries keep the name it had, new ones take the new name.
+    JsonNode qualification = body(send(token, get(STAGES, w))).get(0);
+    send(
+            token,
+            put(STAGES + "/{id}", w, qualification.get("id").asLong()),
+            Map.of("name", "Discovery", "probability", 10, "version", qualification.get("version")))
+        .andExpect(status().isOk());
+    send(token, get(DEAL + "/history", w, first))
+        .andExpect(jsonPath("$[0].toStage.name").value("Qualification"))
+        .andExpect(jsonPath("$[0].toStage.id").value(stage.get("Qualification")));
+    long fourth = create(token, w, Map.of("name", "Fourth", "amount", "1"));
+    send(token, get(DEAL + "/history", w, fourth))
+        .andExpect(jsonPath("$[0].toStage.name").value("Discovery"));
+  }
+
+  @Test
+  void changedByIsNullOnceTheMemberLeaves() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    String repEmail = uniqueEmail();
+    String rep = tokenFor(repEmail);
+    addMember(w, repEmail, WorkspaceRole.SALES_REP);
+    long id = create(rep, w, Map.of("name", "Rep's", "amount", "1"));
+    send(owner, get(DEAL + "/history", w, id))
+        .andExpect(jsonPath("$[0].changedBy.email").value(repEmail));
+
+    send(rep, delete("/api/v1/workspaces/{workspaceId}/members/{userId}", w, userId(repEmail)))
+        .andExpect(status().isNoContent());
+
+    // The entry stays; who made it is no longer shown, and the deal is unassigned.
+    send(owner, get(DEAL + "/history", w, id))
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].toStage.name").value("Qualification"))
+        .andExpect(jsonPath("$[0].changedBy").doesNotExist())
+        .andExpect(jsonPath("$[0].changedAt").exists());
+    send(owner, get(DEAL, w, id)).andExpect(jsonPath("$.owner").doesNotExist());
   }
 
   @Test

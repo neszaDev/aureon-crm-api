@@ -18,6 +18,8 @@ class DealTest {
     deal.moveTo(3, StageKind.OPEN, StageKind.LOST, "Too expensive");
     Instant lost = deal.getClosedAt();
     assertThat(lost).isNotNull();
+    // Microseconds, as PostgreSQL stores it, so the answer equals a later read.
+    assertThat(lost.getNano() % 1000).isZero();
     assertThat(deal.getLostReason()).isEqualTo("Too expensive");
 
     // The same LOST stage with a new reason keeps the close time.

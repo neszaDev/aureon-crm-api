@@ -15,6 +15,8 @@ class CrmRecordTest {
     row.archive();
     var first = row.getArchivedAt();
     assertThat(row.isArchived()).isTrue();
+    // Microseconds, as PostgreSQL stores it, so the answer equals a later read.
+    assertThat(first.getNano() % 1000).isZero();
     Thread.sleep(2);
     row.archive();
     assertThat(row.getArchivedAt()).isEqualTo(first);

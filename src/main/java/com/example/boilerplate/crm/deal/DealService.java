@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.jpa.domain.Specification;
@@ -108,23 +107,16 @@ public class DealService {
   public List<StageChangeResponse> history(long id) {
     deal(id);
     List<DealStageChange> changes = history.findByDealIdOrderByChangedAtDescIdDesc(id);
-    List<Long> stageIds =
-        changes.stream()
-            .flatMap(c -> Stream.of(c.getFromStageId(), c.getToStageId()))
-            .filter(Objects::nonNull)
-            .distinct()
-            .toList();
-    Map<Long, Ref> stageRefs =
-        stages.findAllById(stageIds).stream()
-            .collect(Collectors.toMap(s -> s.getId(), s -> new Ref(s.getId(), s.getName())));
     Map<Long, MemberRef> people =
         directory.refs(changes.stream().map(DealStageChange::getChangedBy).toList());
     return changes.stream()
         .map(
             c ->
                 new StageChangeResponse(
-                    c.getFromStageId() == null ? null : stageRefs.get(c.getFromStageId()),
-                    stageRefs.get(c.getToStageId()),
+                    c.getFromStageName() == null
+                        ? null
+                        : new HistoryStageRef(c.getFromStageId(), c.getFromStageName()),
+                    new HistoryStageRef(c.getToStageId(), c.getToStageName()),
                     c.getChangedBy() == null ? null : people.get(c.getChangedBy()),
                     c.getChangedAt()))
         .toList();
@@ -142,7 +134,7 @@ public class DealService {
     edit(deal, r, currency);
     deal.changeOwner(owner);
     deals.save(deal);
-    history.save(new DealStageChange(deal.getId(), null, stage.getId(), caller()));
+    history.save(new DealStageChange(deal.getId(), null, stage, caller()));
     audit.record(AuditAction.CREATE, AuditEntityType.DEAL, deal.getId(), deal.getName(), Map.of());
     return response(deal);
   }
@@ -194,7 +186,7 @@ public class DealService {
     DealResponse after = response(deals.saveAndFlush(deal));
     Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!sameStage) {
-      history.save(new DealStageChange(id, from.getId(), target.getId(), caller()));
+      history.save(new DealStageChange(id, from, target, caller()));
       // The names, not the stage references: what a reader of the trail needs.
       changes.put("stage", Map.<String, Object>of("from", from.getName(), "to", target.getName()));
     }
