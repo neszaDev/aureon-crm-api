@@ -96,9 +96,11 @@ is its own override, or else its stage's probability.
 
 ### Task
 
-`OPEN` → `COMPLETED` or `CANCELLED`; both can be reopened. Overdue means `OPEN` with `dueAt` in the
-past. In-app reminders show the caller's overdue tasks, tasks due within 24 hours, and their leads
-whose follow-up date is today or earlier. Nothing is emailed.
+`OPEN` → `COMPLETED` or `CANCELLED`; both can be reopened. Any other move, a repeat included, is a
+conflict. Overdue means `OPEN` with `dueAt` in the past (computed, not stored). In-app reminders
+show the caller's overdue tasks, tasks due within 24 hours, and their open leads whose follow-up
+date is today or earlier in the workspace's time zone (task due times are instants and need none).
+Nothing is emailed.
 
 ### Records: archive, never delete
 

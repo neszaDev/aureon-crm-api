@@ -39,7 +39,9 @@ src/main/java/com/example/boilerplate/
                a currency, two specification-ordered sorts and the conversion (one transaction
                under the lead's row lock, through the other services' create methods); deal/ adds stage moves with a
                history and the board (grouped totals per currency through the DealTotals
-               repository fragment); common/ = what every record type shares (CrmRecord,
+               repository fragment); task/ adds actions with their own audit events, edit rights for the
+               assignee or the creator, a computed overdue flag and the reminders (which reuse the
+               task and lead lists); common/ = what every record type shares (CrmRecord,
                ListParams, SortField, TextSearch, RecordLinks, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and

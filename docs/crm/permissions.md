@@ -24,7 +24,7 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
 4. Composite foreign keys `(workspace_id, x_id)` make it impossible to store a link to a record,
    stage, source or member of another workspace.
 5. Services check permissions with `WorkspaceAccess.require(Permission)`, ownership rules with
-   `WorkspaceAccess.requireEditable(ownerId)` and owner changes with `ownerForCreate` /
+   `WorkspaceAccess.requireEditable(ownerId)` (a task: `requireEditableBy(assigneeId, createdBy)`) and owner changes with `ownerForCreate` /
    `ownerForUpdate`. Lacking a permission: **403**.
 6. The role is read from the database on every request, so a role change or removal takes effect
    on the next request, without waiting for the access token to expire.
@@ -62,7 +62,10 @@ Rules beyond the matrix:
   only. A new owner must be a member of the workspace (400). So a sales rep owns what they create
   and can't hand it on. An unowned record (its owner left the workspace) can be edited only with
   `RECORDS_EDIT_ANY`.
-- Removing a member keeps their records: owner/assignee/author fields become empty
+- Tasks: editing needs `RECORDS_EDIT_ANY`, or being the task's assignee or its creator
+  (`WorkspaceAccess.requireEditableBy`); completing, reopening and cancelling are edits. Another
+  member only reads it. Tasks are never deleted.
+- Removing a member keeps their records: owner/assignee/author/creator fields become empty
   ("Unassigned"), and managers can reassign them.
 
 The permissions of the caller are returned with the workspace (`GET /workspaces/{id}` →

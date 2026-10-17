@@ -3,6 +3,8 @@ package com.example.boilerplate.crm.common;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.contact.ContactRepository;
+import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.lead.LeadRepository;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Component;
@@ -18,12 +20,20 @@ public class RecordLinks {
   private final CompanyRepository companies;
   private final LeadSourceRepository sources;
   private final ContactRepository contacts;
+  private final LeadRepository leads;
+  private final DealRepository deals;
 
   public RecordLinks(
-      CompanyRepository companies, LeadSourceRepository sources, ContactRepository contacts) {
+      CompanyRepository companies,
+      LeadSourceRepository sources,
+      ContactRepository contacts,
+      LeadRepository leads,
+      DealRepository deals) {
     this.companies = companies;
     this.sources = sources;
     this.contacts = contacts;
+    this.leads = leads;
+    this.deals = deals;
   }
 
   public void company(Long id) {
@@ -36,6 +46,14 @@ public class RecordLinks {
 
   public void contact(Long id) {
     check("contactId", id, contacts);
+  }
+
+  public void lead(Long id) {
+    check("leadId", id, leads);
+  }
+
+  public void deal(Long id) {
+    check("dealId", id, deals);
   }
 
   private static void check(String field, Long id, CrudRepository<?, Long> rows) {

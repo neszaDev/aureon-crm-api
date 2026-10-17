@@ -22,10 +22,21 @@ public class WorkspaceAccess {
 
   /** Any record with {@code RECORDS_EDIT_ANY}, otherwise only the caller's own. */
   public void requireEditable(Long ownerUserId) {
+    requireEditableBy(ownerUserId);
+  }
+
+  /**
+   * As {@link #requireEditable} for a record with several people attached (a task's assignee and
+   * creator): without {@code RECORDS_EDIT_ANY} the caller must be one of {@code userIds}. Null
+   * (someone who left) is nobody.
+   */
+  public void requireEditableBy(Long... userIds) {
     Membership m = WorkspaceContext.require();
-    if (!m.role().has(Permission.RECORDS_EDIT_ANY) && !Objects.equals(ownerUserId, m.userId())) {
-      throw forbidden();
+    if (m.role().has(Permission.RECORDS_EDIT_ANY)) return;
+    for (Long userId : userIds) {
+      if (Objects.equals(userId, m.userId())) return;
     }
+    throw forbidden();
   }
 
   /**

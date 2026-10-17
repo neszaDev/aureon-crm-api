@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class RecordLinksIT extends WorkspaceTestSupport {
   @Autowired RecordLinks links;
 
-  record Tenant(Membership member, long company, long source, long contact) {}
+  record Tenant(Membership member, long company, long source, long contact, long lead, long deal) {}
 
   private Tenant tenant() throws Exception {
     String email = uniqueEmail();
@@ -35,7 +35,19 @@ class RecordLinksIT extends WorkspaceTestSupport {
         body(send(token, post("/api/v1/workspaces/{w}/contacts", w), Map.of("firstName", "Ada")))
             .get("id")
             .asLong();
-    return new Tenant(members.findMembership(w, email).orElseThrow(), company, source, contact);
+    long lead =
+        body(send(token, post("/api/v1/workspaces/{w}/leads", w), Map.of("firstName", "Grace")))
+            .get("id")
+            .asLong();
+    long deal =
+        body(send(
+                token,
+                post("/api/v1/workspaces/{w}/deals", w),
+                Map.of("name", "Renewal", "amount", "1")))
+            .get("id")
+            .asLong();
+    return new Tenant(
+        members.findMembership(w, email).orElseThrow(), company, source, contact, lead, deal);
   }
 
   @Test
@@ -46,14 +58,22 @@ class RecordLinksIT extends WorkspaceTestSupport {
     passes(a, () -> links.company(a.company()));
     passes(a, () -> links.source(a.source()));
     passes(a, () -> links.contact(a.contact()));
+    passes(a, () -> links.lead(a.lead()));
+    passes(a, () -> links.deal(a.deal()));
     passes(a, () -> links.company(null));
     passes(a, () -> links.source(null));
     passes(a, () -> links.contact(null));
+    passes(a, () -> links.lead(null));
+    passes(a, () -> links.deal(null));
 
     rejected(a, "companyId", () -> links.company(b.company()));
     rejected(a, "sourceId", () -> links.source(b.source()));
     rejected(a, "contactId", () -> links.contact(b.contact()));
+    rejected(a, "leadId", () -> links.lead(b.lead()));
+    rejected(a, "dealId", () -> links.deal(b.deal()));
     rejected(a, "companyId", () -> links.company(Long.MAX_VALUE));
+    rejected(a, "leadId", () -> links.lead(Long.MAX_VALUE));
+    rejected(a, "dealId", () -> links.deal(Long.MAX_VALUE));
   }
 
   private static void passes(Tenant t, Runnable check) {

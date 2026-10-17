@@ -49,6 +49,28 @@ class WorkspaceAccessTest {
   }
 
   @Test
+  void requireEditableByAcceptsAnyOfTheGivenUsersAndNullIsNobody() {
+    WorkspaceContext.runAs(
+        as(SALES_REP),
+        () -> {
+          access.requireEditableBy(1L);
+          access.requireEditableBy(2L, 1L);
+          access.requireEditableBy(null, 1L);
+          assertThrows(AccessDeniedException.class, () -> access.requireEditableBy(2L, 3L));
+          assertThrows(AccessDeniedException.class, () -> access.requireEditableBy(null, null));
+          return assertThrows(AccessDeniedException.class, () -> access.requireEditableBy());
+        });
+    WorkspaceContext.runAs(
+        as(MANAGER),
+        () -> {
+          access.requireEditableBy(2L, 3L);
+          access.requireEditableBy(null, null);
+          access.requireEditableBy();
+          return null;
+        });
+  }
+
+  @Test
   void ownerForCreateIsTheCallerByDefaultAndSomeoneElseNeedsAssignAndMembership() {
     when(members.existsByWorkspaceIdAndUserId(10, 2)).thenReturn(true);
     WorkspaceContext.runAs(

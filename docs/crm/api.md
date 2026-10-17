@@ -27,7 +27,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   field name allowed for that list) and `direction` (`ASC` or `DESC`), and return a Spring
   `Page` (`content`, `totalElements`, `totalPages`, `number`, `size`, ...). Without `direction`
   a sort takes its own: `DESC` for `CREATED_AT`, `UPDATED_AT` and `PRIORITY`, `ASC` for `NAME`,
-  `COMPANY` and `FOLLOW_UP_DATE`. The id is always a tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
+  `COMPANY`, `FOLLOW_UP_DATE` and `DUE_AT`. The id is always a tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
   Text search `q` is trimmed; blank means no search.
 - **Errors** always use `ApiError` (`status`, `message`, `fieldErrors`, ...). 400 invalid input or
   query parameter; 401 no valid token; 403 member without the permission; 404 unknown record,
@@ -209,22 +209,36 @@ Deal        = DealSummary + { probabilityOverride?, source?: Ref, lostReason?, l
 
 ## Tasks and reminders
 
-`/workspaces/{w}/tasks`: list, create, get, update. List filters: `q` (title), `status`
-(repeatable), `assigneeId`, `mine` (assigned to the caller), `overdue`, `dueFrom` / `dueTo`
-(instants), `companyId`, `contactId`, `leadId`, `dealId`; `sort`: `DUE_AT` (default, `ASC`, no due
-date last), `PRIORITY`, `CREATED_AT`, `UPDATED_AT`.
+`/workspaces/{w}/tasks`: list, create, get, update, and the status actions below. Tasks are
+cancelled, never deleted (there is no `DELETE`). List filters: `q` (title), `status` (repeatable),
+`assigneeId`, `mine` (assigned to the caller; with `assigneeId` both must hold), `overdue`
+(`true`: open tasks due in the past; `false`: all the others, those without a due time included;
+omitted: both), `dueFrom` / `dueTo` (instants, inclusive, never matching tasks without a due
+time), `companyId`, `contactId`, `leadId`, `dealId`; `sort`: `DUE_AT` (default, `ASC`; tasks
+without a due time come last in both directions), `PRIORITY` (HIGH first descending), `CREATED_AT`,
+`UPDATED_AT`. The list returns full `Task`s. Due times are kept in microseconds, as stored. Whoever
+may edit a task (its assignee, its creator, or `RECORDS_EDIT_ANY`; 403 otherwise, checked first)
+may also complete, reopen and cancel it; an unassigned task whose creator left is a manager's.
 
 | Method and path | Body → response |
 |---|---|
-| `POST /{id}/complete`, `/reopen`, `/cancel` | `{ version }` → `Task` |
+| `POST /{id}/complete`, `/reopen`, `/cancel` | `{ version }` → `Task`; a stale version is a 409, compared first. `complete` and `cancel` need an `OPEN` task (`complete` sets `completedAt`), `reopen` a `COMPLETED` or `CANCELLED` one (back to `OPEN`, `completedAt` cleared); any other move, a repeat included, is a 409 that changes nothing. Audit: `COMPLETE`, `REOPEN`, `CANCEL` with the changed fields |
 | `GET /workspaces/{w}/reminders` | → `{ overdueTasks, dueSoonTasks (next 24 h), followUpLeads }` of the caller, at most 20 each |
 
+The reminders are the caller's: their `OPEN` tasks due before now (`overdueTasks`, oldest due time
+first) and due from now to 24 hours ahead (`dueSoonTasks`, soonest first), and their non-archived
+`NEW`, `CONTACTED` or `QUALIFIED` leads whose `followUpDate` is today or earlier (`followUpLeads`,
+oldest date first, full `Lead`s). Task times are instants; only "today" for the follow-up date
+uses the workspace's time zone.
+
 ```ts
-TaskInput = { title (1-200), description?, dueAt?, priority (default MEDIUM), assigneeId?,
+TaskInput = { title (1-200), description? (≤5000), dueAt?, priority (default MEDIUM), assigneeId?,
               companyId?, contactId?, leadId?, dealId? }       // assigneeId: see Conventions, Owner
 Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberRef, status,
               overdue, completedAt?, company?: Ref, contact?: { id, fullName }, lead?: { id, fullName },
               deal?: Ref, createdAt, updatedAt, version }
+// overdue: computed, OPEN with dueAt in the past. assignee and createdBy are missing once that
+// person left the workspace. An edit (PUT) can't change the status: only the actions do.
 ```
 
 ## Activities

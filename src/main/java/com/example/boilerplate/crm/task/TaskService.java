@@ -1,0 +1,290 @@
+package com.example.boilerplate.crm.task;
+
+import com.example.boilerplate.audit.AuditAction;
+import com.example.boilerplate.audit.AuditChanges;
+import com.example.boilerplate.audit.AuditEntityType;
+import com.example.boilerplate.audit.AuditTrail;
+import com.example.boilerplate.common.entity.AuditableEntity;
+import com.example.boilerplate.common.entity.Versions;
+import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.text.Texts;
+import com.example.boilerplate.crm.common.ListParams;
+import com.example.boilerplate.crm.common.PersonRef;
+import com.example.boilerplate.crm.common.Priority;
+import com.example.boilerplate.crm.common.RecordLinks;
+import com.example.boilerplate.crm.common.Ref;
+import com.example.boilerplate.crm.company.CompanyRepository;
+import com.example.boilerplate.crm.contact.ContactRepository;
+import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.lead.LeadRepository;
+import com.example.boilerplate.crm.task.dto.*;
+import com.example.boilerplate.workspace.MemberDirectory;
+import com.example.boilerplate.workspace.WorkspaceAccess;
+import com.example.boilerplate.workspace.WorkspaceContext;
+import com.example.boilerplate.workspace.dto.MemberRef;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort.Direction;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * The current workspace's tasks. Tasks are cancelled, never deleted. Whoever may edit one (its
+ * assignee, its creator, or anyone with {@code RECORDS_EDIT_ANY}) may also complete, reopen and
+ * cancel it.
+ */
+@Service
+@Transactional
+public class TaskService {
+  private final TaskRepository tasks;
+  private final CompanyRepository companies;
+  private final ContactRepository contacts;
+  private final LeadRepository leads;
+  private final DealRepository deals;
+  private final RecordLinks links;
+  private final WorkspaceAccess access;
+  private final MemberDirectory directory;
+  private final AuditTrail audit;
+  private final AuditChanges auditChanges;
+
+  public TaskService(
+      TaskRepository tasks,
+      CompanyRepository companies,
+      ContactRepository contacts,
+      LeadRepository leads,
+      DealRepository deals,
+      RecordLinks links,
+      WorkspaceAccess access,
+      MemberDirectory directory,
+      AuditTrail audit,
+      AuditChanges auditChanges) {
+    this.tasks = tasks;
+    this.companies = companies;
+    this.contacts = contacts;
+    this.leads = leads;
+    this.deals = deals;
+    this.links = links;
+    this.access = access;
+    this.directory = directory;
+    this.audit = audit;
+    this.auditChanges = auditChanges;
+  }
+
+  @Transactional(readOnly = true)
+  public Page<TaskResponse> list(
+      TaskFilter filter, int page, int size, TaskSort sort, Direction direction) {
+    return list(filter, Instant.now(), page, size, sort, direction);
+  }
+
+  /**
+   * As above, with overdue measured against {@code now}: the reminders ask for several lists that
+   * must not leave a gap between them.
+   */
+  @Transactional(readOnly = true)
+  Page<TaskResponse> list(
+      TaskFilter filter, Instant now, int page, int size, TaskSort sort, Direction direction) {
+    Specification<CrmTask> matching =
+        TaskSpecifications.matching(filter, WorkspaceContext.require().userId(), now);
+    Specification<CrmTask> ordering = TaskSpecifications.ordering(sort, direction);
+    Page<CrmTask> found =
+        ordering == null
+            ? tasks.findAll(matching, ListParams.pageable(page, size, direction, sort))
+            : tasks.findAll(matching.and(ordering), ListParams.unsorted(page, size));
+    Related related = related(found.getContent());
+    return found.map(t -> response(t, related, now));
+  }
+
+  @Transactional(readOnly = true)
+  public TaskResponse get(long id) {
+    return response(task(id));
+  }
+
+  public TaskResponse create(CreateTaskRequest r) {
+    long assignee = access.ownerForCreate("assigneeId", r.assigneeId());
+    checkLinks(r);
+    CrmTask task = new CrmTask(WorkspaceContext.require().userId());
+    edit(task, r);
+    task.changeAssignee(assignee);
+    tasks.save(task);
+    audit.record(AuditAction.CREATE, AuditEntityType.TASK, task.getId(), task.getTitle(), Map.of());
+    return response(task);
+  }
+
+  public TaskResponse update(long id, UpdateTaskRequest r) {
+    CrmTask task = task(id);
+    requireEditable(task);
+    Versions.check(task, r.version());
+    Long assignee = access.ownerForUpdate("assigneeId", r.assigneeId(), task.getAssigneeId());
+    checkLinks(r);
+    TaskResponse before = response(task);
+    edit(task, r);
+    task.changeAssignee(assignee);
+    // Flush so the response carries the new version.
+    TaskResponse after = response(tasks.saveAndFlush(task));
+    Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
+    if (!changes.isEmpty()) {
+      audit.record(AuditAction.UPDATE, AuditEntityType.TASK, id, task.getTitle(), changes);
+    }
+    return after;
+  }
+
+  public TaskResponse complete(long id, VersionRequest r) {
+    return move(
+        id, r, TaskStatus.COMPLETED, AuditAction.COMPLETE, "Only open tasks can be completed");
+  }
+
+  public TaskResponse reopen(long id, VersionRequest r) {
+    return move(
+        id,
+        r,
+        TaskStatus.OPEN,
+        AuditAction.REOPEN,
+        "Only completed or cancelled tasks can be reopened");
+  }
+
+  public TaskResponse cancel(long id, VersionRequest r) {
+    return move(
+        id, r, TaskStatus.CANCELLED, AuditAction.CANCEL, "Only open tasks can be cancelled");
+  }
+
+  /**
+   * Moves the task to {@code target} when {@link TaskStatus#canMoveTo allows it}, else a 409 with
+   * {@code refusal}; the version is compared first, since a stale client has not seen the status.
+   */
+  private TaskResponse move(
+      long id, VersionRequest r, TaskStatus target, AuditAction action, String refusal) {
+    CrmTask task = task(id);
+    requireEditable(task);
+    Versions.check(task, r.version());
+    if (!task.getStatus().canMoveTo(target)) throw new ConflictException(refusal);
+    TaskResponse before = response(task);
+    task.changeStatus(target);
+    TaskResponse after = response(tasks.saveAndFlush(task));
+    audit.record(
+        action, AuditEntityType.TASK, id, task.getTitle(), auditChanges.recordDiff(before, after));
+    return after;
+  }
+
+  private CrmTask task(long id) {
+    return tasks.findById(id).orElseThrow(() -> new NotFoundException("Task not found"));
+  }
+
+  private void requireEditable(CrmTask task) {
+    access.requireEditableBy(task.getAssigneeId(), task.getCreatedBy());
+  }
+
+  private void checkLinks(TaskInput r) {
+    links.company(r.companyId());
+    links.contact(r.contactId());
+    links.lead(r.leadId());
+    links.deal(r.dealId());
+  }
+
+  /**
+   * Create and update apply the request alike; the assignee is decided and the links are checked by
+   * the caller.
+   */
+  private static void edit(CrmTask task, TaskInput r) {
+    task.update(
+        Texts.required("title", r.title()),
+        Texts.optional(r.description()),
+        r.dueAt(),
+        r.priority() == null ? Priority.MEDIUM : r.priority(),
+        r.companyId(),
+        r.contactId(),
+        r.leadId(),
+        r.dealId());
+  }
+
+  /** What a page shows besides the tasks' own columns: one query each for a whole page. */
+  private record Related(
+      Map<Long, MemberRef> people,
+      Map<Long, Ref> companies,
+      Map<Long, PersonRef> contacts,
+      Map<Long, PersonRef> leads,
+      Map<Long, Ref> deals) {
+    MemberRef assignee(CrmTask t) {
+      return t.getAssigneeId() == null ? null : people.get(t.getAssigneeId());
+    }
+
+    MemberRef createdBy(CrmTask t) {
+      return t.getCreatedBy() == null ? null : people.get(t.getCreatedBy());
+    }
+
+    Ref company(CrmTask t) {
+      return t.getCompanyId() == null ? null : companies.get(t.getCompanyId());
+    }
+
+    PersonRef contact(CrmTask t) {
+      return t.getContactId() == null ? null : contacts.get(t.getContactId());
+    }
+
+    PersonRef lead(CrmTask t) {
+      return t.getLeadId() == null ? null : leads.get(t.getLeadId());
+    }
+
+    Ref deal(CrmTask t) {
+      return t.getDealId() == null ? null : deals.get(t.getDealId());
+    }
+  }
+
+  private Related related(List<CrmTask> page) {
+    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+    List<Long> people = new ArrayList<>(ids(page, CrmTask::getAssigneeId));
+    people.addAll(ids(page, CrmTask::getCreatedBy));
+    return new Related(
+        directory.refs(people),
+        load(companies, ids(page, CrmTask::getCompanyId), c -> new Ref(c.getId(), c.getName())),
+        load(
+            contacts,
+            ids(page, CrmTask::getContactId),
+            c -> new PersonRef(c.getId(), c.getFullName())),
+        load(leads, ids(page, CrmTask::getLeadId), l -> new PersonRef(l.getId(), l.getFullName())),
+        load(deals, ids(page, CrmTask::getDealId), d -> new Ref(d.getId(), d.getName())));
+  }
+
+  private static List<Long> ids(List<CrmTask> page, Function<CrmTask, Long> link) {
+    return page.stream().map(link).filter(Objects::nonNull).distinct().toList();
+  }
+
+  /** The rows with these ids (those of this workspace) by id; no query for no ids. */
+  private static <E extends AuditableEntity, V> Map<Long, V> load(
+      JpaRepository<E, Long> rows, List<Long> ids, Function<E, V> ref) {
+    if (ids.isEmpty()) return Map.of();
+    return rows.findAllById(ids).stream().collect(Collectors.toMap(AuditableEntity::getId, ref));
+  }
+
+  private TaskResponse response(CrmTask t) {
+    return response(t, related(List.of(t)), Instant.now());
+  }
+
+  private static TaskResponse response(CrmTask t, Related r, Instant now) {
+    return new TaskResponse(
+        t.getId(),
+        t.getTitle(),
+        t.getDescription(),
+        t.getDueAt(),
+        t.getPriority(),
+        r.assignee(t),
+        r.createdBy(t),
+        t.getStatus(),
+        t.isOverdue(now),
+        t.getCompletedAt(),
+        r.company(t),
+        r.contact(t),
+        r.lead(t),
+        r.deal(t),
+        t.getCreatedAt(),
+        t.getUpdatedAt(),
+        t.getVersion());
+  }
+}

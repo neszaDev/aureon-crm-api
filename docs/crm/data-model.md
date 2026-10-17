@@ -90,7 +90,7 @@ Referral, Event, Outbound, Partner, Other) in the transaction that creates it.
 | `leads` | `first_name`, `last_name?`, `company_name varchar(200)?`, `email?`, `phone?`, `job_title?`, `source_id?`, `owner_id?`, `status varchar(16)`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `follow_up_date date?`, `estimated_value numeric(15,2)?` + `currency char(3)?`, `unqualified_reason varchar(500)?`, `notes?`, `converted_at?`, `converted_company_id?`, `converted_contact_id?`, `converted_deal_id?`, `archived_at?` |
 | `deals` | `name varchar(200)`, `amount numeric(15,2) ≥ 0`, `currency char(3)`, `stage_id`, `probability smallint?` (override), `expected_close_date date?`, `owner_id?`, `company_id?`, `contact_id?`, `source_id?`, `lead_id?` (`UNIQUE`: one deal per converted lead), `lost_reason varchar(500)?`, `closed_at?`, `notes?`, `archived_at?` |
 | `deal_stage_changes` | `deal_id`, `from_stage_id?` + `from_stage_name varchar(60)?` (both null for the first entry), `to_stage_id?` + `to_stage_name varchar(60)`, `changed_by?` (user id, no FK: history outlives memberships and accounts), `changed_at`; the names are snapshots taken at the change, the ids `ON DELETE SET NULL (column)` so deleting a stage keeps the rows; the app only inserts, no `updated_at` or `version`, and no append-only trigger (SET NULL updates rows) |
-| `tasks` | `title varchar(200)`, `description varchar(5000)?`, `due_at timestamptz?`, `priority`, `status varchar(16)` (`OPEN`, `COMPLETED`, `CANCELLED`), `assignee_id?`, `created_by?` (user id), `completed_at?`, `company_id?`, `contact_id?`, `lead_id?`, `deal_id?` |
+| `tasks` | `title varchar(200)`, `description varchar(5000)?`, `due_at timestamptz?`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `status varchar(16)` (`OPEN`, `COMPLETED`, `CANCELLED`), `assignee_id?`, `created_by?` (user id; a member foreign key like the owners: `ON DELETE SET NULL (created_by)`, so a creator who leaves becomes null), `completed_at?` (`CHECK`: set exactly when `COMPLETED`), `company_id?`, `contact_id?`, `lead_id?`, `deal_id?` |
 | `activities` | `type varchar(16)` (`CALL`, `EMAIL`, `MEETING`, `NOTE`), `subject varchar(200)`, `body varchar(5000)?`, `occurred_at`, `author_id?`, `company_id?`, `contact_id?`, `lead_id?`, `deal_id?`; `CHECK` at least one link |
 
 Foreign keys use `ON DELETE RESTRICT` (records are archived, never deleted; `deal_stage_changes →
@@ -101,12 +101,13 @@ with a foreign-key error, which the API reports as 409 before it gets that far.
 Indexes: every foreign key; `(workspace_id, lower(name))` on companies;
 `(workspace_id, lower(email))` on contacts and leads; `GIN (tags)` on contacts;
 `(workspace_id, status)` on leads; `(workspace_id, stage_id)` and `(workspace_id, closed_at)` on
-deals; `(workspace_id, assignee_id, status, due_at)` on tasks;
+deals; `(workspace_id, assignee_id, status, due_at)` on tasks (the reminders and `mine`);
 `(workspace_id, occurred_at DESC)` on activities. Substring search (`ILIKE '%q%'`) scans within one
 workspace, which is fine at SMB scale; `pg_trgm` indexes are the upgrade path.
 
 ## Derived values (not stored)
 
+- A task's `overdue`: `OPEN` and `due_at` before now.
 - A deal's status: its stage's kind. Its effective probability: `COALESCE(deals.probability,
   stage.probability)`.
 - Counts and totals on the dashboard and reports: computed by queries on request.
