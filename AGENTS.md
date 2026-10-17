@@ -8,9 +8,9 @@ Keep this file the single source of truth; `CLAUDE.md` only imports it.
 Aureon CRM API: the backend of a multi-tenant CRM (Spring Boot 3.5 / Java 21 / PostgreSQL).
 Every business is a **workspace** with members, roles and invitation links; its data is
 isolated per request by a tenant boundary, changes are written to an append-only audit trail,
-and the CRM features (pipeline stages, lead sources, companies and contacts so far) live under
-`/api/v1/workspaces/{workspaceId}/...`. The CRM specification, data model, permission matrix and
-API contract are in [docs/crm/](docs/crm/README.md).
+and the CRM features (pipeline stages, lead sources, companies, contacts, leads, deals, tasks and
+activities so far) live under `/api/v1/workspaces/{workspaceId}/...`. The CRM specification, data
+model, permission matrix and API contract are in [docs/crm/](docs/crm/README.md).
 
 The repo was built from `spring-postgres-boilerplate`, so its accounts (JWT access tokens +
 rotating refresh tokens, sign-in rate limits, admin user management), owner-scoped file uploads,
@@ -41,8 +41,11 @@ src/main/java/com/example/boilerplate/
                history and the board (grouped totals per currency through the DealTotals
                repository fragment); task/ adds actions with their own audit events, edit rights for the
                assignee or the creator, a computed overdue flag and the reminders (which reuse the
-               task and lead lists); common/ = what every record type shares (CrmRecord,
-               ListParams, SortField, TextSearch, RecordLinks, ...)
+               task and lead lists); activity/ adds the one record that is deleted (its audit event
+               keeps the last state), an author instead of an owner with author-only edit rights,
+               and the company filled in from the contact or deal; common/ = what every record
+               type shares (CrmRecord, ListParams, SortField, TextSearch, RecordLinks, LinkRefs,
+               ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
                InvitationService
@@ -110,8 +113,10 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
 - **Audit changes:** an update's event stores `AuditChanges.recordDiff(before, after)` of the
   response DTOs (it drops `version`, `createdAt`, `updatedAt`) and nothing when that is empty; a
-  create stores empty changes and the record's label. Entities assign money through
-  `Money.scale2`, so `1250` from a request and `1250.00` from `numeric(15,2)` are not a change.
+  create stores empty changes and the record's label; deleting an activity stores its last state
+  (every field as a `from`), because nothing else keeps what was written. Entities assign money
+  through `Money.scale2`, so `1250` from a request and `1250.00` from `numeric(15,2)` are not a
+  change.
 - **Record lists** use `JpaSpecificationExecutor.findAll(spec, ListParams.pageable(...))` and
   `TextSearch.pattern` with `cb.like(cb.lower(path), cb.lower(cb.literal(pattern)), '\\')`. A column
   that must list nulls last in both directions adds `Ordering.nullsLast` to the spec and uses

@@ -9,9 +9,10 @@ role in it (owner, admin, manager or sales rep); one account can belong to sever
 A workspace's data is isolated from every other: each request is checked for membership, and the
 database queries are filtered by workspace (Hibernate `@TenantId`) and backed by composite foreign
 keys. Changes are written to an append-only audit trail. On top of that sit the CRM features:
-pipeline stages and lead sources today, and companies, contacts, leads, deals, tasks, activities,
-a dashboard and reports as the contract in [docs/crm/](docs/crm/README.md) is built out. That
-folder holds the specification, data model, permission matrix and REST contract.
+pipeline stages, lead sources, companies, contacts, leads (with conversion), deals (with the
+pipeline board), tasks (with reminders) and activities today, and a dashboard and reports as the
+contract in [docs/crm/](docs/crm/README.md) is built out. That folder holds the specification, data
+model, permission matrix and REST contract.
 
 It was built from [spring-postgres-boilerplate](https://github.com/neszaDev/spring-postgres-boilerplate),
 so it also has JWT access tokens with rotating refresh tokens, sign-in rate limits, admin user

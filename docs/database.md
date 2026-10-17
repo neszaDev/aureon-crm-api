@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V12__add_company_nickname.sql`. Note the **two**
+   highest existing version + 1. Example: `V18__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -42,10 +42,18 @@ Migrations run automatically at application startup, in every profile.
 | `V9__crm_reference_data.sql` | `pipeline_stages` (kind and probability checks, unique name per workspace, one Won and one Lost stage per workspace) and `lead_sources` (unique name per workspace, `archived_at`) |
 | `V10__workspace_invitations.sql` | `workspace_invitations` (SHA-256 of the link token, unique; partial unique index: one open invitation per email and workspace) |
 | `V11__invitation_invited_by_index.sql` | index on `workspace_invitations(invited_by)`, so deleting an account (`ON DELETE SET NULL`) doesn't scan the table |
+| `V12__companies.sql` | `companies` (`UNIQUE (workspace_id, id)`: the target of the other records' composite foreign keys; owner is a member foreign key `ON DELETE SET NULL (owner_id)`; index on `lower(name)` for the duplicate check) |
+| `V13__contacts.sql` | `contacts` (company, source and owner foreign keys; `tags text[]` with a GIN index; index on `lower(email)` for the duplicate check) |
+| `V14__leads.sql` | `leads` (status and priority checks; estimated value and currency both set or both null; `converted_company_id` and `converted_contact_id` foreign keys, the deal's comes in V15) |
+| `V15__deals.sql` | `deals` (stage, company, contact, source, lead and owner foreign keys; `UNIQUE (workspace_id, lead_id)`: one deal per converted lead) and `deal_stage_changes` (stage names kept as snapshots, the stage ids `ON DELETE SET NULL (column)`); adds the foreign key of `leads.converted_deal_id` |
+| `V16__tasks.sql` | `tasks` (status and priority checks; `completed_at` set exactly when `COMPLETED`; assignee and creator are member foreign keys `ON DELETE SET NULL (column)`; company, contact, lead and deal links; index on `(workspace_id, assignee_id, status, due_at)` for the reminders) |
+| `V17__activities.sql` | `activities` (type check; `CHECK (num_nonnulls(company_id, contact_id, lead_id, deal_id) >= 1)`: at least one link; author is a member foreign key `ON DELETE SET NULL (author_id)`; index on `(workspace_id, occurred_at DESC)` for the newest-first list) |
 
 Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
-tenant boundary, the composite foreign keys and the rest of the CRM tables are described in
-[docs/crm/data-model.md](crm/data-model.md). Workspaces are never hard-deleted, so
+tenant boundary, the composite foreign keys and the columns of the CRM tables are described in
+[docs/crm/data-model.md](crm/data-model.md). A member foreign key must list its column
+(`ON DELETE SET NULL (owner_id)`): a plain `SET NULL` would also null the `NOT NULL`
+`workspace_id`. Workspaces are never hard-deleted, so
 `audit_events.workspace_id` is a plain foreign key and the trail stays append-only.
 
 ## Local database

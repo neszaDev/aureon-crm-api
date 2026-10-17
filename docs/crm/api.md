@@ -244,15 +244,40 @@ Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberR
 ## Activities
 
 `/workspaces/{w}/activities`: `GET` (filters `type`, `companyId`, `contactId`, `leadId`, `dealId`,
-`authorId`, `from` / `to`; newest `occurredAt` first), `POST`, `GET /{id}`, `PUT /{id}`,
-`DELETE /{id}`. A company's timeline includes activities logged on its contacts and deals: when an
-activity names a contact or deal with a company, the service fills in `companyId`.
+`authorId`, `from`, `to`), `POST` (201), `GET /{id}`, `PUT /{id}`, `DELETE /{id}` (204).
+
+- **List**: `page` and `size` as everywhere, always newest `occurredAt` first with the id breaking
+  ties the same way (there is no `sort` or `direction`). Every filter given must hold. `from` and
+  `to` are instants on `occurredAt`, `from` inclusive and `to` exclusive, so consecutive periods
+  neither overlap nor leave a gap. `type` takes one value; an unknown one, or a `from` / `to` that
+  isn't an instant, is a 400.
+- **Links**: at least one of `companyId`, `contactId`, `leadId`, `dealId`, else 400 with
+  `fieldErrors.links`: `Link the activity to a company, contact, lead or deal`. Each must be a
+  record of this workspace (400 on that field). Archived records can still be linked: archiving
+  hides a record, it doesn't end its history. An edit can't drop the last link either.
+- **Company timeline**: a company's timeline includes the activities logged on its contacts and
+  deals, because the service fills `companyId` in when the request sends none: the contact's
+  company, else the deal's. A `PUT` works the same way: `companyId` null derives it again from the
+  links it carries (and clears it when they have no company), a `companyId` keeps it whatever the
+  contact's is. It is filled when the activity is written: a contact that later moves to another
+  company leaves its past activities on the old one.
+- **`occurredAt`** is an instant, stored in microseconds. A new activity without one happens now;
+  an edit that leaves it out keeps the current one.
+- **Author** is the caller, whatever the body says, and never changes. It is missing once that
+  person left the workspace. Only the author or a member with `RECORDS_EDIT_ANY` edits or deletes
+  (403, checked before the version and the body, so the activity of a member who left is for
+  `RECORDS_EDIT_ANY` only); anyone in the workspace reads.
+- **Audit**: `CREATE` with no changes, `UPDATE` with the changed fields (none, no event), and
+  `DELETE`, which keeps what the activity was: every field it had as the `from` of a change (`to`
+  null). The label is the subject. `DELETE` takes no version; a deleted activity is a 404.
 
 ```ts
-ActivityInput = { type: CALL | EMAIL | MEETING | NOTE, subject (1-200), body?, occurredAt? (default
-                  now), companyId?, contactId?, leadId?, dealId? }     // at least one link
-Activity      = { id, ...fields, author?: MemberRef, company?: Ref, contact?, lead?, deal?,
+ActivityInput = { type: CALL | EMAIL | MEETING | NOTE, subject (1-200), body? (≤5000), occurredAt?
+                  (default now), companyId?, contactId?, leadId?, dealId? }  // at least one link
+Activity      = { id, ...ActivityInput fields, author?: MemberRef, company?: Ref,
+                  contact?: { id, fullName }, lead?: { id, fullName }, deal?: Ref,
                   createdAt, updatedAt, version }
+// PUT takes ActivityInput + version (every field; an omitted body or link is cleared)
 ```
 
 ## Dashboard and reports

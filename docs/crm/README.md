@@ -102,13 +102,20 @@ show the caller's overdue tasks, tasks due within 24 hours, and their open leads
 date is today or earlier in the workspace's time zone (task due times are instants and need none).
 Nothing is emailed.
 
+### Activity
+
+A call, email, meeting or note logged by a member against a company, contact, lead or deal (at
+least one). It belongs to the company its contact or deal belongs to, unless the request names
+another, so a company's timeline lists what happened on its contacts and deals too. The author is
+the member who logged it; only they or someone with `RECORDS_EDIT_ANY` can edit or delete it.
+
 ### Records: archive, never delete
 
 Companies, contacts, leads and deals are **archived**, not deleted: they disappear from lists and
 pickers but keep their history and links, and can be restored. Tasks are cancelled, not deleted.
-Activities (call, email, meeting and note logs) can be edited or deleted by their author or a
-manager; deletions are audited. Pipeline stages and lead sources can be deleted only while nothing
-uses them.
+Activities (call, email, meeting and note logs) can be edited or deleted by their author or anyone
+with `RECORDS_EDIT_ANY`; a deletion is audited with the activity's last state. Pipeline stages and
+lead sources can be deleted only while nothing uses them.
 
 ## Money
 

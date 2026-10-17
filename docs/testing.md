@@ -15,7 +15,13 @@ as in `auth/JwtServiceTest` and `auth/RefreshTokenServiceTest`. To test configur
 use `ApplicationContextRunner` (see `auth/AuthPropertiesTest`). The workspace layer has its own:
 `workspace/WorkspaceRoleTest` (permissions per role), `WorkspaceAccessTest` (permission and
 ownership checks, `runAs`), `WorkspaceAccessInterceptorTest` (the context is cleared after a
-request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs).
+request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs). The CRM adds
+`crm/common/` (`CrmRecordTest` archive and owner, `CurrenciesTest`, `ListParamsTest` paging and
+sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
+`TextSearchTest` wildcard escaping), `crm/lead/LeadStatusTest` (the status transition table),
+`crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
+transitions, overdue, microsecond times), `common/entity/TimestampPrecisionTest` and
+`common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400).
 
 ## Integration tests
 
@@ -62,10 +68,23 @@ What the existing ITs cover:
 | `audit/AuditTrailIT` | Audit events written with the change, append-only (the database refuses `UPDATE`/`DELETE`), refuses to run outside a transaction |
 | `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, permissions, versions, validation |
 | `crm/settings/LeadSourceIT` | Default sources, create/rename/archive/delete, duplicate names, permissions, versions |
+| `workspace/MemberDirectoryIT` | Owner, assignee and author names: only members of the current workspace resolve |
+| `crm/common/RecordLinksIT` | Record links: the workspace's pass, any other (or unknown) id is a 400 on its field |
+| `crm/common/ListHelpersIT` | The list helpers on real queries: literal search, sorting with the id tie-breaker in both directions, nulls last |
+| `crm/company/CompanyIT` | Create/get/update, validation, search, filters, sorting, paging, archive/restore, duplicate warning, owner rules, a removed member's companies become unassigned, stale version (409), other workspace (404) |
+| `crm/contact/ContactIT` | The same for contacts, plus tags (normalized, filtered, listed), sorting by name and company, duplicates by email and phone, company links, the company's contact count |
+| `crm/lead/LeadIT` | Create/update, validation, estimated value and currency, the status lifecycle and its rules, follow-up date, filters, search, sorting (nulls last, priority), archive/restore, owner rules, versions |
+| `crm/lead/LeadConversionIT` | Conversion into company, contact and deal in one transaction (rollback on a bad deal), links to existing records, the owner of the new records, retry returns the first result, concurrent conversions create once, an archived qualified lead converts, a converted lead is read-only, permissions |
+| `crm/deal/DealIT` | Create/update, money as strings, default stage and currency, moves with the stage history, won/lost rules, filters, sorting, archive/restore, stage and source in use, rep rules, links and stage of another workspace |
+| `crm/deal/DealBoardIT` | The pipeline board: a column per stage, totals per currency, the card cap with the full count, archived deals left out |
+| `crm/task/TaskIT` | Create/assign/update, assignee-or-creator edit rights, complete/reopen/cancel with their audit events, the overdue flag, sorting (due date nulls last, priority), filters, links, a removed member's tasks become unassigned, no delete |
+| `crm/task/ReminderIT` | The caller's overdue and due-soon tasks and follow-up leads: ordering, the cap of 20, the workspace time zone |
+| `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
-`WorkspaceEndpointsGuardIT` needs no edit when a workspace controller is added: it finds the new
-endpoints itself and fails if one answers a non-member with anything but 404. If it fails, fix the
-endpoint, not the test.
+`WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one
+answers a non-member with anything but 404. If it fails, fix the endpoint, not the test. Only its
+minimum endpoint count (`hasSizeGreaterThanOrEqualTo`) is raised by hand, to the number registered
+(62 after the activities), so a scan that silently misses endpoints can't pass.
 
 ## Reports
 
