@@ -297,8 +297,9 @@ Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberR
   an edit that leaves it out keeps the current one.
 - **Author** is the caller, whatever the body says, and never changes. It is missing once that
   person left the workspace. Only the author or a member with `RECORDS_EDIT_ANY` edits or deletes
-  (403, checked before the version and the body, so the activity of a member who left is for
-  `RECORDS_EDIT_ANY` only); anyone in the workspace reads.
+  (403, checked before the version and the links; a body that fails bean validation is a 400
+  first. The activity of a member who left is for `RECORDS_EDIT_ANY` only); anyone in the
+  workspace reads.
 - **Audit**: `CREATE` with no changes, `UPDATE` with the changed fields (none, no event), and
   `DELETE`, which keeps what the activity was: every field it had as the `from` of a change (`to`
   null). The label is the subject. `DELETE` takes no version; a deleted activity is a 404.

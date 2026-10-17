@@ -420,8 +420,8 @@ class ActivityIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.subject").value("R1's call, edited"))
         .andExpect(jsonPath("$.author.userId").value(r1.userId()));
 
-    // Another rep reads, but can't change or delete: 403 before any other check, a stale
-    // version and an invalid body included.
+    // Another rep reads, but can't change or delete: 403 before the version (stale or current)
+    // and the links are checked; only bean validation of the body, in the controller, comes first.
     send(r2.token(), get(ACTIVITY, w, id)).andExpect(status().isOk());
     own.put("subject", "Taken");
     own.put("version", 0);
