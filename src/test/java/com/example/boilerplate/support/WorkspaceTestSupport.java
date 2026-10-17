@@ -7,10 +7,13 @@ import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.WorkspaceMember;
 import com.example.boilerplate.workspace.WorkspaceMemberRepository;
 import com.example.boilerplate.workspace.WorkspaceRole;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** Base for ITs of workspace-scoped endpoints: workspaces and members without invitations. */
 public abstract class WorkspaceTestSupport extends AbstractIntegrationTest {
@@ -46,5 +49,24 @@ public abstract class WorkspaceTestSupport extends AbstractIntegrationTest {
   protected void addMember(long workspaceId, String email, WorkspaceRole role) {
     members.save(
         new WorkspaceMember(workspaceId, users.findByEmail(email).orElseThrow().getId(), role));
+  }
+
+  /** Sends {@code request} as the token's user, with {@code body} as JSON unless it is null. */
+  protected ResultActions send(String token, MockHttpServletRequestBuilder request, Object body)
+      throws Exception {
+    request.header(HttpHeaders.AUTHORIZATION, bearer(token));
+    if (body != null) {
+      request.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
+    }
+    return mvc.perform(request);
+  }
+
+  protected ResultActions send(String token, MockHttpServletRequestBuilder request)
+      throws Exception {
+    return send(token, request, null);
+  }
+
+  protected JsonNode body(ResultActions result) throws Exception {
+    return json.readTree(result.andReturn().getResponse().getContentAsString());
   }
 }

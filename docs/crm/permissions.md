@@ -14,6 +14,11 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
    query and sets it on insert, so a repository query can't return another workspace's rows even
    if a filter is forgotten. Requests without a workspace context use a tenant id that matches
    nothing; only startup code and the demo seeder run as the root tenant, explicitly.
+   This covers load by id too: in Hibernate 6.6.53, `findById` / `EntityManager.find` add the
+   tenant restriction, so another workspace's id is not found (404) and services use the plain
+   repository `findById` (verified by `TenantIsolationIT`). Hibernate does not re-check the tenant
+   of an entity it already holds, so an entity loaded through native SQL could be changed across
+   workspaces: never load workspace-owned entities with native SQL.
 4. Composite foreign keys `(workspace_id, x_id)` make it impossible to store a link to a record,
    stage, source or member of another workspace.
 5. Services check permissions with `WorkspaceAccess.require(Permission)` and ownership rules with

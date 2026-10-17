@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.crm.settings.WorkspaceDefaults;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.dto.*;
@@ -24,6 +25,7 @@ public class WorkspaceService {
   private final WorkspaceAccess access;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
+  private final WorkspaceDefaults defaults;
 
   public WorkspaceService(
       WorkspaceRepository workspaces,
@@ -31,13 +33,15 @@ public class WorkspaceService {
       UserRepository users,
       WorkspaceAccess access,
       AuditTrail audit,
-      AuditChanges auditChanges) {
+      AuditChanges auditChanges,
+      WorkspaceDefaults defaults) {
     this.workspaces = workspaces;
     this.members = members;
     this.users = users;
     this.access = access;
     this.audit = audit;
     this.auditChanges = auditChanges;
+    this.defaults = defaults;
   }
 
   @Transactional(readOnly = true)
@@ -45,13 +49,13 @@ public class WorkspaceService {
     return workspaces.findSummariesByMemberEmail(email);
   }
 
-  /** The workspace and its owner membership commit together. */
+  /** The workspace, its owner membership and its default stages and sources commit together. */
   public WorkspaceResponse create(String email, CreateWorkspaceRequest r) {
     User user = users.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
     Workspace w =
         workspaces.save(new Workspace(r.name().strip(), r.defaultCurrency(), r.timezone()));
     members.save(new WorkspaceMember(w.getId(), user.getId(), WorkspaceRole.OWNER));
-    seedDefaults(w.getId());
+    defaults.seed(w.getId());
     // No workspace context yet: the workspace is being created.
     audit.record(
         w.getId(),
@@ -87,10 +91,6 @@ public class WorkspaceService {
       audit.record(AuditAction.UPDATE, AuditEntityType.WORKSPACE, w.getId(), w.getName(), changes);
     }
     return after;
-  }
-
-  private void seedDefaults(long id) {
-    // Task 4 adds WorkspaceDefaults.seed(id): default pipeline stages and lead sources.
   }
 
   private Workspace workspace(long id) {
