@@ -142,10 +142,14 @@ Contact        = ContactSummary + { source?: Ref, notes?, archivedAt?, createdAt
 filters: `q` (names, company name, email, phone), `status` (repeatable), `ownerId`, `sourceId`,
 `priority`, `followUpBefore` (date), `archived`; `sort`: `CREATED_AT` (default, `DESC`),
 `UPDATED_AT`, `FOLLOW_UP_DATE`, `PRIORITY`, `NAME`. Converted leads can't be updated (409).
+The list returns full `Lead`s. Without `direction` a sort takes its natural one: `DESC` for
+`CREATED_AT`, `UPDATED_AT` and `PRIORITY` (HIGH first), `ASC` for `FOLLOW_UP_DATE` and `NAME`
+(last name, then first name, ignoring case). Leads without a follow-up date come last in both
+directions; `followUpBefore` is inclusive and never matches them.
 
 | Method and path | Body → response |
 |---|---|
-| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (required for UNQUALIFIED), version }` → `Lead` |
+| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409, the lead's current status again a 200 that changes nothing |
 | `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true` |
 
 ```ts
@@ -154,6 +158,8 @@ LeadInput   = { firstName, lastName?, companyName?, email?, phone?, jobTitle?, s
 Lead        = { id, ...LeadInput fields, source?: Ref, owner?: MemberRef, status, unqualifiedReason?,
                 convertedAt?, convertedCompany?: Ref, convertedContact?: Ref, convertedDeal?: Ref,
                 archived, archivedAt?, createdAt, updatedAt, version }
+// estimatedValue and currency: both or neither. A value alone takes the workspace's currency;
+// a currency alone is a 400 on estimatedValue.
 LeadConversionInput = {
   companyId?,            // link to this existing company, or
   createCompany,         // create one from companyName (ignored when companyId is set)

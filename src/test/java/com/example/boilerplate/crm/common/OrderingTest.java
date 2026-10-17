@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.common;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -22,8 +23,9 @@ class OrderingTest {
       CriteriaBuilder cb = mock(CriteriaBuilder.class);
 
       Ordering.<Object>nullsLast("dueAt", Direction.ASC).toPredicate(root, query, cb);
+      Ordering.<Object>byPriority("priority", Direction.DESC).toPredicate(root, query, cb);
 
-      verify(query).getResultType();
+      verify(query, times(2)).getResultType();
       verifyNoMoreInteractions(query, root, cb);
     }
   }

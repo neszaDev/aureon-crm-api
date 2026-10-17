@@ -35,8 +35,9 @@ src/main/java/com/example/boilerplate/
   audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
   crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources;
                company/ = the first record type, the pattern for the others; contact/ adds
-               tags and a sort on a joined path; common/ = what every record type shares
-               (CrmRecord, ListParams, SortField, TextSearch, RecordLinks, ...)
+               tags and a sort on a joined path; lead/ adds a status lifecycle, money with
+               a currency and two specification-ordered sorts; common/ = what every record
+               type shares (CrmRecord, ListParams, SortField, TextSearch, RecordLinks, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
                InvitationService
@@ -109,7 +110,8 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 - **Record lists** use `JpaSpecificationExecutor.findAll(spec, ListParams.pageable(...))` and
   `TextSearch.pattern` with `cb.like(cb.lower(path), cb.lower(cb.literal(pattern)), '\\')`. A column
   that must list nulls last in both directions adds `Ordering.nullsLast` to the spec and uses
-  `ListParams.unsorted`: Spring Data's Criteria sorting throws on `Sort.Order.nullsLast()`.
+  `ListParams.unsorted`: Spring Data's Criteria sorting throws on `Sort.Order.nullsLast()`;
+  `Ordering.byPriority` (HIGH, MEDIUM, LOW) works the same way.
   Currency fields of requests take no `@IsoCurrency` (case-sensitive); `Currencies.resolve` checks.
   A `SortField` lists its `keys` (several for one sort, e.g. last then first name; a to-one path
   such as `company.name` is left-joined); a name key is `Key.ignoringCase` (Alpine's PostgreSQL
