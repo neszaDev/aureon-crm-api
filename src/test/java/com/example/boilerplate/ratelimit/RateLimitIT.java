@@ -2,7 +2,9 @@ package com.example.boilerplate.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.support.PostgresTestcontainersConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -30,6 +32,7 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(PostgresTestcontainersConfig.class)
 class RateLimitIT {
   static final String PASSWORD = "a-secure-password";
+  static final ObjectMapper JSON = new ObjectMapper();
   final HttpClient http = HttpClient.newHttpClient();
   @LocalServerPort int port;
 
@@ -89,6 +92,38 @@ class RateLimitIT {
     assertThat(login(email(), "x", "198.51.100.40").statusCode()).isEqualTo(429);
   }
 
+  /** Registering through an invitation link takes from the same per-IP budget as registration. */
+  @Test
+  void invitationRegistrationSharesThePerIpRegistrationLimit() throws Exception {
+    String ip = "198.51.100.50";
+    assertThat(register(email(), ip).statusCode()).isEqualTo(201);
+    // The limit is taken before the link is looked up, so an unknown link still counts.
+    String link = Tokens.random();
+    assertThat(registerThroughLink(link, ip).statusCode()).isEqualTo(404);
+
+    var blocked = registerThroughLink(link, ip);
+    assertThat(blocked.statusCode()).isEqualTo(429);
+    assertThat(blocked.headers().firstValue("Retry-After"))
+        .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
+    assertThat(blocked.body())
+        .contains("\"path\":\"/api/v1/invitations/{token}/register\"")
+        .doesNotContain(link);
+  }
+
+  /** Guessing the current password while signed in counts as a failed sign-in, and vice versa. */
+  @Test
+  void wrongCurrentPasswordsShareThePerEmailFailureLimitWithLogin() throws Exception {
+    String email = email();
+    String accessToken =
+        JSON.readTree(register(email, "198.51.100.60").body()).get("accessToken").asText();
+
+    assertThat(login(email, "wrong-password", "198.51.100.61").statusCode()).isEqualTo(401);
+    assertThat(changePassword(accessToken, "wrong-password").statusCode()).isEqualTo(400);
+
+    assertThat(changePassword(accessToken, PASSWORD).statusCode()).isEqualTo(429);
+    assertThat(login(email, PASSWORD, "198.51.100.62").statusCode()).isEqualTo(429);
+  }
+
   private HttpResponse<String> register(String email, String clientIp) throws Exception {
     return post("/api/v1/auth/register", email, PASSWORD, clientIp);
   }
@@ -98,15 +133,39 @@ class RateLimitIT {
     return post("/api/v1/auth/login", email, password, clientIp);
   }
 
+  private HttpResponse<String> registerThroughLink(String link, String clientIp) throws Exception {
+    return send(
+        "/api/v1/invitations/" + link + "/register",
+        "{\"password\":\"" + PASSWORD + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> changePassword(String accessToken, String currentPassword)
+      throws Exception {
+    return send(
+        "/api/v1/users/me/password",
+        "{\"currentPassword\":\"" + currentPassword + "\",\"newPassword\":\"another-password\"}",
+        "Authorization",
+        "Bearer " + accessToken);
+  }
+
   private HttpResponse<String> post(String path, String email, String password, String clientIp)
+      throws Exception {
+    return send(
+        path,
+        "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> send(String path, String json, String header, String value)
       throws Exception {
     return http.send(
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
             .header("Content-Type", "application/json")
-            .header("X-Forwarded-For", clientIp)
-            .POST(
-                HttpRequest.BodyPublishers.ofString(
-                    "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
+            .header(header, value)
+            .POST(HttpRequest.BodyPublishers.ofString(json))
             .build(),
         HttpResponse.BodyHandlers.ofString());
   }

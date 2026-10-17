@@ -53,17 +53,22 @@ class WorkspaceEndpointsGuardIT extends WorkspaceTestSupport {
 
     List<String> wrong = new ArrayList<>();
     for (Endpoint e : workspaceEndpoints()) {
-      int status =
+      var response =
           (e.hasBody()
                   ? send(outsider, e.build(workspace), Map.of())
                   : send(outsider, e.build(workspace)))
               .andReturn()
-              .getResponse()
-              .getStatus();
-      if (status != 404) wrong.add(e + " -> " + status);
+              .getResponse();
+      // The interceptor's 404, not one a service gave after letting the outsider in.
+      String message = json.readTree(response.getContentAsString()).path("message").asText();
+      if (response.getStatus() != 404 || !message.equals("Workspace not found")) {
+        wrong.add(e + " -> " + response.getStatus() + " " + message);
+      }
     }
 
-    assertThat(wrong).as("endpoints that answered a non-member with something but 404").isEmpty();
+    assertThat(wrong)
+        .as("endpoints that answered a non-member with something but the interceptor's 404")
+        .isEmpty();
   }
 
   @Test
@@ -99,8 +104,9 @@ class WorkspaceEndpointsGuardIT extends WorkspaceTestSupport {
                 }
               }
             });
-    // A floor, so the scan can't pass by finding nothing; new endpoints only raise it.
-    assertThat(found).hasSizeGreaterThanOrEqualTo(15);
+    // The endpoints there are today, so the scan can't pass by missing some: raise it with every
+    // new workspace endpoint.
+    assertThat(found).hasSizeGreaterThanOrEqualTo(17);
     return found;
   }
 }
