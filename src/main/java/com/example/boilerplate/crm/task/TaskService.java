@@ -4,20 +4,14 @@ import com.example.boilerplate.audit.AuditAction;
 import com.example.boilerplate.audit.AuditChanges;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
-import com.example.boilerplate.common.entity.AuditableEntity;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
+import com.example.boilerplate.crm.common.LinkRefs;
 import com.example.boilerplate.crm.common.ListParams;
-import com.example.boilerplate.crm.common.PersonRef;
 import com.example.boilerplate.crm.common.Priority;
 import com.example.boilerplate.crm.common.RecordLinks;
-import com.example.boilerplate.crm.common.Ref;
-import com.example.boilerplate.crm.company.CompanyRepository;
-import com.example.boilerplate.crm.contact.ContactRepository;
-import com.example.boilerplate.crm.deal.DealRepository;
-import com.example.boilerplate.crm.lead.LeadRepository;
 import com.example.boilerplate.crm.task.dto.*;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -27,13 +21,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,10 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class TaskService {
   private final TaskRepository tasks;
-  private final CompanyRepository companies;
-  private final ContactRepository contacts;
-  private final LeadRepository leads;
-  private final DealRepository deals;
+  private final LinkRefs linkRefs;
   private final RecordLinks links;
   private final WorkspaceAccess access;
   private final MemberDirectory directory;
@@ -58,20 +46,14 @@ public class TaskService {
 
   public TaskService(
       TaskRepository tasks,
-      CompanyRepository companies,
-      ContactRepository contacts,
-      LeadRepository leads,
-      DealRepository deals,
+      LinkRefs linkRefs,
       RecordLinks links,
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.tasks = tasks;
-    this.companies = companies;
-    this.contacts = contacts;
-    this.leads = leads;
-    this.deals = deals;
+    this.linkRefs = linkRefs;
     this.links = links;
     this.access = access;
     this.directory = directory;
@@ -209,12 +191,7 @@ public class TaskService {
   }
 
   /** What a page shows besides the tasks' own columns: one query each for a whole page. */
-  private record Related(
-      Map<Long, MemberRef> people,
-      Map<Long, Ref> companies,
-      Map<Long, PersonRef> contacts,
-      Map<Long, PersonRef> leads,
-      Map<Long, Ref> deals) {
+  private record Related(Map<Long, MemberRef> people, LinkRefs.Refs links) {
     MemberRef assignee(CrmTask t) {
       return t.getAssigneeId() == null ? null : people.get(t.getAssigneeId());
     }
@@ -222,48 +199,23 @@ public class TaskService {
     MemberRef createdBy(CrmTask t) {
       return t.getCreatedBy() == null ? null : people.get(t.getCreatedBy());
     }
-
-    Ref company(CrmTask t) {
-      return t.getCompanyId() == null ? null : companies.get(t.getCompanyId());
-    }
-
-    PersonRef contact(CrmTask t) {
-      return t.getContactId() == null ? null : contacts.get(t.getContactId());
-    }
-
-    PersonRef lead(CrmTask t) {
-      return t.getLeadId() == null ? null : leads.get(t.getLeadId());
-    }
-
-    Ref deal(CrmTask t) {
-      return t.getDealId() == null ? null : deals.get(t.getDealId());
-    }
   }
 
   private Related related(List<CrmTask> page) {
-    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
-    List<Long> people = new ArrayList<>(ids(page, CrmTask::getAssigneeId));
-    people.addAll(ids(page, CrmTask::getCreatedBy));
+    List<Long> people = new ArrayList<>(column(page, CrmTask::getAssigneeId));
+    people.addAll(column(page, CrmTask::getCreatedBy));
     return new Related(
         directory.refs(people),
-        load(companies, ids(page, CrmTask::getCompanyId), c -> new Ref(c.getId(), c.getName())),
-        load(
-            contacts,
-            ids(page, CrmTask::getContactId),
-            c -> new PersonRef(c.getId(), c.getFullName())),
-        load(leads, ids(page, CrmTask::getLeadId), l -> new PersonRef(l.getId(), l.getFullName())),
-        load(deals, ids(page, CrmTask::getDealId), d -> new Ref(d.getId(), d.getName())));
+        linkRefs.of(
+            column(page, CrmTask::getCompanyId),
+            column(page, CrmTask::getContactId),
+            column(page, CrmTask::getLeadId),
+            column(page, CrmTask::getDealId)));
   }
 
-  private static List<Long> ids(List<CrmTask> page, Function<CrmTask, Long> link) {
-    return page.stream().map(link).filter(Objects::nonNull).distinct().toList();
-  }
-
-  /** The rows with these ids (those of this workspace) by id; no query for no ids. */
-  private static <E extends AuditableEntity, V> Map<Long, V> load(
-      JpaRepository<E, Long> rows, List<Long> ids, Function<E, V> ref) {
-    if (ids.isEmpty()) return Map.of();
-    return rows.findAllById(ids).stream().collect(Collectors.toMap(AuditableEntity::getId, ref));
+  /** One column of the page, null (no link) and repeats included: the callers filter them. */
+  private static List<Long> column(List<CrmTask> page, Function<CrmTask, Long> field) {
+    return page.stream().map(field).toList();
   }
 
   private TaskResponse response(CrmTask t) {
@@ -286,10 +238,10 @@ public class TaskService {
         t.getStatus(),
         t.isOverdue(now),
         t.getCompletedAt(),
-        r.company(t),
-        r.contact(t),
-        r.lead(t),
-        r.deal(t),
+        r.links().company(t.getCompanyId()),
+        r.links().contact(t.getContactId()),
+        r.links().lead(t.getLeadId()),
+        r.links().deal(t.getDealId()),
         t.getCreatedAt(),
         t.getUpdatedAt(),
         t.getVersion());
