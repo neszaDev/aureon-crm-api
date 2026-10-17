@@ -3,11 +3,14 @@ package com.example.boilerplate.common.exception;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.SQLException;
+import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -40,6 +43,7 @@ class GlobalExceptionHandlerTest {
       ResponseEntity<ApiError> r = answer(state);
       assertThat(r.getStatusCode()).as(state).isEqualTo(HttpStatus.BAD_REQUEST);
       assertThat(r.getBody().message()).as(state).isEqualTo("Invalid value");
+      assertThat(r.getBody().code()).as(state).isEqualTo(ErrorCode.TEXT_INVALID);
     }
   }
 
@@ -56,6 +60,7 @@ class GlobalExceptionHandlerTest {
     ResponseEntity<ApiError> r = answer("22021");
     assertThat(r.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(r.getBody().message()).isEqualTo("Text must not contain null characters");
+    assertThat(r.getBody().code()).isEqualTo(ErrorCode.TEXT_INVALID);
   }
 
   @Test
@@ -65,6 +70,7 @@ class GlobalExceptionHandlerTest {
       ResponseEntity<ApiError> r = answer(state);
       assertThat(r.getStatusCode()).as(state).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
       assertThat(r.getBody().message()).as(state).isEqualTo("Unexpected server error");
+      assertThat(r.getBody().code()).as(state).isNull();
     }
   }
 
@@ -74,6 +80,41 @@ class GlobalExceptionHandlerTest {
       ResponseEntity<ApiError> r = answer(state);
       assertThat(r.getStatusCode()).as(state).isEqualTo(HttpStatus.CONFLICT);
       assertThat(r.getBody().message()).isEqualTo("Conflicts with existing data");
+      assertThat(r.getBody().code()).as(state).isEqualTo(ErrorCode.CONFLICT);
     }
+  }
+
+  /** A unique index behind a rule the service checks first: the race loser gets the rule's code. */
+  @Test
+  void aUniqueIndexOfARuleAnswersWithItsCode() {
+    Map<String, ErrorCode> rules =
+        Map.of(
+            "uq_pipeline_stages_name", ErrorCode.DUPLICATE_NAME,
+            "uq_lead_sources_name", ErrorCode.DUPLICATE_NAME,
+            "users_email_key", ErrorCode.EMAIL_TAKEN,
+            "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED,
+            "deals_workspace_id_lead_id_key", ErrorCode.CONFLICT);
+    rules.forEach(
+        (constraint, code) -> {
+          SQLException sql = new SQLException("duplicate key", "23505");
+          ResponseEntity<ApiError> r =
+              handler.integrity(
+                  new DataIntegrityViolationException(
+                      "could not execute statement",
+                      new ConstraintViolationException("insert", sql, constraint)),
+                  new MockHttpServletRequest("POST", "/x"));
+          assertThat(r.getStatusCode()).as(constraint).isEqualTo(HttpStatus.CONFLICT);
+          assertThat(r.getBody().code()).as(constraint).isEqualTo(code);
+        });
+  }
+
+  @Test
+  void aConcurrentUpdateIsAVersionConflict() {
+    ResponseEntity<ApiError> r =
+        handler.staleUpdate(
+            new OptimisticLockingFailureException("stale"),
+            new MockHttpServletRequest("PUT", "/x"));
+    assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(r.getBody().code()).isEqualTo(ErrorCode.VERSION_CONFLICT);
   }
 }

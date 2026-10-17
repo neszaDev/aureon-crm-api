@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.common.LinkRefs;
@@ -149,7 +150,8 @@ public class TaskService {
     CrmTask task = task(id);
     requireEditable(task);
     Versions.check(task, r.version());
-    if (!task.getStatus().canMoveTo(target)) throw new ConflictException(refusal);
+    if (!task.getStatus().canMoveTo(target))
+      throw new ConflictException(ErrorCode.TASK_STATUS_CONFLICT, refusal);
     Instant now = Instant.now();
     TaskResponse before = response(task, now);
     task.changeStatus(target);

@@ -34,9 +34,17 @@ public class GlobalExceptionHandler {
   private static final Set<String> CLIENT_DATA_EXCEPTIONS =
       Set.of("22001", "22003", CHARACTER_NOT_IN_REPERTOIRE, "22P05");
 
+  /** Unique indexes behind a rule the service checks first: a violation lost a race to it. */
+  private static final Map<String, ErrorCode> UNIQUE_RULES =
+      Map.of(
+          "uq_pipeline_stages_name", ErrorCode.DUPLICATE_NAME,
+          "uq_lead_sources_name", ErrorCode.DUPLICATE_NAME,
+          "users_email_key", ErrorCode.EMAIL_TAKEN,
+          "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED);
+
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
-    return error(HttpStatus.CONFLICT, e.getMessage(), r, Map.of());
+    return error(HttpStatus.CONFLICT, e.code(), e.getMessage(), r, Map.of());
   }
 
   /**
@@ -44,7 +52,8 @@ public class GlobalExceptionHandler {
    * PostgreSQL data exceptions are the client's mistake instead (a value too long or out of range,
    * text with a NUL character, which PostgreSQL refuses in any text column or parameter), and
    * Spring reports them as integrity violations too. The rest of SQLSTATE class 22 (division by
-   * zero, an invalid regex, ...) is a server bug: 500.
+   * zero, an invalid regex, ...) is a server bug: 500. A unique index named in {@link
+   * #UNIQUE_RULES} answers with that rule's code.
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
@@ -59,22 +68,27 @@ public class GlobalExceptionHandler {
           CHARACTER_NOT_IN_REPERTOIRE.equals(state)
               ? "Text must not contain null characters"
               : "Invalid value";
-      return error(HttpStatus.BAD_REQUEST, message, r, Map.of());
+      return error(HttpStatus.BAD_REQUEST, ErrorCode.TEXT_INVALID, message, r, Map.of());
     }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
-    return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
+    return error(HttpStatus.CONFLICT, uniqueRule(e), "Conflicts with existing data", r, Map.of());
   }
 
   @ExceptionHandler(OptimisticLockingFailureException.class)
   ResponseEntity<ApiError> staleUpdate(OptimisticLockingFailureException e, HttpServletRequest r) {
     return error(
-        HttpStatus.CONFLICT, "Changed by another request; reload and try again", r, Map.of());
+        HttpStatus.CONFLICT,
+        ErrorCode.VERSION_CONFLICT,
+        "Changed by another request; reload and try again",
+        r,
+        Map.of());
   }
 
-  /** Thrown by services that re-check a role (e.g. UserAdminService). */
+  /** Thrown by services that re-check a role or permission (e.g. UserAdminService). */
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ApiError> forbidden(AccessDeniedException e, HttpServletRequest r) {
-    return error(HttpStatus.FORBIDDEN, e.getMessage(), r, Map.of());
+    ErrorCode code = e instanceof ForbiddenException f ? f.code() : ErrorCode.FORBIDDEN;
+    return error(HttpStatus.FORBIDDEN, code, e.getMessage(), r, Map.of());
   }
 
   @ExceptionHandler(RateLimitExceededException.class)
@@ -87,6 +101,7 @@ public class GlobalExceptionHandler {
                 Instant.now(),
                 s.value(),
                 s.getReasonPhrase(),
+                ErrorCode.RATE_LIMITED,
                 e.getMessage(),
                 RequestPaths.safePath(r),
                 Map.of()));
@@ -94,41 +109,46 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(FileRejectedException.class)
   ResponseEntity<ApiError> fileRejected(FileRejectedException e, HttpServletRequest r) {
-    return error(e.getStatus(), e.getMessage(), r, Map.of());
+    return error(e.getStatus(), null, e.getMessage(), r, Map.of());
   }
 
   /** Over spring.servlet.multipart limits, before the controller runs. */
   @ExceptionHandler(MaxUploadSizeExceededException.class)
   ResponseEntity<ApiError> uploadTooLarge(MaxUploadSizeExceededException e, HttpServletRequest r) {
-    return error(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large", r, Map.of());
+    return error(HttpStatus.PAYLOAD_TOO_LARGE, null, "File is too large", r, Map.of());
   }
 
   @ExceptionHandler(NotFoundException.class)
   ResponseEntity<ApiError> notFound(NotFoundException e, HttpServletRequest r) {
-    return error(HttpStatus.NOT_FOUND, e.getMessage(), r, Map.of());
+    return error(HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND, e.getMessage(), r, Map.of());
   }
 
   @ExceptionHandler(BadCredentialsException.class)
   ResponseEntity<ApiError> unauthorized(BadCredentialsException e, HttpServletRequest r) {
-    return error(HttpStatus.UNAUTHORIZED, e.getMessage(), r, Map.of());
+    return error(HttpStatus.UNAUTHORIZED, null, e.getMessage(), r, Map.of());
   }
 
   /** A valid token whose user no longer exists (e.g. deleted account). */
   @ExceptionHandler(UsernameNotFoundException.class)
   ResponseEntity<ApiError> unknownUser(UsernameNotFoundException e, HttpServletRequest r) {
-    return error(HttpStatus.UNAUTHORIZED, "Authentication required", r, Map.of());
+    return error(HttpStatus.UNAUTHORIZED, null, "Authentication required", r, Map.of());
   }
 
   @ExceptionHandler(InvalidRefreshTokenException.class)
   ResponseEntity<ApiError> invalidRefreshToken(
       InvalidRefreshTokenException e, HttpServletRequest r) {
-    return error(HttpStatus.UNAUTHORIZED, e.getMessage(), r, Map.of());
+    return error(HttpStatus.UNAUTHORIZED, null, e.getMessage(), r, Map.of());
   }
 
   /** A field rejected by a service (e.g. a wrong current password), shaped like bean validation. */
   @ExceptionHandler(FieldValidationException.class)
   ResponseEntity<ApiError> fieldInvalid(FieldValidationException e, HttpServletRequest r) {
-    return error(HttpStatus.BAD_REQUEST, "Validation failed", r, Map.of(e.field(), e.getMessage()));
+    return error(
+        HttpStatus.BAD_REQUEST,
+        e.code(),
+        "Validation failed",
+        r,
+        Map.of(e.field(), e.getMessage()));
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -137,13 +157,15 @@ public class GlobalExceptionHandler {
     e.getBindingResult()
         .getFieldErrors()
         .forEach(f -> fields.put(f.getField(), f.getDefaultMessage()));
-    return error(HttpStatus.BAD_REQUEST, "Validation failed", r, fields);
+    return error(
+        HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_FAILED, "Validation failed", r, fields);
   }
 
   /** Constraint violations on @RequestParam/@PathVariable (e.g. {@code size=1000}). */
   @ExceptionHandler({ConstraintViolationException.class, HandlerMethodValidationException.class})
   ResponseEntity<ApiError> parameterValidation(Exception e, HttpServletRequest r) {
-    return error(HttpStatus.BAD_REQUEST, "Validation failed", r, Map.of());
+    return error(
+        HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_FAILED, "Validation failed", r, Map.of());
   }
 
   @ExceptionHandler({
@@ -151,7 +173,7 @@ public class GlobalExceptionHandler {
     MethodArgumentTypeMismatchException.class
   })
   ResponseEntity<ApiError> unreadable(Exception e, HttpServletRequest r) {
-    return error(HttpStatus.BAD_REQUEST, "Malformed request", r, Map.of());
+    return error(HttpStatus.BAD_REQUEST, null, "Malformed request", r, Map.of());
   }
 
   @ExceptionHandler(Exception.class)
@@ -159,10 +181,10 @@ public class GlobalExceptionHandler {
     // Spring MVC exceptions (404 no route, 405 method, 415 media type, ...) carry their status.
     if (e instanceof ErrorResponse er) {
       HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
-      return error(status, status.getReasonPhrase(), r, Map.of());
+      return error(status, null, status.getReasonPhrase(), r, Map.of());
     }
     log.error("Unhandled exception on {} {}", r.getMethod(), route(r), e);
-    return error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error", r, Map.of());
+    return error(HttpStatus.INTERNAL_SERVER_ERROR, null, "Unexpected server error", r, Map.of());
   }
 
   /**
@@ -174,11 +196,22 @@ public class GlobalExceptionHandler {
     return pattern != null ? pattern : "<unmatched>";
   }
 
+  /** The rule of the constraint Hibernate names (read from PostgreSQL's message), else CONFLICT. */
+  private static ErrorCode uniqueRule(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      if (t instanceof org.hibernate.exception.ConstraintViolationException c
+          && c.getConstraintName() != null) {
+        return UNIQUE_RULES.getOrDefault(c.getConstraintName(), ErrorCode.CONFLICT);
+      }
+    }
+    return ErrorCode.CONFLICT;
+  }
+
   private ResponseEntity<ApiError> error(
-      HttpStatus s, String m, HttpServletRequest r, Map<String, String> f) {
+      HttpStatus s, ErrorCode c, String m, HttpServletRequest r, Map<String, String> f) {
     return ResponseEntity.status(s)
         .body(
             new ApiError(
-                Instant.now(), s.value(), s.getReasonPhrase(), m, RequestPaths.safePath(r), f));
+                Instant.now(), s.value(), s.getReasonPhrase(), c, m, RequestPaths.safePath(r), f));
   }
 }

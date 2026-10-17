@@ -1,6 +1,7 @@
 package com.example.boilerplate.user;
 
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
@@ -57,7 +58,7 @@ public class UserAdminService {
     boolean changed = false;
     if (r.email() != null && !r.email().equalsIgnoreCase(target.getEmail())) {
       if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
-        throw new ConflictException("Email is already registered");
+        throw new ConflictException(ErrorCode.EMAIL_TAKEN, "Email is already registered");
       target.changeEmail(r.email());
       changed = true;
     }
@@ -84,7 +85,8 @@ public class UserAdminService {
 
   /** Keeps at least one admin: nobody can demote, rename or delete themselves here. */
   private static User notSelf(User actor, User target, String message) {
-    if (actor.getId().equals(target.getId())) throw new ConflictException(message);
+    if (actor.getId().equals(target.getId()))
+      throw new ConflictException(ErrorCode.OWN_ACCOUNT, message);
     return target;
   }
 

@@ -45,7 +45,7 @@ class RateLimitIT {
     assertThat(blocked.statusCode()).isEqualTo(429);
     assertThat(blocked.headers().firstValue("Retry-After"))
         .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
-    assertThat(blocked.body()).contains("\"status\":429");
+    assertThat(blocked.body()).contains("\"status\":429", "\"code\":\"RATE_LIMITED\"");
 
     // Another client behind the same proxy has its own budget.
     assertThat(register(email(), "198.51.100.2").statusCode()).isEqualTo(201);

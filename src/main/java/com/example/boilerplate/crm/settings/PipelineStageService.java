@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
@@ -93,7 +94,8 @@ public class PipelineStageService {
     List<Long> ids = r.stageIds();
     // Same size and same set: no stage missing, none twice, no closed or unknown id.
     if (ids.size() != open.size() || !open.keySet().equals(new HashSet<>(ids))) {
-      throw new FieldValidationException("stageIds", "must list every open stage exactly once");
+      throw new FieldValidationException(
+          "stageIds", "must list every open stage exactly once", ErrorCode.PIPELINE_CHANGED);
     }
     Map<Long, Long> dealCounts = dealCounts();
     Map<Long, StageResponse> before = new HashMap<>();
@@ -109,13 +111,16 @@ public class PipelineStageService {
     access.require(Permission.SETTINGS_MANAGE);
     PipelineStage stage = stage(id);
     if (stage.getKind() != StageKind.OPEN) {
-      throw new ConflictException("The Won and Lost stages can't be deleted");
+      throw new ConflictException(
+          ErrorCode.STAGE_PROTECTED, "The Won and Lost stages can't be deleted");
     }
     List<PipelineStage> all = stages.findAllByOrderByPositionAscIdAsc();
     List<PipelineStage> open = open(all);
-    if (open.size() == 1) throw new ConflictException("The pipeline needs an open stage");
+    if (open.size() == 1)
+      throw new ConflictException(ErrorCode.STAGE_PROTECTED, "The pipeline needs an open stage");
     // Archived deals too: their foreign key holds the stage. Their history keeps its name.
-    if (deals.existsByStageId(id)) throw new ConflictException("Stage has deals; move them first");
+    if (deals.existsByStageId(id))
+      throw new ConflictException(ErrorCode.STAGE_IN_USE, "Stage has deals; move them first");
     stages.delete(stage);
     renumber(open.stream().filter(s -> s != stage).toList(), all);
     audit.record(AuditAction.DELETE, AuditEntityType.PIPELINE_STAGE, id, stage.getName(), Map.of());
@@ -129,7 +134,8 @@ public class PipelineStageService {
   private String uniqueName(String name, long exceptId) {
     String stripped = Texts.required("name", name);
     if (stages.existsByNameIgnoreCaseAndIdNot(stripped, exceptId)) {
-      throw new ConflictException("A stage with this name already exists");
+      throw new ConflictException(
+          ErrorCode.DUPLICATE_NAME, "A stage with this name already exists");
     }
     return stripped;
   }

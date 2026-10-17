@@ -2,14 +2,15 @@ package com.example.boilerplate.auth;
 
 import com.example.boilerplate.auth.dto.*;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
+import com.example.boilerplate.common.exception.ForbiddenException;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
 import com.example.boilerplate.user.dto.ChangePasswordRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,11 +40,12 @@ public class AuthService {
   }
 
   public AuthTokensResponse register(RegisterRequest r, String clientIp) {
-    if (!registrationEnabled) throw new AccessDeniedException("Registration is disabled");
+    if (!registrationEnabled)
+      throw new ForbiddenException(ErrorCode.REGISTRATION_DISABLED, "Registration is disabled");
     requireHashable("password", r.password());
     rateLimiter.consume(Policy.REGISTER_PER_IP, clientIp);
     if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
-      throw new ConflictException("Email is already registered");
+      throw new ConflictException(ErrorCode.EMAIL_TAKEN, "Email is already registered");
     return refreshTokens.create(users.save(new User(r.email(), encoder.encode(r.password()))));
   }
 

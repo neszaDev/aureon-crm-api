@@ -9,9 +9,14 @@ lead sources and the rest of the CRM) are in the [CRM API contract](crm/api.md);
 [Workspaces](#workspaces) below for a first request. Errors always use the same JSON shape:
 
 ```json
-{"timestamp":"...","status":400,"error":"Bad Request","message":"Validation failed",
- "path":"/api/v1/auth/register","fieldErrors":{"email":"must be a well-formed email address"}}
+{"timestamp":"...","status":400,"error":"Bad Request","code":"VALIDATION_FAILED",
+ "message":"Validation failed","path":"/api/v1/auth/register",
+ "fieldErrors":{"email":"must be a well-formed email address"}}
 ```
+
+`code` says what went wrong in a form that doesn't change, for clients that translate messages
+(`message` stays English); errors without one (401, malformed JSON, 500, ...) leave it out. The
+codes and their statuses are listed in the [CRM API contract](crm/api.md#conventions).
 
 `path` is the route template when one matched (e.g.
 `/api/v1/workspaces/{workspaceId}/pipeline-stages/{id}`), otherwise (an unknown URL, or a request

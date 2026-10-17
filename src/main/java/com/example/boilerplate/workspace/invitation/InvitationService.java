@@ -10,6 +10,8 @@ import com.example.boilerplate.auth.AuthService;
 import com.example.boilerplate.auth.RefreshTokenService;
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
+import com.example.boilerplate.common.exception.ForbiddenException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.common.text.Texts;
@@ -30,7 +32,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -89,7 +90,7 @@ public class InvitationService {
     Membership m = access.require(Permission.MEMBERS_MANAGE);
     if (r.role() == OWNER) requireOwner(m);
     if (members.existsByWorkspaceIdAndEmail(m.workspaceId(), r.email())) {
-      throw new ConflictException("This person is already a member");
+      throw new ConflictException(ErrorCode.ALREADY_MEMBER, "This person is already a member");
     }
     Instant now = Instant.now();
     invitations
@@ -97,7 +98,8 @@ public class InvitationService {
         .ifPresent(
             open -> {
               if (open.status(now) != InvitationStatus.EXPIRED) {
-                throw new ConflictException("This email already has a pending invitation");
+                throw new ConflictException(
+                    ErrorCode.ALREADY_INVITED, "This email already has a pending invitation");
               }
               open.revoke(now);
               // The insert below runs at once; the partial unique index must see this first.
@@ -132,7 +134,8 @@ public class InvitationService {
     Instant now = Instant.now();
     InvitationStatus status = i.status(now);
     if (status == InvitationStatus.ACCEPTED || status == InvitationStatus.REVOKED) {
-      throw new ConflictException("This invitation is no longer pending");
+      throw new ConflictException(
+          ErrorCode.INVITATION_NOT_PENDING, "This invitation is no longer pending");
     }
     i.revoke(now);
     audit.record(AuditAction.INVITE_REVOKE, AuditEntityType.INVITATION, id, i.getEmail(), Map.of());
@@ -162,7 +165,8 @@ public class InvitationService {
   public AcceptInvitationResponse accept(String token, String email) {
     Invitation i = byToken(token);
     if (!i.getEmail().equals(email)) {
-      throw new AccessDeniedException("This invitation is for another email address");
+      throw new ForbiddenException(
+          ErrorCode.INVITATION_EMAIL_MISMATCH, "This invitation is for another email address");
     }
     requirePending(i);
     User user =
@@ -183,7 +187,7 @@ public class InvitationService {
     Invitation i = byToken(token);
     requirePending(i);
     if (users.existsByEmail(i.getEmail()))
-      throw new ConflictException("Email is already registered");
+      throw new ConflictException(ErrorCode.EMAIL_TAKEN, "Email is already registered");
     User user = new User(i.getEmail(), encoder.encode(r.password()));
     user.changeDisplayName(Texts.optional(r.displayName()));
     join(i, users.save(user));
@@ -217,12 +221,14 @@ public class InvitationService {
 
   private static void requirePending(Invitation i) {
     if (i.status(Instant.now()) != InvitationStatus.PENDING) {
-      throw new ConflictException("This invitation is no longer pending");
+      throw new ConflictException(
+          ErrorCode.INVITATION_NOT_PENDING, "This invitation is no longer pending");
     }
   }
 
   private static void requireOwner(Membership m) {
-    if (m.role() != OWNER) throw new AccessDeniedException("Only owners can manage owners");
+    if (m.role() != OWNER)
+      throw new ForbiddenException(ErrorCode.OWNER_ONLY, "Only owners can manage owners");
   }
 
   private static InvitationResponse response(Invitation i) {

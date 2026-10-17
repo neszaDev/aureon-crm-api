@@ -21,7 +21,8 @@ class RegistrationDisabledIT extends WorkspaceTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(new Credentials(uniqueEmail(), PASSWORD))))
         .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.message").value("Registration is disabled"));
+        .andExpect(jsonPath("$.message").value("Registration is disabled"))
+        .andExpect(jsonPath("$.code").value("REGISTRATION_DISABLED"));
 
     assertFalse(adminAccessToken().isBlank());
   }

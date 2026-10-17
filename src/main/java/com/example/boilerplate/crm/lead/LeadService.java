@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
@@ -112,7 +113,8 @@ public class LeadService {
     Lead lead = lead(id);
     access.requireEditable(lead.getOwnerId());
     // Before the version check: a stale client should learn that nothing can be edited any more.
-    if (lead.isConverted()) throw new ConflictException("Converted leads can't be edited");
+    if (lead.isConverted())
+      throw new ConflictException(ErrorCode.LEAD_CONVERTED, "Converted leads can't be edited");
     Versions.check(lead, r.version());
     Long owner = access.ownerForUpdate("ownerId", r.ownerId(), lead.getOwnerId());
     links.source(r.sourceId());
@@ -144,7 +146,7 @@ public class LeadService {
       throw new FieldValidationException("status", "can't be set here: convert the lead instead");
     }
     if (current != target && !current.canMoveTo(target)) {
-      throw new ConflictException("Converted leads can't change status");
+      throw new ConflictException(ErrorCode.LEAD_CONVERTED, "Converted leads can't change status");
     }
     Versions.check(lead, r.version());
     String reason = Texts.optional(r.reason());

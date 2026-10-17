@@ -6,6 +6,8 @@ import com.example.boilerplate.audit.AuditAction;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
+import com.example.boilerplate.common.exception.ForbiddenException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
@@ -13,7 +15,6 @@ import com.example.boilerplate.workspace.dto.MemberResponse;
 import com.example.boilerplate.workspace.dto.UpdateMemberRequest;
 import java.util.List;
 import java.util.Map;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,7 +97,8 @@ public class MemberService {
   }
 
   private static void requireOwner(Membership caller) {
-    if (caller.role() != OWNER) throw new AccessDeniedException("Only owners can manage owners");
+    if (caller.role() != OWNER)
+      throw new ForbiddenException(ErrorCode.OWNER_ONLY, "Only owners can manage owners");
   }
 
   private void requireAnotherOwner(WorkspaceMember owner) {
@@ -104,7 +106,8 @@ public class MemberService {
         members.lockOwners(owner.getWorkspaceId()).stream()
             .anyMatch(o -> !o.getUserId().equals(owner.getUserId()));
     if (!another) {
-      throw new ConflictException("A workspace needs an owner; make someone else an owner first");
+      throw new ConflictException(
+          ErrorCode.LAST_OWNER, "A workspace needs an owner; make someone else an owner first");
     }
   }
 }

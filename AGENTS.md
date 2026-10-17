@@ -98,7 +98,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   records (or MapStruct for larger mappings).
 - **Errors.** Throw `NotFoundException` / `ConflictException` (or add a specific exception)
   and map it in `GlobalExceptionHandler`. Responses always use the `ApiError` shape. Client
-  mistakes must never produce a 500.
+  mistakes must never produce a 500. A rule violation carries an `ErrorCode` (`ConflictException`,
+  `ForbiddenException`, optionally `FieldValidationException`) that clients translate; a new code
+  goes into the table in docs/crm/api.md (Conventions) and `ErrorCodeIT`.
 - **Owner scoping.** Queries for user-owned data filter by the authenticated email
   (`findByIdAndOwnerEmail`). Another user's row is a 404, not a 403.
 - **Workspace endpoints** live under `/api/v1/workspaces/{workspaceId}/...`. `WorkspaceAccessInterceptor`

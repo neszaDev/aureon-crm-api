@@ -5,6 +5,7 @@ import com.example.boilerplate.audit.AuditChanges;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.crm.common.PersonRef;
@@ -90,7 +91,8 @@ public class LeadConversionService {
     access.requireEditable(lead.getOwnerId());
     if (lead.isConverted()) return result(lead, true);
     if (lead.getStatus() != LeadStatus.QUALIFIED) {
-      throw new ConflictException("Only qualified leads can be converted");
+      throw new ConflictException(
+          ErrorCode.LEAD_NOT_QUALIFIED, "Only qualified leads can be converted");
     }
     long owner =
         lead.getOwnerId() != null ? lead.getOwnerId() : WorkspaceContext.require().userId();
@@ -180,7 +182,7 @@ public class LeadConversionService {
     try {
       return dealService.create(request, owner, lead.getId()).getId();
     } catch (FieldValidationException e) {
-      throw new FieldValidationException("deal." + e.field(), e.getMessage());
+      throw new FieldValidationException("deal." + e.field(), e.getMessage(), e.code());
     }
   }
 

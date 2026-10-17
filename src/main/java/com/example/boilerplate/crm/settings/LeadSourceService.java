@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.contact.ContactRepository;
@@ -86,7 +87,8 @@ public class LeadSourceService {
     LeadSource source = source(id);
     // Archived records too: their foreign keys hold the source.
     if (leads.existsBySourceId(id) || contacts.existsBySourceId(id) || deals.existsBySourceId(id)) {
-      throw new ConflictException("Lead source is in use; archive it instead");
+      throw new ConflictException(
+          ErrorCode.SOURCE_IN_USE, "Lead source is in use; archive it instead");
     }
     sources.delete(source);
     audit.record(AuditAction.DELETE, AuditEntityType.LEAD_SOURCE, id, source.getName(), Map.of());
@@ -100,7 +102,8 @@ public class LeadSourceService {
   private String uniqueName(String name, long exceptId) {
     String stripped = Texts.required("name", name);
     if (sources.existsByNameIgnoreCaseAndIdNot(stripped, exceptId)) {
-      throw new ConflictException("A lead source with this name already exists");
+      throw new ConflictException(
+          ErrorCode.DUPLICATE_NAME, "A lead source with this name already exists");
     }
     return stripped;
   }

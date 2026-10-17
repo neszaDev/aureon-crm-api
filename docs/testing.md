@@ -21,7 +21,8 @@ sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTe
 `TextSearchTest` wildcard escaping), `crm/lead/LeadStatusTest` (the status transition table),
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
 transitions, overdue, microsecond times), `common/entity/TimestampPrecisionTest` and
-`common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400).
+`common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
+codes of unique indexes and stale updates).
 
 ## Integration tests
 
@@ -60,6 +61,7 @@ What the existing ITs cover:
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
+| `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index |
 | `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
 | `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |
 | `workspace/invitation/InvitationIT` | Invite, preview, accept as an existing account, register through the link, revoke, expiry, owner rules, concurrent accepts, tokens stored hashed and kept out of logs |

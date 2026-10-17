@@ -29,10 +29,42 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   a sort takes its own: `DESC` for `CREATED_AT`, `UPDATED_AT` and `PRIORITY`, `ASC` for `NAME`,
   `COMPANY`, `FOLLOW_UP_DATE` and `DUE_AT`. The id is always a tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
   Text search `q` is trimmed; blank means no search.
-- **Errors** always use `ApiError` (`status`, `message`, `fieldErrors`, ...). 400 invalid input or
-  query parameter; 401 no valid token; 403 member without the permission; 404 unknown record,
-  **or not a member of the workspace**; 409 version conflict, duplicate name, or a rule (convert a
-  lead that isn't qualified, delete a stage in use, remove the last owner, ...).
+- **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...). 400 invalid
+  input or query parameter; 401 no valid token; 403 member without the permission; 404 unknown
+  record, **or not a member of the workspace**; 409 version conflict, duplicate name, or a rule
+  (convert a lead that isn't qualified, delete a stage in use, remove the last owner, ...).
+  `message` is English, for logs and API users; clients translate by **`code`**, which is stable.
+  A 400 on fields also has `fieldErrors` (`{ field: message }`). Errors outside this table have no
+  `code` (it is left out): 401, a malformed body or a parameter of the wrong type (400), an unknown
+  route (404), 405, 413, 415, the file uploads' 400/413/415, 500. Show those by status.
+
+  | `code` | Status | Meaning |
+  |---|---|---|
+  | `VALIDATION_FAILED` | 400 | Invalid input or query parameter: `fieldErrors` names the fields when it can (bean validation, a link not in this workspace, a blank required text, `page`/`size` out of range, ...) |
+  | `TEXT_INVALID` | 400 | The database refused a value: text with a NUL character, a value too long or a number out of range for its column |
+  | `PIPELINE_CHANGED` | 400 | `PUT /pipeline-stages/order`: `stageIds` isn't exactly the current open stages (someone added or deleted one): reload the pipeline |
+  | `FORBIDDEN` | 403 | The role lacks the permission, or the record isn't the caller's to edit; admin-only endpoints |
+  | `REGISTRATION_DISABLED` | 403 | `POST /auth/register` with `REGISTRATION_ENABLED=false` (invite-only) |
+  | `OWNER_ONLY` | 403 | Only owners manage owners: an admin changing an owner's role or making someone owner, removing an owner, inviting as `OWNER` or revoking an `OWNER` invitation |
+  | `INVITATION_EMAIL_MISMATCH` | 403 | Accepting an invitation made for another email address |
+  | `NOT_FOUND` | 404 | The record, invitation or user doesn't exist, or belongs to another workspace or user; a workspace the caller isn't a member of |
+  | `VERSION_CONFLICT` | 409 | Stale `version`, or a concurrent update won: reload and retry |
+  | `EMAIL_TAKEN` | 409 | An account with this email exists (registration, registering through an invitation, an admin changing an email) |
+  | `OWN_ACCOUNT` | 409 | An admin changing or deleting their own account (`/users/{id}`) |
+  | `ACCOUNT_OWNS_WORKSPACE` | 409 | Deleting an account that is the only owner of a workspace: add another owner first |
+  | `LAST_OWNER` | 409 | Demoting, removing or leaving as the workspace's last owner |
+  | `ALREADY_MEMBER` | 409 | Inviting someone who is already a member |
+  | `ALREADY_INVITED` | 409 | Inviting an email that has a pending invitation |
+  | `INVITATION_NOT_PENDING` | 409 | Accepting, registering through or revoking an invitation that was accepted or revoked (accept/register: or expired) |
+  | `DUPLICATE_NAME` | 409 | A pipeline stage or lead source with this name (any case) exists, also when two requests race |
+  | `STAGE_PROTECTED` | 409 | Deleting `WON` or `LOST` (`The Won and Lost stages can't be deleted`) or the last open stage (`The pipeline needs an open stage`): one code, the message says which |
+  | `STAGE_IN_USE` | 409 | Deleting a stage that holds deals, archived ones too |
+  | `SOURCE_IN_USE` | 409 | Deleting a lead source a lead, contact or deal uses: archive it instead |
+  | `LEAD_CONVERTED` | 409 | Editing a converted lead or changing its status |
+  | `LEAD_NOT_QUALIFIED` | 409 | Converting a lead that isn't `QUALIFIED` |
+  | `TASK_STATUS_CONFLICT` | 409 | `complete` or `cancel` a task that isn't `OPEN`, `reopen` one that is |
+  | `CONFLICT` | 409 | Any other conflict with stored data (a database constraint) |
+  | `RATE_LIMITED` | 429 | Too many sign-in or registration attempts: wait `Retry-After` seconds |
 
 Common shapes:
 
