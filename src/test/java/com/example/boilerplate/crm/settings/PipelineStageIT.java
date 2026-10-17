@@ -219,6 +219,20 @@ class PipelineStageIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void omittedProbabilityIs400NotZero() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long stage = body(send(token, get(STAGES, w))).get(0).get("id").asLong();
+
+    send(token, post(STAGES, w), Map.of("name", "Contract"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.probability").exists());
+    send(token, put(STAGE, w, stage), Map.of("name", "Renamed", "version", 0))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.probability").exists());
+  }
+
+  @Test
   void salesRepCanReadButNotWrite() throws Exception {
     String owner = tokenFor(uniqueEmail());
     long w = createWorkspace(owner, "Acme");

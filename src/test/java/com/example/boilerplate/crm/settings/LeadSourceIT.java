@@ -102,6 +102,17 @@ class LeadSourceIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void omittedArchivedIs400NotFalse() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long id = idOf(token, w, "Website");
+
+    send(token, put(SOURCE, w, id), Map.of("name", "Web", "version", 0))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.archived").exists());
+  }
+
+  @Test
   void deleteUnusedIs204() throws Exception {
     String token = tokenFor(uniqueEmail());
     long w = createWorkspace(token, "Acme");

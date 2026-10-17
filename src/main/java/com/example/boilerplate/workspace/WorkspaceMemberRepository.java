@@ -39,14 +39,16 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
 
   /**
    * Locks the owners' rows, so two requests can't each remove "the other" owner: the second one
-   * waits and then no longer sees the owner the first one demoted or removed.
+   * waits and then no longer sees the owner the first one demoted or removed. Ordered by id, so
+   * concurrent transactions lock in one consistent order and can't deadlock.
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       """
       select m from WorkspaceMember m
       where m.workspaceId = :workspaceId
-        and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER""")
+        and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER
+      order by m.id""")
   List<WorkspaceMember> lockOwners(long workspaceId);
 
   /** Locks the owner rows of every workspace {@code userId} owns, as {@link #lockOwners} does. */
@@ -58,6 +60,7 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
         and o.workspaceId in (
           select m.workspaceId from WorkspaceMember m
           where m.userId = :userId
-            and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER)""")
+            and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER)
+      order by o.id""")
   List<WorkspaceMember> lockOwnersOfWorkspacesOwnedBy(long userId);
 }
