@@ -2,7 +2,9 @@ package com.example.boilerplate.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.boilerplate.crm.common.Money;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -70,5 +72,21 @@ class AuditChangesTest {
             new AuditChanges(new ObjectMapper())
                 .recordDiff(before, new Row("Acme", "x", 2, "t0", "t2")))
         .isEmpty();
+  }
+
+  record Priced(String name, BigDecimal amount) {}
+
+  @Test
+  void amountsOfTheSameValueDoNotDiffOnceScaleNormalised() {
+    AuditChanges audit = new AuditChanges(new ObjectMapper());
+    // "1250" from a request, "1250.00" from numeric(15,2): the same money.
+    Priced fromRequest = new Priced("Deal", Money.scale2(new BigDecimal("1250")));
+    Priced fromDatabase = new Priced("Deal", Money.scale2(new BigDecimal("1250.00")));
+
+    assertThat(audit.recordDiff(fromDatabase, fromRequest)).isEmpty();
+    assertThat(
+            audit.recordDiff(
+                fromDatabase, new Priced("Deal", Money.scale2(new BigDecimal("1250.5")))))
+        .containsOnlyKeys("amount");
   }
 }

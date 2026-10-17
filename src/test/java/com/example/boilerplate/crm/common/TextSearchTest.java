@@ -8,9 +8,14 @@ import org.junit.jupiter.api.Test;
 
 class TextSearchTest {
   @Test
-  void trimsLowerCasesAndEscapesLikeWildcards() {
+  void trimsAndEscapesLikeWildcards() {
     assertThat(TextSearch.pattern(" 50%_off ")).contains("%50\\%\\_off%");
-    assertThat(TextSearch.pattern("ACME Ltd")).contains("%acme ltd%");
+  }
+
+  @Test
+  void theCaseIsLeftToTheDatabase() {
+    // Specs lower both sides in SQL, so Java's idea of lower case can't disagree with Postgres'.
+    assertThat(TextSearch.pattern("ACME Ltd")).contains("%ACME Ltd%");
   }
 
   @Test
@@ -24,6 +29,13 @@ class TextSearchTest {
     assertThat(TextSearch.pattern("")).isEmpty();
     // U+3000 and U+00A0 are blank too, as in Texts.
     assertThat(TextSearch.pattern(" 　  ")).isEmpty();
+  }
+
+  @Test
+  void aNullCharacterIsRejectedBecausePostgresCannotStoreIt() {
+    assertThatThrownBy(() -> TextSearch.pattern("a\u0000b"))
+        .isInstanceOfSatisfying(
+            FieldValidationException.class, e -> assertThat(e.field()).isEqualTo("q"));
   }
 
   @Test

@@ -29,9 +29,14 @@ public @interface IsoCurrency {
             .map(Currency::getCurrencyCode)
             .collect(Collectors.toUnmodifiableSet());
 
+    /** Case-sensitive: {@code EUR} is known, {@code eur} is not. */
+    public static boolean isKnown(String code) {
+      return CODES.contains(code);
+    }
+
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
-      return value == null || CODES.contains(value);
+      return value == null || isKnown(value);
     }
   }
 }
