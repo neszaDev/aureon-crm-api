@@ -8,12 +8,12 @@ import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.crm.common.PersonRef;
-import com.example.boilerplate.crm.common.RecordLinks;
 import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.Company;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.company.CompanyService;
 import com.example.boilerplate.crm.company.dto.CreateCompanyRequest;
+import com.example.boilerplate.crm.contact.Contact;
 import com.example.boilerplate.crm.contact.ContactRepository;
 import com.example.boilerplate.crm.contact.ContactService;
 import com.example.boilerplate.crm.contact.dto.CreateContactRequest;
@@ -48,7 +48,6 @@ public class LeadConversionService {
   private final CompanyService companyService;
   private final ContactService contactService;
   private final DealService dealService;
-  private final RecordLinks links;
   private final WorkspaceAccess access;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
@@ -62,7 +61,6 @@ public class LeadConversionService {
       CompanyService companyService,
       ContactService contactService,
       DealService dealService,
-      RecordLinks links,
       WorkspaceAccess access,
       AuditTrail audit,
       AuditChanges auditChanges) {
@@ -74,7 +72,6 @@ public class LeadConversionService {
     this.companyService = companyService;
     this.contactService = contactService;
     this.dealService = dealService;
-    this.links = links;
     this.access = access;
     this.audit = audit;
     this.auditChanges = auditChanges;
@@ -98,7 +95,7 @@ public class LeadConversionService {
     long owner =
         lead.getOwnerId() != null ? lead.getOwnerId() : WorkspaceContext.require().userId();
 
-    links.contact(r.contactId());
+    checkContact(r.contactId());
     Long companyId = company(lead, r, owner);
     long contactId = r.contactId() != null ? r.contactId() : newContact(lead, companyId, owner);
     Long dealId = r.deal() == null ? null : newDeal(lead, r.deal(), companyId, contactId, owner);
@@ -113,6 +110,17 @@ public class LeadConversionService {
         lead.getFullName(),
         auditChanges.recordDiff(before, after));
     return result(lead, false);
+  }
+
+  /** The contact to link, if any: of this workspace and active, like the company. */
+  private void checkContact(Long id) {
+    if (id == null) return;
+    Contact contact =
+        contacts
+            .findById(id)
+            .orElseThrow(
+                () -> new FieldValidationException("contactId", "is not found in this workspace"));
+    if (contact.isArchived()) throw new FieldValidationException("contactId", "is archived");
   }
 
   /** The given company (active, of this workspace), a new one from the lead, or none. */

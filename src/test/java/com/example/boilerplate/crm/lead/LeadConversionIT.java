@@ -23,6 +23,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -231,11 +232,16 @@ class LeadConversionIT extends WorkspaceTestSupport {
     long theirContact = id(send(b, post(CONTACTS, wb), Map.of("firstName", "B")));
     long archived = id(send(a, post(COMPANIES, wa), Map.of("name", "Old")));
     send(a, post(COMPANIES + "/{id}/archive", wa, archived)).andExpect(status().isOk());
+    long archivedContact = id(send(a, post(CONTACTS, wa), Map.of("firstName", "Old")));
+    send(a, post(CONTACTS + "/{id}/archive", wa, archivedContact)).andExpect(status().isOk());
     long lead = qualifiedLead(a, wa, Map.of("firstName", "Ada", "companyName", "Engines"));
 
     invalid(a, wa, lead, conversion(theirCompany, false, null, null), "companyId");
     invalid(a, wa, lead, conversion(archived, false, null, null), "companyId");
     invalid(a, wa, lead, conversion(null, true, theirContact, null), "contactId");
+    send(a, post(CONVERT, wa, lead), conversion(null, true, archivedContact, null))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.contactId").value("is archived"));
     invalid(
         a, wa, lead, conversion(null, true, null, deal(" ", "1", null, null, null)), "deal.name");
     invalid(
@@ -261,10 +267,27 @@ class LeadConversionIT extends WorkspaceTestSupport {
     invalid(a, wa, lead, noFlag, "createCompany");
 
     assertThat(count("companies", wa)).isEqualTo(1);
-    assertThat(count("contacts", wa)).isZero();
+    // Only the archived contact made above.
+    assertThat(count("contacts", wa)).isEqualTo(1);
     send(a, get(LEAD, wa, lead))
         .andExpect(jsonPath("$.status").value("QUALIFIED"))
         .andExpect(jsonPath("$.version").value(1));
+  }
+
+  /** B's token and workspace with A's lead id: not found, and A's lead stays as it was. */
+  @Test
+  void leadOfAnotherWorkspaceIs404() throws Exception {
+    String a = tokenFor(uniqueEmail());
+    long wa = createWorkspace(a, "A");
+    String b = tokenFor(uniqueEmail());
+    long wb = createWorkspace(b, "B");
+    long theirLead = qualifiedLead(a, wa, Map.of("firstName", "Ada"));
+
+    convert(b, wb, theirLead, conversion(null, false, null, null)).andExpect(status().isNotFound());
+
+    send(a, get(LEAD, wa, theirLead)).andExpect(jsonPath("$.status").value("QUALIFIED"));
+    assertThat(count("contacts", wa)).isZero();
+    assertThat(count("contacts", wb)).isZero();
   }
 
   @Test
@@ -331,7 +354,7 @@ class LeadConversionIT extends WorkspaceTestSupport {
         start.countDown();
         List<JsonNode> results = new ArrayList<>();
         for (Future<ResultActions> f : futures) {
-          results.add(body(f.get().andExpect(status().isOk())));
+          results.add(body(f.get(30, TimeUnit.SECONDS).andExpect(status().isOk())));
         }
 
         assertThat(results)
