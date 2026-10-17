@@ -42,6 +42,12 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
+                    // Invitation links: preview and sign-up need the link's 256-bit token, not an
+                    // account. Accepting as an existing account stays authenticated.
+                    .requestMatchers(HttpMethod.GET, "/api/v1/invitations/*")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/invitations/*/register")
+                    .permitAll()
                     .requestMatchers("/api/v1/users/me", "/api/v1/users/me/password")
                     .authenticated()
                     // User management; UserAdminService re-checks the role in the database.

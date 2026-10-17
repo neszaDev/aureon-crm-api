@@ -3,17 +3,16 @@ package com.example.boilerplate.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.example.boilerplate.support.AbstractIntegrationTest;
+import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.example.boilerplate.workspace.WorkspaceRole;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-class UserAdminIT extends AbstractIntegrationTest {
-  @Autowired UserRepository users;
+class UserAdminIT extends WorkspaceTestSupport {
   private String admin;
 
   @BeforeEach
@@ -175,6 +174,25 @@ class UserAdminIT extends AbstractIntegrationTest {
                         Map.of("refreshToken", tokens.get("refreshToken").asText()))))
         .andExpect(status().isUnauthorized());
     mvc.perform(auth(delete("/api/v1/users/{id}", id), admin)).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void cannotDeleteLastOwnerOfAWorkspace() throws Exception {
+    String ownerEmail = uniqueEmail();
+    long w = createWorkspace(tokenFor(ownerEmail), "Acme");
+    long id = idOf(ownerEmail);
+
+    mvc.perform(auth(delete("/api/v1/users/{id}", id), admin))
+        .andExpect(status().isConflict())
+        .andExpect(
+            jsonPath("$.message")
+                .value("This account is the only owner of a workspace; add another owner first"));
+    mvc.perform(auth(get("/api/v1/users/{id}", id), admin)).andExpect(status().isOk());
+
+    String coOwnerEmail = uniqueEmail();
+    tokenFor(coOwnerEmail);
+    addMember(w, coOwnerEmail, WorkspaceRole.OWNER);
+    mvc.perform(auth(delete("/api/v1/users/{id}", id), admin)).andExpect(status().isNoContent());
   }
 
   private long idOf(String email) {

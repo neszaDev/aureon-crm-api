@@ -1,6 +1,7 @@
 package com.example.boilerplate.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -54,6 +55,22 @@ class SecurityIT extends AbstractIntegrationTest {
                 .content("{}")
                 .header(HttpHeaders.AUTHORIZATION, bearer(registerAndGetAccessToken())))
         .andExpect(status().isBadRequest());
+  }
+
+  /** Only the preview and registration through a link are public; both need the 256-bit token. */
+  @Test
+  void invitationPreviewAndRegisterArePublicButAcceptIsNot() throws Exception {
+    // Past security: an unknown token is the service's 404, a bad body the validator's 400.
+    mvc.perform(get("/api/v1/invitations/unknown")).andExpect(status().isNotFound());
+    mvc.perform(
+            post("/api/v1/invitations/unknown/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isBadRequest());
+
+    mvc.perform(post("/api/v1/invitations/unknown/accept")).andExpect(status().isUnauthorized());
+    mvc.perform(delete("/api/v1/invitations/unknown")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/v1/invitations/unknown/register")).andExpect(status().isUnauthorized());
   }
 
   @Test

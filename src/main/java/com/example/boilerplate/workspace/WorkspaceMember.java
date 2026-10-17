@@ -24,4 +24,20 @@ public class WorkspaceMember extends AuditableEntity {
     this.userId = userId;
     this.role = role;
   }
+
+  public void changeRole(WorkspaceRole role) {
+    this.role = role;
+  }
+
+  public Long getWorkspaceId() {
+    return workspaceId;
+  }
+
+  public Long getUserId() {
+    return userId;
+  }
+
+  public WorkspaceRole getRole() {
+    return role;
+  }
 }

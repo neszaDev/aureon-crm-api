@@ -94,7 +94,7 @@ public class AuthService {
   }
 
   /** {@code @Size(max = 72)} counts characters, but BCrypt throws above 72 bytes (e.g. Thai). */
-  private static void requireHashable(String field, String password) {
+  public static void requireHashable(String field, String password) {
     if (password.getBytes(StandardCharsets.UTF_8).length > 72)
       throw new FieldValidationException(field, "must be at most 72 bytes");
   }
