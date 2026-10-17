@@ -27,7 +27,14 @@ public final class TextSearch {
     if (text.indexOf('\0') >= 0) {
       throw new FieldValidationException("q", "must not contain null characters");
     }
-    String escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
-    return Optional.of("%" + escaped + "%");
+    return Optional.of("%" + escape(text) + "%");
+  }
+
+  /**
+   * {@code text} for a {@code LIKE ... ESCAPE '\'} pattern: {@code \}, {@code %} and {@code _}
+   * escaped.
+   */
+  public static String escape(String text) {
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 }

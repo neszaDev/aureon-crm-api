@@ -6,4 +6,12 @@ package com.example.boilerplate.crm.common;
 public interface SortField {
   /** The entity attribute the list is ordered by. */
   String property();
+
+  /**
+   * Whether the text attribute sorts by its lower case. Names do, so "beta" lands between "Alpha"
+   * and "Gamma" whatever the database collation (Alpine's PostgreSQL sorts upper case first).
+   */
+  default boolean ignoreCase() {
+    return false;
+  }
 }

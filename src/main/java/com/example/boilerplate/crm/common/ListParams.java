@@ -18,14 +18,20 @@ public final class ListParams {
    * Ordering#nullsLast} for columns that must list nulls last).
    */
   public static Pageable pageable(int page, int size, Direction direction, String property) {
-    check(page, size);
-    Sort sort = Sort.by(direction, property);
-    if (!property.equals("id")) sort = sort.and(Sort.by(direction, "id"));
-    return PageRequest.of(page, size, sort);
+    return pageable(page, size, new Sort.Order(direction, property));
   }
 
+  /** As above; a field that {@link SortField#ignoreCase ignores case} sorts by its lower case. */
   public static Pageable pageable(int page, int size, Direction direction, SortField field) {
-    return pageable(page, size, direction, field.property());
+    Sort.Order order = new Sort.Order(direction, field.property());
+    return pageable(page, size, field.ignoreCase() ? order.ignoreCase() : order);
+  }
+
+  private static Pageable pageable(int page, int size, Sort.Order order) {
+    check(page, size);
+    Sort sort = Sort.by(order);
+    if (!order.getProperty().equals("id")) sort = sort.and(Sort.by(order.getDirection(), "id"));
+    return PageRequest.of(page, size, sort);
   }
 
   /** Only the page: the order comes from the specification ({@link Ordering#nullsLast}). */

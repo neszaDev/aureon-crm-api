@@ -13,7 +13,8 @@ import org.springframework.data.domain.Sort.NullHandling;
 
 class ListParamsTest {
   enum Field implements SortField {
-    CREATED_AT("createdAt");
+    CREATED_AT("createdAt"),
+    NAME("name");
 
     private final String property;
 
@@ -24,6 +25,11 @@ class ListParamsTest {
     @Override
     public String property() {
       return property;
+    }
+
+    @Override
+    public boolean ignoreCase() {
+      return this == NAME;
     }
   }
 
@@ -53,6 +59,16 @@ class ListParamsTest {
     assertThat(ListParams.pageable(0, 20, Direction.DESC, Field.CREATED_AT).getSort().toList())
         .extracting(Sort.Order::getProperty, Sort.Order::getDirection)
         .containsExactly(tuple("createdAt", Direction.DESC), tuple("id", Direction.DESC));
+  }
+
+  @Test
+  void aSortFieldThatIgnoresCaseLeavesTheIdTieBreakerAlone() {
+    assertThat(ListParams.pageable(0, 20, Direction.DESC, Field.NAME).getSort().toList())
+        .extracting(Sort.Order::getProperty, Sort.Order::getDirection, Sort.Order::isIgnoreCase)
+        .containsExactly(tuple("name", Direction.DESC, true), tuple("id", Direction.DESC, false));
+    assertThat(ListParams.pageable(0, 20, Direction.ASC, Field.CREATED_AT).getSort().toList())
+        .extracting(Sort.Order::isIgnoreCase)
+        .containsOnly(false);
   }
 
   @Test
