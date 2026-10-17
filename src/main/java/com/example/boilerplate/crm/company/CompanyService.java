@@ -9,6 +9,7 @@ import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.company.dto.*;
+import com.example.boilerplate.crm.contact.ContactRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.dto.MemberRef;
@@ -17,6 +18,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,7 @@ public class CompanyService {
   private static final int MIN_HOST_LENGTH = 3;
 
   private final CompanyRepository companies;
+  private final ContactRepository contacts;
   private final WorkspaceAccess access;
   private final MemberDirectory directory;
   private final AuditTrail audit;
@@ -39,11 +42,13 @@ public class CompanyService {
 
   public CompanyService(
       CompanyRepository companies,
+      ContactRepository contacts,
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.companies = companies;
+    this.contacts = contacts;
     this.access = access;
     this.directory = directory;
     this.audit = audit;
@@ -174,8 +179,9 @@ public class CompanyService {
       if (host == null) return null;
       host = host.toLowerCase(Locale.ROOT);
       if (host.startsWith("www.")) host = host.substring(4);
-      // "" (from "https://www.") or "ab" would make the candidate LIKE match nearly every website.
-      return host.length() < MIN_HOST_LENGTH ? null : host;
+      // "" (from "https://www."), "www" or "ab" would make the candidate LIKE match nearly every
+      // website.
+      return host.length() < MIN_HOST_LENGTH || host.equals("www") ? null : host;
     } catch (URISyntaxException e) {
       return null;
     }
@@ -205,9 +211,10 @@ public class CompanyService {
         openDealCounts(ids));
   }
 
-  // Task 3 (contacts) replaces this with one grouped count of the companies' active contacts.
   private Map<Long, Long> contactCounts(List<Long> companyIds) {
-    return Map.of();
+    if (companyIds.isEmpty()) return Map.of();
+    return contacts.countActiveByCompany(companyIds).stream()
+        .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
   }
 
   // Task 5 (deals) replaces this with one grouped count of their active deals in OPEN stages.

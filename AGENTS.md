@@ -8,7 +8,7 @@ Keep this file the single source of truth; `CLAUDE.md` only imports it.
 Aureon CRM API: the backend of a multi-tenant CRM (Spring Boot 3.5 / Java 21 / PostgreSQL).
 Every business is a **workspace** with members, roles and invitation links; its data is
 isolated per request by a tenant boundary, changes are written to an append-only audit trail,
-and the CRM features (pipeline stages, lead sources and companies so far) live under
+and the CRM features (pipeline stages, lead sources, companies and contacts so far) live under
 `/api/v1/workspaces/{workspaceId}/...`. The CRM specification, data model, permission matrix and
 API contract are in [docs/crm/](docs/crm/README.md).
 
@@ -34,8 +34,9 @@ src/main/java/com/example/boilerplate/
                interceptor and tenant resolver; invitation/ (links, preview, accept, register)
   audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
   crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources;
-               company/ = the first record type, the pattern for the others; common/ = what
-               every record type shares (CrmRecord, ListParams, TextSearch, RecordLinks, ...)
+               company/ = the first record type, the pattern for the others; contact/ adds
+               tags and a sort on a joined path; common/ = what every record type shares
+               (CrmRecord, ListParams, SortField, TextSearch, RecordLinks, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
                InvitationService
@@ -110,7 +111,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   that must list nulls last in both directions adds `Ordering.nullsLast` to the spec and uses
   `ListParams.unsorted`: Spring Data's Criteria sorting throws on `Sort.Order.nullsLast()`.
   Currency fields of requests take no `@IsoCurrency` (case-sensitive); `Currencies.resolve` checks.
-  A name sort sets `SortField.ignoreCase` (Alpine's PostgreSQL collation puts upper case first).
+  A `SortField` lists its `keys` (several for one sort, e.g. last then first name; a to-one path
+  such as `company.name` is left-joined); a name key is `Key.ignoringCase` (Alpine's PostgreSQL
+  collation puts upper case first). `ListParams` adds the id tie-breaker.
 - **Record links** in request bodies (`companyId`, `sourceId`, ...) go through `RecordLinks` before
   saving (400 on that field); a member FK is `(workspace_id, owner_id) REFERENCES workspace_members
   (workspace_id, user_id) ON DELETE SET NULL (owner_id)`, so removing a member unassigns.

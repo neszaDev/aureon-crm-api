@@ -23,7 +23,10 @@ public interface CompanyRepository
    */
   default List<Company> findWebsiteCandidates(String host) {
     String escaped = TextSearch.escape(host);
-    return findActiveByWebsiteLike("%://" + escaped + "%", "%://www." + escaped + "%");
+    // shortcut: at most 300 candidates, so a host that starts hundreds of websites can miss a real
+    // duplicate; store the normalized host in a column of its own when that matters.
+    return findActiveByWebsiteLike(
+        "%://" + escaped + "%", "%://www." + escaped + "%", Limit.of(300));
   }
 
   @Query(
@@ -33,5 +36,5 @@ public interface CompanyRepository
         and (lower(c.website) like lower(:pattern) escape '\\'
           or lower(c.website) like lower(:wwwPattern) escape '\\')
       order by c.id""")
-  List<Company> findActiveByWebsiteLike(String pattern, String wwwPattern);
+  List<Company> findActiveByWebsiteLike(String pattern, String wwwPattern, Limit limit);
 }

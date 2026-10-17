@@ -284,9 +284,12 @@ class CompanyIT extends WorkspaceTestSupport {
     duplicates(token, w, "name", "Nobody", "website", "https://nobody.example")
         .andExpect(jsonPath("$.length()").value(0));
     duplicates(token, w, "website", "not a url").andExpect(jsonPath("$.length()").value(0));
-    // No host (only "www.") or a 1-2 character one matches nothing, not nearly everything.
+    // No host (only "www.", or "www" alone) or a 1-2 character one matches nothing, not nearly
+    // everything.
     long tiny = create(token, w, Map.of("name", "Tiny", "website", "http://ab"));
+    create(token, w, Map.of("name", "Bare www", "website", "https://www"));
     duplicates(token, w, "website", "https://www.").andExpect(jsonPath("$.length()").value(0));
+    duplicates(token, w, "website", "https://www").andExpect(jsonPath("$.length()").value(0));
     duplicates(token, w, "website", "https://ab").andExpect(jsonPath("$.length()").value(0));
     duplicates(token, w, "name", "tiny", "website", "https://ab")
         .andExpect(jsonPath("$[*].id", contains((int) tiny)));

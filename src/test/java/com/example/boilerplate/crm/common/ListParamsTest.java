@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.example.boilerplate.common.exception.FieldValidationException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -13,23 +14,20 @@ import org.springframework.data.domain.Sort.NullHandling;
 
 class ListParamsTest {
   enum Field implements SortField {
-    CREATED_AT("createdAt"),
-    NAME("name");
+    CREATED_AT(Key.of("createdAt")),
+    NAME(Key.ignoringCase("name")),
+    FULL_NAME(Key.ignoringCase("lastName"), Key.of("firstName")),
+    COMPANY(Key.ignoringCase("company.name"));
 
-    private final String property;
+    private final List<Key> keys;
 
-    Field(String property) {
-      this.property = property;
+    Field(Key... keys) {
+      this.keys = List.of(keys);
     }
 
     @Override
-    public String property() {
-      return property;
-    }
-
-    @Override
-    public boolean ignoreCase() {
-      return this == NAME;
+    public List<Key> keys() {
+      return keys;
     }
   }
 
@@ -69,6 +67,20 @@ class ListParamsTest {
     assertThat(ListParams.pageable(0, 20, Direction.ASC, Field.CREATED_AT).getSort().toList())
         .extracting(Sort.Order::isIgnoreCase)
         .containsOnly(false);
+  }
+
+  @Test
+  void aSortFieldOfSeveralKeysKeepsTheirOrderAndCaseThenTheId() {
+    assertThat(ListParams.pageable(0, 20, Direction.DESC, Field.FULL_NAME).getSort().toList())
+        .extracting(Sort.Order::getProperty, Sort.Order::getDirection, Sort.Order::isIgnoreCase)
+        .containsExactly(
+            tuple("lastName", Direction.DESC, true),
+            tuple("firstName", Direction.DESC, false),
+            tuple("id", Direction.DESC, false));
+    // A path through a to-one link: Spring Data left-joins it for the sort.
+    assertThat(ListParams.pageable(0, 20, Direction.ASC, Field.COMPANY).getSort().toList())
+        .extracting(Sort.Order::getProperty, Sort.Order::isIgnoreCase)
+        .containsExactly(tuple("company.name", true), tuple("id", false));
   }
 
   @Test

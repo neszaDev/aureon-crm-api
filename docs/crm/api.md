@@ -101,7 +101,7 @@ Invitation rules:
 | Method and path | Body → response |
 |---|---|
 | `GET /` | `?q` (name, website, phone), `ownerId`, `industry`, `archived`, paging; `sort`: `NAME` (default, `ASC`), `CREATED_AT`, `UPDATED_AT` → `Page<CompanySummary>` |
-| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case first, then same website host (case and a leading `www.` aside; hosts under 3 characters match nothing) |
+| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case first, then same website host (case and a leading `www.` aside; hosts under 3 characters and a bare `www` match nothing) |
 | `POST /` | `CompanyInput` → 201 `Company` |
 | `GET /{id}` | → `Company` |
 | `PUT /{id}` | `CompanyInput` + `version` → `Company` |
@@ -118,17 +118,21 @@ Company        = CompanySummary + { address?, employeeCount?, notes?, archivedAt
 
 ## Contacts
 
-`/workspaces/{w}/contacts`: the same endpoints as companies (`duplicates` takes `?email&phone`:
-same email ignoring case, or same digits of the phone), plus `GET /tags` → the workspace's tags in
-use, sorted. List filters: `q` (first and last name, email, phone, company name), `companyId`,
-`ownerId`, `sourceId`, `tag`, `archived`; `sort`: `NAME` (default), `COMPANY`, `CREATED_AT`,
-`UPDATED_AT`.
+`/workspaces/{w}/contacts`: the same endpoints as companies (`duplicates` takes `?email&phone` →
+up to 5 active contacts as `ContactRef` (`id, fullName, email?, phone?`): same email ignoring case
+first, then the same digits of the phone, at least 6 of them), plus `GET /tags` → the tags of the
+workspace's active contacts, each once, sorted. List filters: `q` (first and last name, both
+together, email, phone, company name), `companyId`, `ownerId`, `sourceId`, `tag` (exactly, any
+case), `archived`; `sort`: `NAME` (default; last name, then first name, ignoring case), `COMPANY`
+(company name ignoring case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`NAME`) or
+a company (`COMPANY`) come last ascending and first descending.
 
 ```ts
-ContactInput   = { firstName (1-100), lastName?, email?, phone?, jobTitle?, companyId?, ownerId?,
-                   sourceId?, tags? (≤20, each 1-40, stored lower case), notes? }
-ContactSummary = { id, firstName, lastName?, fullName, email?, phone?, jobTitle?, company?: Ref,
-                   owner?: MemberRef, tags, archived, updatedAt }
+ContactInput   = { firstName (1-100), lastName? (≤100), email? (≤254, stored lower case), phone? (≤50),
+                   jobTitle? (≤100), companyId?, ownerId?, sourceId?, tags? (≤20 once stripped,
+                   lower-cased and deduplicated, each 1-40; stored sorted), notes? (≤5000) }
+ContactSummary = { id, firstName, lastName?, fullName (first + " " + last), email?, phone?,
+                   jobTitle?, company?: Ref, owner?: MemberRef, tags, archived, updatedAt }
 Contact        = ContactSummary + { source?: Ref, notes?, archivedAt?, createdAt, version }
 ```
 

@@ -1,6 +1,8 @@
 package com.example.boilerplate.crm.common;
 
 import com.example.boilerplate.common.exception.FieldValidationException;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,19 +20,23 @@ public final class ListParams {
    * Ordering#nullsLast} for columns that must list nulls last).
    */
   public static Pageable pageable(int page, int size, Direction direction, String property) {
-    return pageable(page, size, new Sort.Order(direction, property));
+    return sorted(page, size, direction, List.of(new Sort.Order(direction, property)));
   }
 
-  /** As above; a field that {@link SortField#ignoreCase ignores case} sorts by its lower case. */
+  /** As above, by each of the field's {@link SortField#keys keys} in turn, then by id. */
   public static Pageable pageable(int page, int size, Direction direction, SortField field) {
-    Sort.Order order = new Sort.Order(direction, field.property());
-    return pageable(page, size, field.ignoreCase() ? order.ignoreCase() : order);
+    List<Sort.Order> orders = new ArrayList<>();
+    for (SortField.Key key : field.keys()) {
+      Sort.Order order = new Sort.Order(direction, key.property());
+      orders.add(key.ignoreCase() ? order.ignoreCase() : order);
+    }
+    return sorted(page, size, direction, orders);
   }
 
-  private static Pageable pageable(int page, int size, Sort.Order order) {
+  private static Pageable sorted(int page, int size, Direction direction, List<Sort.Order> orders) {
     check(page, size);
-    Sort sort = Sort.by(order);
-    if (!order.getProperty().equals("id")) sort = sort.and(Sort.by(order.getDirection(), "id"));
+    Sort sort = Sort.by(orders);
+    if (sort.getOrderFor("id") == null) sort = sort.and(Sort.by(direction, "id"));
     return PageRequest.of(page, size, sort);
   }
 

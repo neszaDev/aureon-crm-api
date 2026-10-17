@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class RecordLinksIT extends WorkspaceTestSupport {
   @Autowired RecordLinks links;
 
-  record Tenant(Membership member, long company, long source) {}
+  record Tenant(Membership member, long company, long source, long contact) {}
 
   private Tenant tenant() throws Exception {
     String email = uniqueEmail();
@@ -31,7 +31,11 @@ class RecordLinksIT extends WorkspaceTestSupport {
             .asLong();
     long source =
         body(send(token, get("/api/v1/workspaces/{w}/lead-sources", w))).get(0).get("id").asLong();
-    return new Tenant(members.findMembership(w, email).orElseThrow(), company, source);
+    long contact =
+        body(send(token, post("/api/v1/workspaces/{w}/contacts", w), Map.of("firstName", "Ada")))
+            .get("id")
+            .asLong();
+    return new Tenant(members.findMembership(w, email).orElseThrow(), company, source, contact);
   }
 
   @Test
@@ -41,11 +45,14 @@ class RecordLinksIT extends WorkspaceTestSupport {
 
     passes(a, () -> links.company(a.company()));
     passes(a, () -> links.source(a.source()));
+    passes(a, () -> links.contact(a.contact()));
     passes(a, () -> links.company(null));
     passes(a, () -> links.source(null));
+    passes(a, () -> links.contact(null));
 
     rejected(a, "companyId", () -> links.company(b.company()));
     rejected(a, "sourceId", () -> links.source(b.source()));
+    rejected(a, "contactId", () -> links.contact(b.contact()));
     rejected(a, "companyId", () -> links.company(Long.MAX_VALUE));
   }
 
