@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.lead;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -11,9 +12,14 @@ import com.example.boilerplate.audit.AuditAction;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditEvent;
 import com.example.boilerplate.audit.AuditEventRepository;
+import com.example.boilerplate.crm.activity.ActivityRepository;
+import com.example.boilerplate.crm.task.TaskRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.example.boilerplate.workspace.Membership;
+import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,9 +44,13 @@ class LeadConversionIT extends WorkspaceTestSupport {
   static final String DEALS = "/api/v1/workspaces/{workspaceId}/deals";
   static final String STAGES = "/api/v1/workspaces/{workspaceId}/pipeline-stages";
   static final String SOURCES = "/api/v1/workspaces/{workspaceId}/lead-sources";
+  static final String ACTIVITIES = "/api/v1/workspaces/{workspaceId}/activities";
+  static final String TASKS = "/api/v1/workspaces/{workspaceId}/tasks";
 
   @Autowired AuditEventRepository events;
   @Autowired JdbcTemplate jdbc;
+  @Autowired ActivityRepository activities;
+  @Autowired TaskRepository tasks;
 
   /** A manager converts a rep's lead: the new records belong to the rep, the lead's owner. */
   @Test
@@ -503,6 +513,127 @@ class LeadConversionIT extends WorkspaceTestSupport {
     send(token, get(LEAD, w, lead))
         .andExpect(jsonPath("$.firstName").value("Ada"))
         .andExpect(jsonPath("$.status").value("CONVERTED"));
+  }
+
+  /**
+   * The lead's activities and tasks join the contact, company and deal it became, so the contact's
+   * timeline and tasks show them. A link they already have stays. A retry links nothing again.
+   */
+  @Test
+  void conversionCarriesTheLeadsHistory() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long lead = qualifiedLead(token, w, Map.of("firstName", "Ada", "companyName", "Engines"));
+    long call =
+        id(
+            send(
+                token,
+                post(ACTIVITIES, w),
+                Map.of("type", "CALL", "subject", "First call", "leadId", lead)));
+    long grace = id(send(token, post(CONTACTS, w), Map.of("firstName", "Grace")));
+    long meeting =
+        id(
+            send(
+                token,
+                post(ACTIVITIES, w),
+                Map.of(
+                    "type",
+                    "MEETING",
+                    "subject",
+                    "With Grace",
+                    "leadId",
+                    lead,
+                    "contactId",
+                    grace)));
+    long task = id(send(token, post(TASKS, w), Map.of("title", "Send the offer", "leadId", lead)));
+
+    JsonNode result =
+        body(
+            convert(token, w, lead, conversion(null, true, null, deal("D", "10", null, null, null)))
+                .andExpect(status().isOk()));
+    long company = result.get("company").get("id").asLong();
+    long contact = result.get("contact").get("id").asLong();
+    long deal = result.get("deal").get("id").asLong();
+
+    send(token, get(ACTIVITIES, w).param("contactId", String.valueOf(contact)))
+        .andExpect(jsonPath("$.content[*].id", contains((int) call)));
+    send(token, get(ACTIVITIES + "/{id}", w, call))
+        .andExpect(jsonPath("$.lead.id").value(lead))
+        .andExpect(jsonPath("$.contact.id").value(contact))
+        .andExpect(jsonPath("$.company.id").value(company))
+        .andExpect(jsonPath("$.deal.id").value(deal))
+        .andExpect(jsonPath("$.version").value(1));
+    send(token, get(ACTIVITIES + "/{id}", w, meeting))
+        .andExpect(jsonPath("$.contact.id").value(grace))
+        .andExpect(jsonPath("$.deal.id").value(deal));
+    send(token, get(TASKS, w).param("contactId", String.valueOf(contact)))
+        .andExpect(jsonPath("$.content[*].id", contains((int) task)))
+        .andExpect(jsonPath("$.content[0].company.id").value(company))
+        .andExpect(jsonPath("$.content[0].deal.id").value(deal))
+        .andExpect(jsonPath("$.content[0].version").value(1));
+    assertThat(trail(w).get(0).getChanges())
+        .containsEntry("linkedActivities", linked(2))
+        .containsEntry("linkedTasks", linked(1));
+
+    // Logged after the conversion: a retry returns the first result and links nothing.
+    long later =
+        id(
+            send(
+                token,
+                post(ACTIVITIES, w),
+                Map.of("type", "NOTE", "subject", "Later", "leadId", lead)));
+    convert(token, w, lead, conversion(null, true, null, null))
+        .andExpect(jsonPath("$.alreadyConverted").value(true));
+    send(token, get(ACTIVITIES + "/{id}", w, later))
+        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.version").value(0));
+    send(token, get(ACTIVITIES + "/{id}", w, call)).andExpect(jsonPath("$.version").value(1));
+  }
+
+  /**
+   * The bulk updates bind the workspace: another one's rows stay untouched whatever the lead id.
+   */
+  @Test
+  void linkingTheHistoryStaysInTheWorkspace() throws Exception {
+    String a = tokenFor(uniqueEmail());
+    long wa = createWorkspace(a, "A");
+    long lead = create(a, wa, Map.of("firstName", "Ada"));
+    long call =
+        id(
+            send(
+                a,
+                post(ACTIVITIES, wa),
+                Map.of("type", "CALL", "subject", "Call", "leadId", lead)));
+    long task = id(send(a, post(TASKS, wa), Map.of("title", "Follow up", "leadId", lead)));
+    String bEmail = uniqueEmail();
+    String b = tokenFor(bEmail);
+    long wb = createWorkspace(b, "B");
+    long theirContact = id(send(b, post(CONTACTS, wb), Map.of("firstName", "B")));
+    Membership inB = new Membership(wb, userId(bEmail), bEmail, WorkspaceRole.OWNER);
+    Instant now = Instant.now();
+
+    assertThat(
+            WorkspaceContext.runAs(
+                inB, () -> activities.linkConvertedLead(wb, lead, theirContact, null, null, now)))
+        .isZero();
+    assertThat(
+            WorkspaceContext.runAs(
+                inB, () -> tasks.linkConvertedLead(wb, lead, theirContact, null, null, now)))
+        .isZero();
+
+    send(a, get(ACTIVITIES + "/{id}", wa, call))
+        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.version").value(0));
+    send(a, get(TASKS + "/{id}", wa, task))
+        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.version").value(0));
+  }
+
+  private static Map<String, Object> linked(int count) {
+    Map<String, Object> change = new HashMap<>();
+    change.put("from", null);
+    change.put("to", count);
+    return change;
   }
 
   private long userId(String email) {

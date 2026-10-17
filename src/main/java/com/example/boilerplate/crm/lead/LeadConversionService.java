@@ -8,6 +8,7 @@ import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.crm.activity.ActivityRepository;
 import com.example.boilerplate.crm.common.PersonRef;
 import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.Company;
@@ -25,10 +26,13 @@ import com.example.boilerplate.crm.lead.dto.LeadConversionInput;
 import com.example.boilerplate.crm.lead.dto.LeadConversionInput.DealDraft;
 import com.example.boilerplate.crm.lead.dto.LeadConversionResponse;
 import com.example.boilerplate.crm.lead.dto.LeadResponse;
+import com.example.boilerplate.crm.task.TaskRepository;
 import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.WorkspaceContext;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +50,8 @@ public class LeadConversionService {
   private final CompanyRepository companies;
   private final ContactRepository contacts;
   private final DealRepository deals;
+  private final ActivityRepository activities;
+  private final TaskRepository tasks;
   private final CompanyService companyService;
   private final ContactService contactService;
   private final DealService dealService;
@@ -59,6 +65,8 @@ public class LeadConversionService {
       CompanyRepository companies,
       ContactRepository contacts,
       DealRepository deals,
+      ActivityRepository activities,
+      TaskRepository tasks,
       CompanyService companyService,
       ContactService contactService,
       DealService dealService,
@@ -70,6 +78,8 @@ public class LeadConversionService {
     this.companies = companies;
     this.contacts = contacts;
     this.deals = deals;
+    this.activities = activities;
+    this.tasks = tasks;
     this.companyService = companyService;
     this.contactService = contactService;
     this.dealService = dealService;
@@ -83,7 +93,8 @@ public class LeadConversionService {
    * contact from the lead, creates the deal when one is given, and marks the lead converted. The
    * new records belong to the lead's owner, or to the caller when the lead has none (only someone
    * who may edit any record gets that far). A lead converted before returns that first result and
-   * writes nothing; any failure leaves nothing behind.
+   * writes nothing; any failure leaves nothing behind. The lead's activities and tasks are linked
+   * to the contact, company and deal ({@link #linkHistory}).
    */
   public LeadConversionResponse convert(long id, LeadConversionInput r) {
     Lead lead = leads.findForUpdate(id).orElseThrow(() -> new NotFoundException("Lead not found"));
@@ -103,15 +114,29 @@ public class LeadConversionService {
     Long dealId = r.deal() == null ? null : newDeal(lead, r.deal(), companyId, contactId, owner);
 
     LeadResponse before = leadService.response(lead);
-    lead.markConverted(companyId, contactId, dealId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    lead.markConverted(companyId, contactId, dealId, now);
     LeadResponse after = leadService.response(leads.saveAndFlush(lead));
-    audit.record(
-        AuditAction.CONVERT,
-        AuditEntityType.LEAD,
-        id,
-        lead.getFullName(),
-        auditChanges.recordDiff(before, after));
+    Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
+    changes.putAll(linkHistory(id, contactId, companyId, dealId, now));
+    audit.record(AuditAction.CONVERT, AuditEntityType.LEAD, id, lead.getFullName(), changes);
     return result(lead, false);
+  }
+
+  /**
+   * The lead's activities and tasks join the contact (and company and deal), so the contact's
+   * timeline shows them; no event of their own, the CONVERT one counts them: {@code
+   * {linkedActivities: {from: null, to: 3}}}, a key only when there are some.
+   */
+  private Map<String, Map<String, Object>> linkHistory(
+      long leadId, long contactId, Long companyId, Long dealId, Instant now) {
+    long workspaceId = WorkspaceContext.workspaceId();
+    Map<String, Object> linked = new LinkedHashMap<>();
+    int a = activities.linkConvertedLead(workspaceId, leadId, contactId, companyId, dealId, now);
+    if (a > 0) linked.put("linkedActivities", a);
+    int t = tasks.linkConvertedLead(workspaceId, leadId, contactId, companyId, dealId, now);
+    if (t > 0) linked.put("linkedTasks", t);
+    return AuditChanges.diff(Map.of(), linked);
   }
 
   /** The contact to link, if any: of this workspace and active, like the company. */
