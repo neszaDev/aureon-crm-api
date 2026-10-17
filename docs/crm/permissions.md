@@ -14,7 +14,8 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
    query and sets it on insert, so a repository query can't return another workspace's rows even
    if a filter is forgotten. Requests without a workspace context use a tenant id that matches
    nothing. There is no root tenant: code outside a request (the demo seeder, tests) runs each
-   workspace's inserts inside `WorkspaceContext.runAs(...)`, and only outside a transaction.
+   workspace's inserts inside `WorkspaceContext.runAs(...)`, which refuses to run inside a
+   transaction.
    This covers load by id too: in Hibernate 6.6.53, `findById` / `EntityManager.find` add the
    tenant restriction, so another workspace's id is not found (404) and services use the plain
    repository `findById` (verified by `TenantIsolationIT`). Hibernate does not re-check the tenant
@@ -22,8 +23,9 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
    workspaces: never load workspace-owned entities with native SQL.
 4. Composite foreign keys `(workspace_id, x_id)` make it impossible to store a link to a record,
    stage, source or member of another workspace.
-5. Services check permissions with `WorkspaceAccess.require(Permission)` and ownership rules with
-   `WorkspaceAccess.requireEditable(ownerId)`. Lacking a permission: **403**.
+5. Services check permissions with `WorkspaceAccess.require(Permission)`, ownership rules with
+   `WorkspaceAccess.requireEditable(ownerId)` and owner changes with `ownerForCreate` /
+   `ownerForUpdate`. Lacking a permission: **403**.
 6. The role is read from the database on every request, so a role change or removal takes effect
    on the next request, without waiting for the access token to expire.
 
@@ -54,8 +56,12 @@ Rules beyond the matrix:
 - The last owner can't be demoted or removed, and can't leave. An account that is the last owner
   of a workspace can't be deleted by a system admin (409) until another owner exists.
 - Anyone can leave a workspace (remove their own membership), except the last owner.
-- A sales rep creating a record is its owner; they may not set another owner. An unowned record
-  (its owner left the workspace) can be edited only with `RECORDS_EDIT_ANY`.
+- Owner (tasks: assignee): on create, none given means the caller; giving anyone else needs
+  `RECORDS_ASSIGN`. On update the request carries the owner: the current one keeps it (no
+  permission needed), another member reassigns and null unassigns, both with `RECORDS_ASSIGN`
+  only. A new owner must be a member of the workspace (400). So a sales rep owns what they create
+  and can't hand it on. An unowned record (its owner left the workspace) can be edited only with
+  `RECORDS_EDIT_ANY`.
 - Removing a member keeps their records: owner/assignee/author fields become empty
   ("Unassigned"), and managers can reassign them.
 

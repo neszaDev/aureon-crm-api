@@ -12,10 +12,15 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   `YYYY-MM-DD`.
 - **Money** is a string with up to 13 integer and 2 fraction digits (`"1250.00"`), plus `currency`
   (ISO 4217, upper case). Totals are lists of `{ currency, amount }`.
-- **Updates** are `PUT` with every editable field (an omitted or null optional field is cleared)
-  and the `version` the client last read. A different version means someone else changed the
-  record: **409**, reload and retry. State changes (archive, convert, move, complete, ...) are
-  `POST` actions; those that act on a version take it in the body too.
+- **Updates** are `PUT` with every editable field (an omitted or null optional field is cleared,
+  `ownerId` included) and the `version` the client last read. A different version means someone
+  else changed the record: **409**, reload and retry. State changes (archive, convert, move,
+  complete, ...) are `POST` actions; those that act on a version take it in the body too.
+- **Owner** (tasks: `assigneeId`): on create, an omitted or null `ownerId` means the caller. On
+  update it is the record's owner: send the current value to keep it, another member's id to
+  reassign, or null to unassign. Reassigning and unassigning need `RECORDS_ASSIGN` (403), and so
+  does creating a record for someone else; an id that isn't a member of the workspace is a 400 on
+  that field.
 - **Required fields** must be present: leaving out a required number or boolean (a stage's
   `probability`, a lead source's `archived`) is a 400 on that field, never `0` or `false`.
 - **Lists** take `page` (≥ 0, default 0), `size` (1-100, default 20), `sort` (an upper-case
@@ -79,7 +84,7 @@ Invitation rules:
 
 | Method and path | Body → response | Permission |
 |---|---|---|
-| `GET /workspaces/{w}/pipeline-stages` | → `Stage[]` (`id, name, position, probability, kind, dealCount, version`), by position | member |
+| `GET /workspaces/{w}/pipeline-stages` | → `Stage[]` (`id, name, position, probability, kind, dealCount (from B2), version`), by position | member |
 | `POST /workspaces/{w}/pipeline-stages` | `{ name (1-60), probability (0-100) }` → 201 `Stage` (an `OPEN` stage, placed after the open ones) | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/{id}` | `{ name, probability, version }` → `Stage` | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/order` | `{ stageIds: [...] }` all `OPEN` stage ids in the new order → `Stage[]` | `SETTINGS_MANAGE` |
@@ -105,7 +110,7 @@ Invitation rules:
 
 ```ts
 CompanyInput   = { name (1-200), industry?, website?, phone?, address?, employeeCount? (0-10000000),
-                   ownerId?, notes? }                 // ownerId defaults to the caller
+                   ownerId?, notes? }                 // ownerId: see Conventions, Owner
 CompanySummary = { id, name, industry?, website?, phone?, owner?: MemberRef, contactCount,
                    openDealCount, archived, updatedAt }
 Company        = CompanySummary + { address?, employeeCount?, notes?, archivedAt?, createdAt, version }
@@ -192,7 +197,7 @@ date last), `PRIORITY`, `CREATED_AT`, `UPDATED_AT`.
 
 ```ts
 TaskInput = { title (1-200), description?, dueAt?, priority (default MEDIUM), assigneeId?,
-              companyId?, contactId?, leadId?, dealId? }       // assigneeId defaults to the caller
+              companyId?, contactId?, leadId?, dealId? }       // assigneeId: see Conventions, Owner
 Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberRef, status,
               overdue, completedAt?, company?: Ref, contact?: { id, fullName }, lead?: { id, fullName },
               deal?: Ref, createdAt, updatedAt, version }

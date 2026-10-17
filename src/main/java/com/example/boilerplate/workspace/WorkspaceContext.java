@@ -2,6 +2,7 @@ package com.example.boilerplate.workspace;
 
 import java.util.Optional;
 import java.util.function.Supplier;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * The membership of the current request, set by {@link WorkspaceAccessInterceptor}. Hibernate reads
@@ -27,8 +28,14 @@ public final class WorkspaceContext {
     return require().workspaceId();
   }
 
-  /** Runs {@code work} as {@code m}, outside a transaction, then restores the previous context. */
+  /**
+   * Runs {@code work} as {@code m}, then restores the previous context. Refuses to run inside a
+   * transaction: its session already holds the tenant it opened with.
+   */
   public static <T> T runAs(Membership m, Supplier<T> work) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new IllegalStateException("WorkspaceContext.runAs must run outside a transaction");
+    }
     Membership previous = CURRENT.get();
     CURRENT.set(m);
     try {

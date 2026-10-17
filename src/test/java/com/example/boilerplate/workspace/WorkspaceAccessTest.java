@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class WorkspaceAccessTest {
   private final WorkspaceMemberRepository members = mock(WorkspaceMemberRepository.class);
@@ -48,23 +49,56 @@ class WorkspaceAccessTest {
   }
 
   @Test
-  void resolveOwnerDefaultsToTheCallerAndOthersNeedAssignAndMembership() {
+  void ownerForCreateIsTheCallerByDefaultAndSomeoneElseNeedsAssignAndMembership() {
     when(members.existsByWorkspaceIdAndUserId(10, 2)).thenReturn(true);
     WorkspaceContext.runAs(
         as(SALES_REP),
         () -> {
-          assertThat(access.resolveOwner(null)).isEqualTo(1);
-          assertThat(access.resolveOwner(1L)).isEqualTo(1);
-          return assertThrows(AccessDeniedException.class, () -> access.resolveOwner(2L));
+          assertThat(access.ownerForCreate("ownerId", null)).isEqualTo(1);
+          assertThat(access.ownerForCreate("ownerId", 1L)).isEqualTo(1);
+          return assertThrows(
+              AccessDeniedException.class, () -> access.ownerForCreate("ownerId", 2L));
         });
     WorkspaceContext.runAs(
         as(MANAGER),
         () -> {
-          assertThat(access.resolveOwner(2L)).isEqualTo(2);
+          assertThat(access.ownerForCreate("ownerId", null)).isEqualTo(1);
+          assertThat(access.ownerForCreate("assigneeId", 2L)).isEqualTo(2);
           FieldValidationException e =
-              assertThrows(FieldValidationException.class, () -> access.resolveOwner(3L));
-          assertThat(e.field()).isEqualTo("ownerId");
-          return e;
+              assertThrows(
+                  FieldValidationException.class, () -> access.ownerForCreate("assigneeId", 3L));
+          assertThat(e.field()).isEqualTo("assigneeId");
+          return assertThat(e.getMessage()).isEqualTo("is not a member of this workspace");
+        });
+  }
+
+  @Test
+  void ownerForUpdateKeepsTheOwnerFreelyButAnyChangeNeedsAssignAndMembership() {
+    when(members.existsByWorkspaceIdAndUserId(10, 2)).thenReturn(true);
+    WorkspaceContext.runAs(
+        as(SALES_REP),
+        () -> {
+          assertThat(access.ownerForUpdate("ownerId", 1L, 1L)).isEqualTo(1L);
+          assertThat(access.ownerForUpdate("ownerId", 3L, 3L)).isEqualTo(3L);
+          assertThat(access.ownerForUpdate("ownerId", null, null)).isNull();
+          assertThrows(AccessDeniedException.class, () -> access.ownerForUpdate("ownerId", 2L, 1L));
+          assertThrows(
+              AccessDeniedException.class, () -> access.ownerForUpdate("ownerId", null, 1L));
+          // Taking an unowned record is a change too.
+          return assertThrows(
+              AccessDeniedException.class, () -> access.ownerForUpdate("ownerId", 1L, null));
+        });
+    WorkspaceContext.runAs(
+        as(MANAGER),
+        () -> {
+          assertThat(access.ownerForUpdate("ownerId", 2L, 1L)).isEqualTo(2L);
+          assertThat(access.ownerForUpdate("ownerId", 2L, null)).isEqualTo(2L);
+          assertThat(access.ownerForUpdate("ownerId", null, 2L)).isNull();
+          FieldValidationException e =
+              assertThrows(
+                  FieldValidationException.class,
+                  () -> access.ownerForUpdate("assigneeId", 3L, 1L));
+          return assertThat(e.field()).isEqualTo("assigneeId");
         });
   }
 
@@ -79,6 +113,19 @@ class WorkspaceAccessTest {
           return assertThat(WorkspaceContext.require()).isEqualTo(outer);
         });
     assertThat(WorkspaceContext.current()).isEmpty();
+  }
+
+  /** Hibernate fixes the tenant when the session opens, so a switch inside one would be ignored. */
+  @Test
+  void runAsRefusesToRunInsideATransaction() {
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+    try {
+      assertThrows(IllegalStateException.class, () -> WorkspaceContext.runAs(as(OWNER), () -> 1));
+    } finally {
+      TransactionSynchronizationManager.setActualTransactionActive(false);
+    }
+    assertThat(WorkspaceContext.current()).isEmpty();
+    assertThat(WorkspaceContext.runAs(as(OWNER), WorkspaceContext::workspaceId)).isEqualTo(10);
   }
 
   @Test
