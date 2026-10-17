@@ -8,7 +8,6 @@ import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.common.ListParams;
-import com.example.boilerplate.crm.common.TextSearch;
 import com.example.boilerplate.crm.company.dto.*;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -18,6 +17,8 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class CompanyService {
   private static final int MAX_DUPLICATES = 5;
+  private static final int MIN_HOST_LENGTH = 3;
 
   private final CompanyRepository companies;
   private final WorkspaceAccess access;
@@ -65,19 +67,26 @@ public class CompanyService {
   }
 
   /**
-   * Active companies that look like the one being entered: the same name in any case, or the same
-   * website host ({@code www.} and case aside), at most 5.
+   * Active companies that look like the one being entered, at most 5: the same name in any case
+   * first, then the same website host ({@code www.} and case aside), each by id.
    */
   @Transactional(readOnly = true)
   public List<CompanyRef> duplicates(String name, String website) {
     String sameName = Texts.optional(name);
     String host = host(website);
-    if (sameName == null && host == null) return List.of();
-    // shortcut: any website containing the host is a candidate, filtered here; fine at SMB scale,
-    // store a normalized host column if this gets slow.
-    String hostPattern = host == null ? null : "%" + TextSearch.escape(host) + "%";
-    return companies.findDuplicateCandidates(sameName, hostPattern).stream()
-        .filter(c -> c.getName().equalsIgnoreCase(sameName) || sameHost(host, c.getWebsite()))
+    Stream<Company> byName =
+        sameName == null
+            ? Stream.empty()
+            : companies.findActiveByName(sameName, Limit.of(MAX_DUPLICATES)).stream();
+    // The LIKE only narrows the candidates down; the host itself is compared here.
+    Stream<Company> byHost =
+        host == null
+            ? Stream.empty()
+            : companies.findWebsiteCandidates(host).stream()
+                .filter(c -> host.equals(host(c.getWebsite())));
+    // Same persistence context, same object: distinct() lists a company found both ways once.
+    return Stream.concat(byName, byHost)
+        .distinct()
         .limit(MAX_DUPLICATES)
         .map(c -> new CompanyRef(c.getId(), c.getName(), c.getWebsite()))
         .toList();
@@ -164,14 +173,12 @@ public class CompanyService {
       String host = new URI(text).getHost();
       if (host == null) return null;
       host = host.toLowerCase(Locale.ROOT);
-      return host.startsWith("www.") ? host.substring(4) : host;
+      if (host.startsWith("www.")) host = host.substring(4);
+      // "" (from "https://www.") or "ab" would make the candidate LIKE match nearly every website.
+      return host.length() < MIN_HOST_LENGTH ? null : host;
     } catch (URISyntaxException e) {
       return null;
     }
-  }
-
-  private static boolean sameHost(String host, String website) {
-    return host != null && host.equals(host(website));
   }
 
   /** What responses show besides the company's own columns: one query each for a whole page. */

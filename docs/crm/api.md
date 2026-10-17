@@ -101,7 +101,7 @@ Invitation rules:
 | Method and path | Body → response |
 |---|---|
 | `GET /` | `?q` (name, website, phone), `ownerId`, `industry`, `archived`, paging; `sort`: `NAME` (default, `ASC`), `CREATED_AT`, `UPDATED_AT` → `Page<CompanySummary>` |
-| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case, or same website host (case and a leading `www.` aside) |
+| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case first, then same website host (case and a leading `www.` aside; hosts under 3 characters match nothing) |
 | `POST /` | `CompanyInput` → 201 `Company` |
 | `GET /{id}` | → `Company` |
 | `PUT /{id}` | `CompanyInput` + `version` → `Company` |

@@ -14,6 +14,8 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditEvent;
 import com.example.boilerplate.audit.AuditEventRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.example.boilerplate.workspace.Membership;
+import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +31,7 @@ class CompanyIT extends WorkspaceTestSupport {
   static final String COMPANY = COMPANIES + "/{id}";
 
   @Autowired AuditEventRepository events;
+  @Autowired CompanyRepository companies;
 
   @Test
   void createGetUpdate() throws Exception {
@@ -114,6 +117,7 @@ class CompanyIT extends WorkspaceTestSupport {
     invalid(token, w, Map.of("name", "　 "), "name");
     invalid(token, w, Map.of("name", "x".repeat(201)), "name");
     invalid(token, w, Map.of("name", "Acme", "website", "ftp://x"), "website");
+    invalid(token, w, Map.of("name", "Acme", "website", "https://x y.example"), "website");
     invalid(token, w, Map.of("name", "Acme", "website", "acme.com"), "website");
     invalid(token, w, Map.of("name", "Acme", "employeeCount", -1), "employeeCount");
     invalid(token, w, Map.of("name", "Acme", "employeeCount", 10_000_001), "employeeCount");
@@ -274,15 +278,64 @@ class CompanyIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$[0].website").value("https://www.acme.com/x"));
     duplicates(token, w, "website", "http://acme.com")
         .andExpect(jsonPath("$[*].id", contains((int) acme, (int) other)));
+    // Same name first, then same host; a company that is both is listed once.
     duplicates(token, w, "name", "Other", "website", "https://WWW.ACME.COM")
-        .andExpect(jsonPath("$[*].id", contains((int) acme, (int) other)));
+        .andExpect(jsonPath("$[*].id", contains((int) other, (int) acme)));
     duplicates(token, w, "name", "Nobody", "website", "https://nobody.example")
         .andExpect(jsonPath("$.length()").value(0));
     duplicates(token, w, "website", "not a url").andExpect(jsonPath("$.length()").value(0));
+    // No host (only "www.") or a 1-2 character one matches nothing, not nearly everything.
+    long tiny = create(token, w, Map.of("name", "Tiny", "website", "http://ab"));
+    duplicates(token, w, "website", "https://www.").andExpect(jsonPath("$.length()").value(0));
+    duplicates(token, w, "website", "https://ab").andExpect(jsonPath("$.length()").value(0));
+    duplicates(token, w, "name", "tiny", "website", "https://ab")
+        .andExpect(jsonPath("$[*].id", contains((int) tiny)));
     duplicates(token, w).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
 
     for (int i = 0; i < 6; i++) create(token, w, Map.of("name", "Twin"));
     duplicates(token, w, "name", "twin").andExpect(jsonPath("$.length()").value(5));
+  }
+
+  @Test
+  void duplicateCandidatesNeedTheHostRightAfterTheScheme() throws Exception {
+    String email = uniqueEmail();
+    String token = tokenFor(email);
+    long w = createWorkspace(token, "Acme");
+    create(token, w, Map.of("name", "Exact", "website", "https://acme.com"));
+    create(token, w, Map.of("name", "Www", "website", "http://WWW.acme.com/about"));
+    create(token, w, Map.of("name", "Longer", "website", "https://acme.community"));
+    create(token, w, Map.of("name", "Inside", "website", "https://notacme.com"));
+    create(token, w, Map.of("name", "Sub", "website", "https://shop.acme.com"));
+    create(token, w, Map.of("name", "In path", "website", "https://example.org/acme.com"));
+    Membership m = members.findMembership(w, email).orElseThrow();
+
+    // The service then drops "Longer" by comparing hosts (see duplicates()).
+    assertThat(
+            WorkspaceContext.runAs(
+                m,
+                () ->
+                    companies.findWebsiteCandidates("acme.com").stream()
+                        .map(Company::getName)
+                        .toList()))
+        .containsExactly("Exact", "Www", "Longer");
+  }
+
+  @Test
+  void websiteIsAnyCaseAndStripped() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+
+    long id =
+        body(send(
+                    token,
+                    post(COMPANIES, w),
+                    Map.of("name", "Acme", "website", " HTTPS://x.example "))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.website").value("HTTPS://x.example")))
+            .get("id")
+            .asLong();
+    duplicates(token, w, "website", "https://X.example/")
+        .andExpect(jsonPath("$[*].id", contains((int) id)));
   }
 
   @Test

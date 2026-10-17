@@ -109,7 +109,8 @@ workspace, which is fine at SMB scale; `pg_trgm` indexes are the upgrade path.
 - A deal's status: its stage's kind. Its effective probability: `COALESCE(deals.probability,
   stage.probability)`.
 - Counts and totals on the dashboard and reports: computed by queries on request.
-- "Contact count" and "open deal count" of a company: subqueries in the list query.
+- "Contact count" and "open deal count" of a company: one grouped count query per page of
+  companies (by the page's ids), not subqueries in the list query.
 
 ## Development data
 
