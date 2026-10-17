@@ -27,6 +27,7 @@ import org.springframework.web.servlet.HandlerMapping;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+  private static final String DATA_EXCEPTION_CLASS = "22";
   private static final String CHARACTER_NOT_IN_REPERTOIRE = "22021";
 
   @ExceptionHandler(ConflictException.class)
@@ -35,15 +36,21 @@ public class GlobalExceptionHandler {
   }
 
   /**
-   * A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). Text
-   * with a NUL character is the client's mistake instead: PostgreSQL refuses it in any text column
-   * or parameter (SQLSTATE 22021), and Spring reports that as an integrity violation too.
+   * A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). A
+   * PostgreSQL data exception (SQLSTATE class 22: a value too long or out of range, text with a NUL
+   * character, which PostgreSQL refuses in any text column or parameter) is the client's mistake
+   * instead, and Spring reports it as an integrity violation too.
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
     if (NestedExceptionUtils.getMostSpecificCause(e) instanceof SQLException sql
-        && CHARACTER_NOT_IN_REPERTOIRE.equals(sql.getSQLState())) {
-      return error(HttpStatus.BAD_REQUEST, "Text must not contain null characters", r, Map.of());
+        && sql.getSQLState() != null
+        && sql.getSQLState().startsWith(DATA_EXCEPTION_CLASS)) {
+      String message =
+          CHARACTER_NOT_IN_REPERTOIRE.equals(sql.getSQLState())
+              ? "Text must not contain null characters"
+              : "Invalid value";
+      return error(HttpStatus.BAD_REQUEST, message, r, Map.of());
     }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
     return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
