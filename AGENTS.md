@@ -35,11 +35,12 @@ src/main/java/com/example/boilerplate/
   audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
   crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
-  ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService
+  ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
+               InvitationService
   file/        owner-scoped uploads (/api/v1/files), FileStorage + LocalFileStorage
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, WorkspaceOwnedEntity, GlobalExceptionHandler + ApiError,
-               request-id filter, validation constraints, Tokens
+               request-id filter, RequestPaths, validation constraints, Tokens, Texts
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
 infra/         Azure: main.bicep (one environment of both apps) + deploy.sh, docs/deployment.md
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make
@@ -92,13 +93,21 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   resolves the caller's membership (no membership: 404) into `WorkspaceContext`; the scope of every
   query comes from that context (Hibernate's `@TenantId` on entities that extend
   `WorkspaceOwnedEntity`), never from the path variable the controller receives or from a request
-  body. Services check permissions with `WorkspaceAccess.require(Permission)`.
+  body. Services check permissions with `WorkspaceAccess.require(Permission)` and owners or
+  assignees with `ownerForCreate` / `ownerForUpdate` (the rule is in docs/crm/api.md, Conventions).
+- **Not tenant-filtered:** `Workspace`, `WorkspaceMember`, `Invitation` and `AuditEvent` don't
+  extend `WorkspaceOwnedEntity`. Inside a workspace route every query on them, including a JPQL
+  join from a tenant-owned entity, must bind `WorkspaceContext.workspaceId()` explicitly. Outside
+  one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
 - **Native SQL** is not filtered by `@TenantId`: it must bind the workspace id explicitly, needs a
   cross-workspace test, and must never load workspace-owned entities.
 - **`WorkspaceContext.runAs(...)`** (seeders, tests) only outside a transaction: Hibernate reads
-  the tenant when the session opens.
+  the tenant when the session opens, so `runAs` throws inside one.
 - **Invitation tokens are never logged**, nor put in an error message or an audit event. Only
   their SHA-256 hash is stored, and a URI under `/api/v1/invitations/{token}` counts as the token.
+- **Free text** from requests goes through `Texts.required(field, value)` / `Texts.optional(value)`:
+  `@NotBlank` and `strip()` miss Unicode spaces such as U+3000 and U+00A0.
+- **Error bodies** use `RequestPaths.safePath(request)` for `ApiError.path`, never the raw URI.
 - **Request DTOs** use boxed types with `@NotNull` for required numbers and booleans: a primitive
   would turn an omitted field into `0` or `false` instead of a 400.
 - **Configuration** binds to validated `@ConfigurationProperties` records (`AuthProperties`,
