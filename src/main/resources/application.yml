@@ -8,6 +8,8 @@ spring:
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
   jpa:
+    # Keep false: Hibernate fixes the tenant (workspace) when a session opens, which must happen
+    # after WorkspaceAccessInterceptor has set it, not at the start of the request.
     open-in-view: false
     hibernate.ddl-auto: validate
   flyway:
