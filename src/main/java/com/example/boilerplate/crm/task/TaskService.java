@@ -125,11 +125,13 @@ public class TaskService {
     Versions.check(task, r.version());
     Long assignee = access.ownerForUpdate("assigneeId", r.assigneeId(), task.getAssigneeId());
     checkLinks(r);
-    TaskResponse before = response(task);
+    // One clock reading for both snapshots: the diff must not show `overdue` flipping by itself.
+    Instant now = Instant.now();
+    TaskResponse before = response(task, now);
     edit(task, r);
     task.changeAssignee(assignee);
     // Flush so the response carries the new version.
-    TaskResponse after = response(tasks.saveAndFlush(task));
+    TaskResponse after = response(tasks.saveAndFlush(task), now);
     Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
     if (!changes.isEmpty()) {
       audit.record(AuditAction.UPDATE, AuditEntityType.TASK, id, task.getTitle(), changes);
@@ -166,9 +168,10 @@ public class TaskService {
     requireEditable(task);
     Versions.check(task, r.version());
     if (!task.getStatus().canMoveTo(target)) throw new ConflictException(refusal);
-    TaskResponse before = response(task);
+    Instant now = Instant.now();
+    TaskResponse before = response(task, now);
     task.changeStatus(target);
-    TaskResponse after = response(tasks.saveAndFlush(task));
+    TaskResponse after = response(tasks.saveAndFlush(task), now);
     audit.record(
         action, AuditEntityType.TASK, id, task.getTitle(), auditChanges.recordDiff(before, after));
     return after;
@@ -264,7 +267,11 @@ public class TaskService {
   }
 
   private TaskResponse response(CrmTask t) {
-    return response(t, related(List.of(t)), Instant.now());
+    return response(t, Instant.now());
+  }
+
+  private TaskResponse response(CrmTask t, Instant now) {
+    return response(t, related(List.of(t)), now);
   }
 
   private static TaskResponse response(CrmTask t, Related r, Instant now) {
