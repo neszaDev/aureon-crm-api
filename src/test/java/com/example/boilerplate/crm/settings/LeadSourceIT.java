@@ -64,6 +64,17 @@ class LeadSourceIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void nullCharacterInNameIs400() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+
+    send(token, post(SOURCES, w), Map.of("name", "Trade\u0000show"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Text must not contain null characters"));
+    send(token, get(SOURCES, w)).andExpect(jsonPath("$.length()").value(6));
+  }
+
+  @Test
   void archiveHidesFromDefaultList() throws Exception {
     String token = tokenFor(uniqueEmail());
     long w = createWorkspace(token, "Acme");

@@ -3,10 +3,12 @@ package com.example.boilerplate.common.exception;
 import com.example.boilerplate.common.web.RequestPaths;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.*;
@@ -25,15 +27,24 @@ import org.springframework.web.servlet.HandlerMapping;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+  private static final String CHARACTER_NOT_IN_REPERTOIRE = "22021";
 
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
     return error(HttpStatus.CONFLICT, e.getMessage(), r, Map.of());
   }
 
-  /** A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). */
+  /**
+   * A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). Text
+   * with a NUL character is the client's mistake instead: PostgreSQL refuses it in any text column
+   * or parameter (SQLSTATE 22021), and Spring reports that as an integrity violation too.
+   */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
+    if (NestedExceptionUtils.getMostSpecificCause(e) instanceof SQLException sql
+        && CHARACTER_NOT_IN_REPERTOIRE.equals(sql.getSQLState())) {
+      return error(HttpStatus.BAD_REQUEST, "Text must not contain null characters", r, Map.of());
+    }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
     return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
   }

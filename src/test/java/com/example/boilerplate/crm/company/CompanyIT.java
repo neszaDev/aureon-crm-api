@@ -127,6 +127,21 @@ class CompanyIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void nullCharactersAre400() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+
+    // PostgreSQL refuses U+0000 in text; that is the client's mistake, not a conflict.
+    send(token, post(COMPANIES, w), Map.of("name", "a\u0000b"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Text must not contain null characters"));
+    duplicates(token, w, "name", "a\u0000b")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Text must not contain null characters"));
+    list(token, w).andExpect(jsonPath("$.totalElements").value(0));
+  }
+
+  @Test
   void searchFilterSortPage() throws Exception {
     String token = tokenFor(uniqueEmail());
     long w = createWorkspace(token, "Acme");
