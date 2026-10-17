@@ -117,7 +117,14 @@ public class ContactService {
   }
 
   public ContactResponse create(CreateContactRequest r) {
-    long owner = access.ownerForCreate("ownerId", r.ownerId());
+    return response(create(r, access.ownerForCreate("ownerId", r.ownerId())));
+  }
+
+  /**
+   * A new contact for {@code owner}, whom the caller has decided ({@code r.ownerId()} is ignored).
+   * Checks the links like any create and writes the {@code CREATE} event.
+   */
+  public Contact create(ContactInput r, long owner) {
     links.company(r.companyId());
     links.source(r.sourceId());
     Contact contact = new Contact();
@@ -130,7 +137,7 @@ public class ContactService {
         contact.getId(),
         contact.getFullName(),
         Map.of());
-    return response(contact);
+    return contact;
   }
 
   public ContactResponse update(long id, UpdateContactRequest r) {

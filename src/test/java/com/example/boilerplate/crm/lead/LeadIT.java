@@ -313,7 +313,7 @@ class LeadIT extends WorkspaceTestSupport {
     long theirContact = id(send(b, post(CONTACTS, wb), Map.of("firstName", "B")));
     long own = create(a, wa, Map.of("firstName", "Ada"));
 
-    // No endpoint sets these yet: the composite foreign keys are the guard.
+    // The conversion links only rows it found here; the composite foreign keys are the backstop.
     assertThatThrownBy(
             () ->
                 jdbc.update(
@@ -482,7 +482,7 @@ class LeadIT extends WorkspaceTestSupport {
     long contact = id(send(token, post(CONTACTS, w), Map.of("firstName", "Ada", "lastName", "L")));
     long id = create(token, w, Map.of("firstName", "Ada"));
     setStatus(token, w, id, "QUALIFIED", null, 0).andExpect(status().isOk());
-    // Conversion arrives with its own endpoint; here the row is converted directly.
+    // Converted directly in the database: LeadConversionIT covers the conversion itself.
     jdbc.update(
         "UPDATE leads SET status = 'CONVERTED', converted_at = now(), converted_company_id = ?,"
             + " converted_contact_id = ?, version = version + 1 WHERE id = ?",

@@ -16,6 +16,7 @@ import com.example.boilerplate.crm.common.RecordLinks;
 import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.contact.ContactRepository;
+import com.example.boilerplate.crm.deal.DealRepository;
 import com.example.boilerplate.crm.lead.dto.*;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
@@ -43,6 +44,7 @@ public class LeadService {
   private final LeadSourceRepository sources;
   private final CompanyRepository companies;
   private final ContactRepository contacts;
+  private final DealRepository deals;
   private final WorkspaceRepository workspaces;
   private final RecordLinks links;
   private final WorkspaceAccess access;
@@ -55,6 +57,7 @@ public class LeadService {
       LeadSourceRepository sources,
       CompanyRepository companies,
       ContactRepository contacts,
+      DealRepository deals,
       WorkspaceRepository workspaces,
       RecordLinks links,
       WorkspaceAccess access,
@@ -65,6 +68,7 @@ public class LeadService {
     this.sources = sources;
     this.companies = companies;
     this.contacts = contacts;
+    this.deals = deals;
     this.workspaces = workspaces;
     this.links = links;
     this.access = access;
@@ -237,7 +241,8 @@ public class LeadService {
       Map<Long, MemberRef> owners,
       Map<Long, Ref> sources,
       Map<Long, Ref> convertedCompanies,
-      Map<Long, Ref> convertedContacts) {
+      Map<Long, Ref> convertedContacts,
+      Map<Long, Ref> convertedDeals) {
     MemberRef owner(Lead l) {
       return l.getOwnerId() == null ? null : owners.get(l.getOwnerId());
     }
@@ -257,9 +262,14 @@ public class LeadService {
           ? null
           : convertedContacts.get(l.getConvertedContactId());
     }
+
+    Ref convertedDeal(Lead l) {
+      return l.getConvertedDealId() == null ? null : convertedDeals.get(l.getConvertedDealId());
+    }
   }
 
   private Related related(List<Lead> page) {
+    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
     return new Related(
         directory.refs(page.stream().map(Lead::getOwnerId).toList()),
         sources.findAllById(ids(page, Lead::getSourceId)).stream()
@@ -267,14 +277,17 @@ public class LeadService {
         companies.findAllById(ids(page, Lead::getConvertedCompanyId)).stream()
             .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getName()))),
         contacts.findAllById(ids(page, Lead::getConvertedContactId)).stream()
-            .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getFullName()))));
+            .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getFullName()))),
+        deals.findAllById(ids(page, Lead::getConvertedDealId)).stream()
+            .collect(Collectors.toMap(d -> d.getId(), d -> new Ref(d.getId(), d.getName()))));
   }
 
   private static List<Long> ids(List<Lead> page, Function<Lead, Long> link) {
     return page.stream().map(link).filter(Objects::nonNull).distinct().toList();
   }
 
-  private LeadResponse response(Lead l) {
+  /** Also the conversion's before and after, for its audit changes. */
+  LeadResponse response(Lead l) {
     return response(l, related(List.of(l)));
   }
 
@@ -299,8 +312,7 @@ public class LeadService {
         l.getConvertedAt(),
         r.convertedCompany(l),
         r.convertedContact(l),
-        // Not mapped yet: the deal arrives with the conversion that creates one.
-        null,
+        r.convertedDeal(l),
         l.isArchived(),
         l.getArchivedAt(),
         l.getCreatedAt(),

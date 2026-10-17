@@ -3,6 +3,7 @@ package com.example.boilerplate.crm.deal;
 import com.example.boilerplate.crm.settings.PipelineStage;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.TenantId;
 
@@ -56,7 +57,8 @@ public class DealStageChange {
     this.toStageId = to.getId();
     this.toStageName = to.getName();
     this.changedBy = changedBy;
-    this.changedAt = Instant.now();
+    // Microseconds, as stored, so this equals a later read.
+    this.changedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   /** Null for the first entry, or once the stage is deleted. */

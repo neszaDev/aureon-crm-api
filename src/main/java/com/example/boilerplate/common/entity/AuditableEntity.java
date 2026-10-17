@@ -2,6 +2,7 @@ package com.example.boilerplate.common.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @MappedSuperclass
 public abstract class AuditableEntity {
@@ -17,14 +18,15 @@ public abstract class AuditableEntity {
 
   @Version private Long version;
 
+  // Microseconds, as stored: a response equals a later read on nanosecond clocks (Linux) too.
   @PrePersist
   void onCreate() {
-    createdAt = updatedAt = Instant.now();
+    createdAt = updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   @PreUpdate
   void onUpdate() {
-    updatedAt = Instant.now();
+    updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
   }
 
   public Long getId() {

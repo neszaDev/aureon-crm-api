@@ -36,7 +36,8 @@ src/main/java/com/example/boilerplate/
   crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources;
                company/ = the first record type, the pattern for the others; contact/ adds
                tags and a sort on a joined path; lead/ adds a status lifecycle, money with
-               a currency and two specification-ordered sorts; deal/ adds stage moves with a
+               a currency, two specification-ordered sorts and the conversion (one transaction
+               under the lead's row lock, through the other services' create methods); deal/ adds stage moves with a
                history and the board (grouped totals per currency through the DealTotals
                repository fragment); common/ = what every record type shares (CrmRecord,
                ListParams, SortField, TextSearch, RecordLinks, ...)

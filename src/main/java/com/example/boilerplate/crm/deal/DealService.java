@@ -123,20 +123,28 @@ public class DealService {
   }
 
   public DealResponse create(CreateDealRequest r) {
-    long owner = access.ownerForCreate("ownerId", r.ownerId());
+    return response(create(r, access.ownerForCreate("ownerId", r.ownerId()), null));
+  }
+
+  /**
+   * A new deal for {@code owner}, whom the caller has decided ({@code r.ownerId()} is ignored),
+   * from the converted lead {@code leadId} or null. Checks the stage and the links like any create
+   * and writes the first history entry and the {@code CREATE} event.
+   */
+  public Deal create(CreateDealRequest r, long owner, Long leadId) {
     PipelineStage stage = r.stageId() == null ? firstOpenStage() : stage(r.stageId());
     if (stage.getKind() != StageKind.OPEN) {
       throw new FieldValidationException("stageId", "must be an open stage");
     }
     checkLinks(r);
     String currency = currency(r);
-    Deal deal = new Deal(stage.getId());
+    Deal deal = new Deal(stage.getId(), leadId);
     edit(deal, r, currency);
     deal.changeOwner(owner);
     deals.save(deal);
     history.save(new DealStageChange(deal.getId(), null, stage, caller()));
     audit.record(AuditAction.CREATE, AuditEntityType.DEAL, deal.getId(), deal.getName(), Map.of());
-    return response(deal);
+    return deal;
   }
 
   public DealResponse update(long id, UpdateDealRequest r) {

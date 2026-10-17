@@ -102,14 +102,21 @@ public class CompanyService {
   }
 
   public CompanyResponse create(CreateCompanyRequest r) {
-    long owner = access.ownerForCreate("ownerId", r.ownerId());
+    return response(create(r, access.ownerForCreate("ownerId", r.ownerId())));
+  }
+
+  /**
+   * A new company for {@code owner}, whom the caller has decided ({@code r.ownerId()} is ignored),
+   * with its {@code CREATE} event.
+   */
+  public Company create(CompanyInput r, long owner) {
     Company company = new Company();
     edit(company, r);
     company.changeOwner(owner);
     companies.save(company);
     audit.record(
         AuditAction.CREATE, AuditEntityType.COMPANY, company.getId(), company.getName(), Map.of());
-    return response(company);
+    return company;
   }
 
   public CompanyResponse update(long id, UpdateCompanyRequest r) {

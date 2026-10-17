@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class DealTest {
   @Test
   void closingSetsTheTimeOnlyWhenTheKindChanges() {
-    Deal deal = new Deal(1);
+    Deal deal = new Deal(1, null);
     deal.moveTo(2, StageKind.OPEN, StageKind.OPEN, "ignored");
     assertThat(deal.getStageId()).isEqualTo(2);
     assertThat(deal.getClosedAt()).isNull();

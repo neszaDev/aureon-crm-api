@@ -58,10 +58,12 @@ public class Lead extends CrmRecord {
 
   private Instant convertedAt;
 
-  // Filled by the conversion (it also sets the deal, whose column has no mapping yet).
+  // Filled by the conversion: the company and the deal are optional, the contact is not.
   private Long convertedCompanyId;
 
   private Long convertedContactId;
+
+  private Long convertedDealId;
 
   /** Empty until {@link #update}: a new lead is filled the way an edit fills it. */
   public Lead() {}
@@ -105,6 +107,18 @@ public class Lead extends CrmRecord {
   public void changeStatus(LeadStatus status, String unqualifiedReason) {
     this.status = status;
     this.unqualifiedReason = status == LeadStatus.UNQUALIFIED ? unqualifiedReason : null;
+  }
+
+  /**
+   * Final: the caller holds the row lock and has checked that the lead is QUALIFIED; the ids name
+   * the records it linked or created. {@code at} in microseconds, as stored.
+   */
+  public void markConverted(Long companyId, long contactId, Long dealId, Instant at) {
+    status = LeadStatus.CONVERTED;
+    convertedCompanyId = companyId;
+    convertedContactId = contactId;
+    convertedDealId = dealId;
+    convertedAt = at;
   }
 
   public boolean isConverted() {
@@ -182,5 +196,9 @@ public class Lead extends CrmRecord {
 
   public Long getConvertedContactId() {
     return convertedContactId;
+  }
+
+  public Long getConvertedDealId() {
+    return convertedDealId;
   }
 }

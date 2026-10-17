@@ -54,7 +54,7 @@ public class Deal extends CrmRecord {
 
   private Long sourceId;
 
-  // Set by the lead conversion.
+  /** The lead converted into this deal; fixed at creation. */
   private Long leadId;
 
   @Column(length = 500)
@@ -68,10 +68,12 @@ public class Deal extends CrmRecord {
   protected Deal() {}
 
   /**
-   * A new deal in {@code stageId}, an open stage (the caller checked); {@link #update} fills it.
+   * A new deal in {@code stageId}, an open stage (the caller checked), from the converted lead
+   * {@code leadId} or null; {@link #update} fills it.
    */
-  public Deal(long stageId) {
+  public Deal(long stageId, Long leadId) {
     this.stageId = stageId;
+    this.leadId = leadId;
   }
 
   /**

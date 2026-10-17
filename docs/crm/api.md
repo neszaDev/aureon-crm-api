@@ -151,7 +151,7 @@ converted leads (they are not edits).
 | Method and path | Body → response |
 |---|---|
 | `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409 (both before the version is compared); the lead's current status again is a 200 that changes nothing, except UNQUALIFIED with a different reason, which saves the reason (new version, `STATUS_CHANGE` audit) |
-| `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true` |
+| `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; needs the right to edit the lead (403, checked first, on a retry too); 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true`, nothing written (an archived record is still listed). One transaction: an error (e.g. 400 on `deal.stageId`) leaves no company, contact or deal behind. The new records belong to the lead's owner, or to the caller when the lead has none. Concurrent conversions of one lead run one after the other: the later one gets `alreadyConverted: true`. Audit: `CREATE` for each new record, `CONVERT` on the lead (status and `converted*` changes) |
 
 ```ts
 LeadInput   = { firstName, lastName?, companyName?, email?, phone?, jobTitle?, sourceId?, ownerId?,
@@ -162,12 +162,17 @@ Lead        = { id, ...LeadInput fields, source?: Ref, owner?: MemberRef, status
 // estimatedValue and currency: both or neither. A value alone takes the workspace's currency (on a
 // PUT too: an omitted currency is not kept); a currency alone is a 400 on estimatedValue.
 LeadConversionInput = {
-  companyId?,            // link to this existing company, or
-  createCompany,         // create one from companyName (ignored when companyId is set)
-  contactId?,            // link to this existing contact, else one is created from the lead
-  deal?: { name, amount, currency?, stageId?, expectedCloseDate? }   // omit for no deal
+  companyId?,            // link to this active company (400 when unknown or archived), or
+  createCompany,         // required; create one from companyName (none without a companyName;
+                         // ignored when companyId is set)
+  contactId?,            // link to this existing contact, else one is created from the lead's
+                         // names, email, phone, job title and source, with the company
+  deal?: { name, amount, currency?, stageId?, expectedCloseDate? }   // omit for no deal; the
+                         // DealInput rules (an open stage, default the first; the workspace's
+                         // currency), errors on deal.<field>; it gets the company, contact,
+                         // source and lead
 }
-LeadConversion = { leadId, company?: Ref, contact: Ref, deal?: Ref, alreadyConverted }
+LeadConversion = { leadId, company?: Ref, contact: { id, fullName }, deal?: Ref, alreadyConverted }
 ```
 
 ## Deals

@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/workspaces/{workspaceId}/leads")
 public class LeadController {
   private final LeadService service;
+  private final LeadConversionService conversions;
 
-  public LeadController(LeadService service) {
+  public LeadController(LeadService service, LeadConversionService conversions) {
     this.service = service;
+    this.conversions = conversions;
   }
 
   @GetMapping
@@ -70,6 +72,14 @@ public class LeadController {
       @PathVariable long id,
       @Valid @RequestBody LeadStatusRequest r) {
     return service.changeStatus(id, r);
+  }
+
+  @PostMapping("/{id}/convert")
+  LeadConversionResponse convert(
+      @PathVariable long workspaceId,
+      @PathVariable long id,
+      @Valid @RequestBody LeadConversionInput r) {
+    return conversions.convert(id, r);
   }
 
   @PostMapping("/{id}/archive")

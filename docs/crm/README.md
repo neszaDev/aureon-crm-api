@@ -71,7 +71,8 @@ Any of the first four may move to any other of the four. `CONVERTED` is reached 
 conversion, which requires `QUALIFIED`. Conversion runs in one transaction: it links to or creates
 the company, links to or creates the contact, optionally creates a deal, and marks the lead
 converted. Retrying a conversion that already happened returns the existing result and creates
-nothing.
+nothing. The new records belong to the lead's owner; an unassigned lead's go to whoever converts
+it (only a member who may edit any record can).
 
 ### Deal
 
