@@ -64,7 +64,7 @@ erDiagram
 | `users` (existing) | + `display_name varchar(100)?` | |
 | `workspaces` | `name varchar(100)`, `default_currency char(3)`, `timezone varchar(64)` | |
 | `workspace_members` | `workspace_id`, `user_id → users ON DELETE CASCADE`, `role varchar(16)` (`OWNER`, `ADMIN`, `MANAGER`, `SALES_REP`) | `UNIQUE (workspace_id, user_id)`; index `(user_id)` |
-| `workspace_invitations` | `workspace_id`, `email varchar(254)` (lower case), `role`, `token_hash varchar(64)` (SHA-256 hex, `UNIQUE`), `invited_by → users ON DELETE SET NULL`, `expires_at`, `accepted_at?`, `revoked_at?` | partial `UNIQUE (workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL` |
+| `workspace_invitations` | `workspace_id`, `email varchar(254)` (lower case), `role`, `token_hash varchar(64)` (SHA-256 hex, `UNIQUE`), `invited_by → users ON DELETE SET NULL`, `expires_at`, `accepted_at?`, `revoked_at?` | partial `UNIQUE (workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL`; index `(invited_by)` |
 | `audit_events` | `workspace_id` (plain FK), `occurred_at`, `actor_id?` (no FK: history outlives accounts), `actor_email?`, `action varchar(32)`, `entity_type varchar(32)`, `entity_id`, `entity_label varchar(200)?`, `changes jsonb`, `request_id varchar(64)?` | append-only (trigger refuses `UPDATE`/`DELETE`); indexes `(workspace_id, occurred_at DESC)`, `(workspace_id, entity_type, entity_id, occurred_at DESC)` |
 
 Workspaces are never hard-deleted (deleting a workspace is a non-goal; there is no endpoint and

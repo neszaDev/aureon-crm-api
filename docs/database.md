@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V11__add_company_nickname.sql`. Note the **two**
+   highest existing version + 1. Example: `V12__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -41,6 +41,7 @@ Migrations run automatically at application startup, in every profile.
 | `V8__audit_events.sql` | `audit_events` (plain FK to the workspace, no FK to users; a trigger refuses `UPDATE` and `DELETE`; indexes by workspace/time and by entity) |
 | `V9__crm_reference_data.sql` | `pipeline_stages` (kind and probability checks, unique name per workspace, one Won and one Lost stage per workspace) and `lead_sources` (unique name per workspace, `archived_at`) |
 | `V10__workspace_invitations.sql` | `workspace_invitations` (SHA-256 of the link token, unique; partial unique index: one open invitation per email and workspace) |
+| `V11__invitation_invited_by_index.sql` | index on `workspace_invitations(invited_by)`, so deleting an account (`ON DELETE SET NULL`) doesn't scan the table |
 
 Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
 tenant boundary, the composite foreign keys and the rest of the CRM tables are described in
