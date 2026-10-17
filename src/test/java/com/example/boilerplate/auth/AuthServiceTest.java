@@ -182,6 +182,24 @@ class AuthServiceTest {
   }
 
   @Test
+  void passwordsOver72BytesAreFieldErrorsNotServerErrors() {
+    String thai = "ก".repeat(30); // 30 characters, 90 bytes: BCrypt would throw
+    var register =
+        assertThrows(
+            FieldValidationException.class,
+            () -> service.register(new RegisterRequest("b@example.com", thai), IP));
+    assertEquals("password", register.field());
+    verifyNoInteractions(users, encoder);
+
+    var change =
+        assertThrows(
+            FieldValidationException.class,
+            () -> service.changePassword("a@example.com", new ChangePasswordRequest("old", thai)));
+    assertEquals("newPassword", change.field());
+    verifyNoInteractions(users, encoder, refreshTokens);
+  }
+
+  @Test
   void changePasswordIsRefusedWhileTheEmailIsBlocked() {
     doThrow(new RateLimitExceededException(Duration.ofSeconds(30)))
         .when(rateLimiter)

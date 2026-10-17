@@ -132,7 +132,9 @@ curl --request POST 'http://localhost:8080/api/v1/users/me/password' \
   `createdAt`.
 - A wrong `currentPassword` is a 400 with `fieldErrors.currentPassword`, never a 401: a 401 would
   tell the client its session is gone. Wrong attempts count toward the per-email sign-in failure
-  limit (429 once it is used up). `newPassword` follows the registration rules (6-72 characters).
+  limit (429 once it is used up).
+- `newPassword` follows the registration rules: 6-72 characters and at most 72 bytes in UTF-8
+  (24 Thai characters). Longer is a 400 on `newPassword` (`password` when registering).
 - On success every refresh token of the user is revoked and a new pair is returned, so other
   devices must sign in again. Their access tokens keep working until they expire.
 

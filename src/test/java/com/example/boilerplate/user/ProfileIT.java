@@ -94,6 +94,14 @@ class ProfileIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void newPasswordOver72BytesIs400EvenWhenUnder72Characters() throws Exception {
+    // 30 Thai characters are 90 bytes in UTF-8, which BCrypt cannot hash.
+    changePassword(registerAndGetAccessToken(), PASSWORD, "ก".repeat(30))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.newPassword").exists());
+  }
+
+  @Test
   void passwordChangeNeedsASignedInUser() throws Exception {
     mvc.perform(
             post("/api/v1/users/me/password")

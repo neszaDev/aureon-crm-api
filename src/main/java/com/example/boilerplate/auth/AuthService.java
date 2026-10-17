@@ -7,6 +7,7 @@ import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
 import com.example.boilerplate.user.dto.ChangePasswordRequest;
+import java.nio.charset.StandardCharsets;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -38,6 +39,7 @@ public class AuthService {
 
   public AuthTokensResponse register(RegisterRequest r, String clientIp) {
     if (!registrationEnabled) throw new AccessDeniedException("Registration is disabled");
+    requireHashable("password", r.password());
     rateLimiter.consume(Policy.REGISTER_PER_IP, clientIp);
     if (users.existsByEmail(r.email().toLowerCase()))
       throw new ConflictException("Email is already registered");
@@ -70,6 +72,7 @@ public class AuthService {
    * Every session is revoked and a new one returned.
    */
   public AuthTokensResponse changePassword(String email, ChangePasswordRequest r) {
+    requireHashable("newPassword", r.newPassword());
     rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
     User u =
         users.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -88,5 +91,11 @@ public class AuthService {
 
   public void logout(String refreshToken) {
     refreshTokens.revoke(refreshToken);
+  }
+
+  /** {@code @Size(max = 72)} counts characters, but BCrypt throws above 72 bytes (e.g. Thai). */
+  private static void requireHashable(String field, String password) {
+    if (password.getBytes(StandardCharsets.UTF_8).length > 72)
+      throw new FieldValidationException(field, "must be at most 72 bytes");
   }
 }
