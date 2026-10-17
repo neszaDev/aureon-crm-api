@@ -1,6 +1,7 @@
 package com.example.boilerplate.security;
 
 import com.example.boilerplate.common.exception.ApiError;
+import com.example.boilerplate.common.web.RequestPaths;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,7 +37,7 @@ public class ApiAccessDeniedHandler implements AccessDeniedHandler {
             status.value(),
             status.getReasonPhrase(),
             "Access denied",
-            request.getRequestURI(),
+            RequestPaths.safePath(request),
             Map.of()));
   }
 }

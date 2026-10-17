@@ -1,5 +1,6 @@
 package com.example.boilerplate.common.exception;
 
+import com.example.boilerplate.common.web.RequestPaths;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
@@ -60,7 +61,7 @@ public class GlobalExceptionHandler {
                 s.value(),
                 s.getReasonPhrase(),
                 e.getMessage(),
-                r.getRequestURI(),
+                RequestPaths.safePath(r),
                 Map.of()));
   }
 
@@ -149,6 +150,8 @@ public class GlobalExceptionHandler {
   private ResponseEntity<ApiError> error(
       HttpStatus s, String m, HttpServletRequest r, Map<String, String> f) {
     return ResponseEntity.status(s)
-        .body(new ApiError(Instant.now(), s.value(), s.getReasonPhrase(), m, r.getRequestURI(), f));
+        .body(
+            new ApiError(
+                Instant.now(), s.value(), s.getReasonPhrase(), m, RequestPaths.safePath(r), f));
   }
 }

@@ -325,6 +325,22 @@ class InvitationIT extends WorkspaceTestSupport {
     register(unknown, Map.of("password", PASSWORD)).andExpect(status().isNotFound());
   }
 
+  /**
+   * Error bodies name the route, as logs do: the URI holds the token, which works as a password.
+   */
+  @Test
+  void errorBodiesShowTheRouteNotTheToken() throws Exception {
+    String link = Tokens.random();
+
+    // Refused by security, before any route is matched.
+    mvc.perform(post(LINK + "/accept", link))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.path").value("/api/v1/invitations/{token}/accept"));
+    preview(link)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.path").value("/api/v1/invitations/{token}"));
+  }
+
   @Test
   void invitationIdOfAnotherWorkspaceIs404() throws Exception {
     String ownerA = tokenFor(uniqueEmail());
