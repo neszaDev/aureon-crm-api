@@ -19,6 +19,7 @@ import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -132,6 +133,16 @@ class PipelineStageIT extends WorkspaceTestSupport {
                 "name", Map.of("from", "Demo", "to", "Product demo"),
                 "probability", Map.of("from", 40, "to", 45)));
     assertThat(trail).extracting(AuditEvent::getEntityLabel).first().isEqualTo("Product demo");
+    // The DELETE keeps the stage's last state, every field as a "from".
+    Map<String, Object> deleted = trail.get(0).getChanges();
+    assertThat(deleted)
+        .containsOnlyKeys("id", "name", "position", "probability", "kind", "dealCount");
+    assertThat(deleted.get("id")).isEqualTo(gone((int) demo));
+    assertThat(deleted.get("name")).isEqualTo(gone("Product demo"));
+    assertThat(deleted.get("position")).isEqualTo(gone(1));
+    assertThat(deleted.get("probability")).isEqualTo(gone(45));
+    assertThat(deleted.get("kind")).isEqualTo(gone("OPEN"));
+    assertThat(deleted.get("dealCount")).isEqualTo(gone(0));
   }
 
   @Test
@@ -285,5 +296,13 @@ class PipelineStageIT extends WorkspaceTestSupport {
     List<Long> all = new ArrayList<>(ids);
     all.add(extra);
     return all;
+  }
+
+  /** A field of a deleted record's last state: {@code {from: value, to: null}}. */
+  private static Map<String, Object> gone(Object from) {
+    Map<String, Object> change = new HashMap<>();
+    change.put("from", from);
+    change.put("to", null);
+    return change;
   }
 }

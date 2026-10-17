@@ -115,8 +115,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
 - **Audit changes:** an update's event stores `AuditChanges.recordDiff(before, after)` of the
   response DTOs (it drops `version`, `createdAt`, `updatedAt`) and nothing when that is empty; a
-  create stores empty changes and the record's label; deleting an activity stores its last state
-  (every field as a `from`), because nothing else keeps what was written. Entities assign money
+  create stores empty changes and the record's label; every delete (an activity, a pipeline
+  stage, a lead source) stores `recordDiff(last, Map.of())`, the record's last state (every field
+  as a `from`, `to` null), because nothing else keeps what was there. Entities assign money
   through `Money.scale2`, so `1250` from a request and `1250.00` from `numeric(15,2)` are not a
   change.
 - **Record lists** use `JpaSpecificationExecutor.findAll(spec, ListParams.pageable(...))` and

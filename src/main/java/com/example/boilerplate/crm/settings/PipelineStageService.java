@@ -107,6 +107,7 @@ public class PipelineStageService {
     return after;
   }
 
+  /** The event keeps what the stage was, every field as the "from" of a change to nothing. */
   public void delete(long id) {
     access.require(Permission.SETTINGS_MANAGE);
     PipelineStage stage = stage(id);
@@ -121,9 +122,16 @@ public class PipelineStageService {
     // Archived deals too: their foreign key holds the stage. Their history keeps its name.
     if (deals.existsByStageId(id))
       throw new ConflictException(ErrorCode.STAGE_IN_USE, "Stage has deals; move them first");
+    // No deals: a dealCount of 0.
+    StageResponse last = response(stage, Map.of());
     stages.delete(stage);
     renumber(open.stream().filter(s -> s != stage).toList(), all);
-    audit.record(AuditAction.DELETE, AuditEntityType.PIPELINE_STAGE, id, stage.getName(), Map.of());
+    audit.record(
+        AuditAction.DELETE,
+        AuditEntityType.PIPELINE_STAGE,
+        id,
+        stage.getName(),
+        auditChanges.recordDiff(last, Map.of()));
   }
 
   private PipelineStage stage(long id) {

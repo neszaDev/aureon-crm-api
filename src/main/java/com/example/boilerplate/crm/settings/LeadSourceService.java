@@ -82,6 +82,7 @@ public class LeadSourceService {
     return after;
   }
 
+  /** The event keeps what the source was, every field as the "from" of a change to nothing. */
   public void delete(long id) {
     access.require(Permission.SETTINGS_MANAGE);
     LeadSource source = source(id);
@@ -90,8 +91,14 @@ public class LeadSourceService {
       throw new ConflictException(
           ErrorCode.SOURCE_IN_USE, "Lead source is in use; archive it instead");
     }
+    LeadSourceResponse last = response(source);
     sources.delete(source);
-    audit.record(AuditAction.DELETE, AuditEntityType.LEAD_SOURCE, id, source.getName(), Map.of());
+    audit.record(
+        AuditAction.DELETE,
+        AuditEntityType.LEAD_SOURCE,
+        id,
+        source.getName(),
+        auditChanges.recordDiff(last, Map.of()));
   }
 
   private LeadSource source(long id) {

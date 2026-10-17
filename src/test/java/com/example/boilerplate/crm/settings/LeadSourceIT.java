@@ -20,6 +20,8 @@ import com.example.boilerplate.audit.AuditEventRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,11 +139,20 @@ class LeadSourceIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$[*].id", not(hasItem((int) id))))
         .andExpect(jsonPath("$.length()").value(6));
     send(token, delete(SOURCE, w, id)).andExpect(status().isNotFound());
-    assertThat(events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(w))
-        .filteredOn(e -> e.getEntityType() == AuditEntityType.LEAD_SOURCE)
-        .filteredOn(e -> e.getEntityId() == id)
+    List<AuditEvent> trail =
+        events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(w).stream()
+            .filter(e -> e.getEntityType() == AuditEntityType.LEAD_SOURCE)
+            .filter(e -> e.getEntityId() == id)
+            .toList();
+    assertThat(trail)
         .extracting(AuditEvent::getAction)
         .containsExactly(AuditAction.DELETE, AuditAction.UPDATE, AuditAction.CREATE);
+    // The DELETE keeps the source's last state, every field as a "from".
+    Map<String, Object> deleted = trail.get(0).getChanges();
+    assertThat(deleted).containsOnlyKeys("id", "name", "archived");
+    assertThat(deleted.get("id")).isEqualTo(gone((int) id));
+    assertThat(deleted.get("name")).isEqualTo(gone("Fair"));
+    assertThat(deleted.get("archived")).isEqualTo(gone(false));
   }
 
   @Test
@@ -165,5 +176,13 @@ class LeadSourceIT extends WorkspaceTestSupport {
       if (s.get("name").asText().equals(name)) return s.get("id").asLong();
     }
     throw new AssertionError("No source " + name);
+  }
+
+  /** A field of a deleted record's last state: {@code {from: value, to: null}}. */
+  private static Map<String, Object> gone(Object from) {
+    Map<String, Object> change = new HashMap<>();
+    change.put("from", from);
+    change.put("to", null);
+    return change;
   }
 }

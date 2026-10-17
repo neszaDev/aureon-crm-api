@@ -114,8 +114,8 @@ the member who logged it; only they or someone with `RECORDS_EDIT_ANY` can edit 
 Companies, contacts, leads and deals are **archived**, not deleted: they disappear from lists and
 pickers but keep their history and links, and can be restored. Tasks are cancelled, not deleted.
 Activities (call, email, meeting and note logs) can be edited or deleted by their author or anyone
-with `RECORDS_EDIT_ANY`; a deletion is audited with the activity's last state. Pipeline stages and
-lead sources can be deleted only while nothing uses them.
+with `RECORDS_EDIT_ANY`. Pipeline stages and lead sources can be deleted only while nothing uses
+them. Every deletion is audited with the record's last state.
 
 ## Money
 
