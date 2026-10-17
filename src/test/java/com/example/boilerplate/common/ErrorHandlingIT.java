@@ -50,7 +50,8 @@ class ErrorHandlingIT extends AbstractIntegrationTest {
   void unknownRouteIsNotFound() throws Exception {
     mvc.perform(get("/api/v1/does-not-exist").header(HttpHeaders.AUTHORIZATION, auth))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.status").value(404));
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.path").value("/api/v1/does-not-exist"));
   }
 
   @Test

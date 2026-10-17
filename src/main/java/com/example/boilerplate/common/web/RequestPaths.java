@@ -12,10 +12,12 @@ public final class RequestPaths {
 
   /**
    * The matched route (e.g. {@code /api/v1/invitations/{token}/accept}). Before a route is matched
-   * (security's 401 and 403), the URI with any invitation token replaced by {@code {token}}.
+   * (security's 401 and 403), or when only a wildcard matched (Spring's resource handler sets
+   * {@code /**} for an unknown URL), the URI with any invitation token replaced by {@code {token}}.
    */
   public static String safePath(HttpServletRequest r) {
-    if (r.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) instanceof String route) {
+    if (r.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) instanceof String route
+        && route.indexOf('*') < 0) {
       return route;
     }
     return INVITATION_TOKEN.matcher(r.getRequestURI()).replaceAll("/invitations/{token}");

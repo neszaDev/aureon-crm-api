@@ -15,6 +15,18 @@ class RequestPathsTest {
   }
 
   @Test
+  void aWildcardPatternIsNotARoute() {
+    // Spring's resource handler sets "/**" for any unknown URL; that says nothing about the path.
+    var unknown = new MockHttpServletRequest("GET", "/api/v1/does-not-exist");
+    unknown.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/**");
+    assertThat(RequestPaths.safePath(unknown)).isEqualTo("/api/v1/does-not-exist");
+
+    var token = new MockHttpServletRequest("GET", "/api/v1/invitations/secret/other");
+    token.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/**");
+    assertThat(RequestPaths.safePath(token)).isEqualTo("/api/v1/invitations/{token}/other");
+  }
+
+  @Test
   void beforeRoutingTheTokenIsMasked() {
     assertThat(RequestPaths.safePath(new MockHttpServletRequest("POST", "/api/v1/users/me")))
         .isEqualTo("/api/v1/users/me");

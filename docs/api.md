@@ -13,6 +13,10 @@ lead sources and the rest of the CRM) are in the [CRM API contract](crm/api.md);
  "path":"/api/v1/auth/register","fieldErrors":{"email":"must be a well-formed email address"}}
 ```
 
+`path` is the route template when one matched (e.g.
+`/api/v1/workspaces/{workspaceId}/pipeline-stages/{id}`), otherwise (an unknown URL, or a request
+refused before routing) the request path with invitation tokens masked.
+
 | Status | When |
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
