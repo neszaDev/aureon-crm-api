@@ -69,13 +69,14 @@ derived products rename it (frontend `AppConfig.name` and locale copy).
 
 Any of the first four may move to any other of the four. `CONVERTED` is reached only through
 conversion, which requires `QUALIFIED`. Conversion runs in one transaction: it links to or creates
-the company, links to or creates the contact, optionally creates a deal, and marks the lead
-converted. The lead's history comes along: its activities and tasks are linked to the contact (and
-to the company and deal, where they have none; onto an existing contact without a company in the
-request, the contact's company), so the contact's timeline shows them. Retrying a conversion that
-already happened returns the existing result and creates nothing. The new records belong to the
-lead's owner; an unassigned lead's go to whoever converts it (only a member who may edit any record
-can).
+the company (onto an existing contact without a company in the request: the contact's company),
+links to or creates the contact, optionally creates a deal with that company and contact, and marks
+the lead converted. The lead's history comes along: its activities and tasks are linked to the
+contact (and to the company and deal, where they have none), so the contact's timeline shows them,
+and what is logged on the lead afterwards joins the contact as it is written. Retrying a conversion
+that already happened returns the existing result and creates nothing. The new records belong to
+the lead's owner; an unassigned lead's go to whoever converts it (only a member who may edit any
+record can).
 
 ### Deal
 
@@ -94,8 +95,9 @@ deletable) and at least one `OPEN` stage. Defaults for a new workspace:
 
 Moving a deal into `WON` or `LOST` records `closedAt`; moving to `LOST` needs a reason. Moving a
 closed deal back to an open stage reopens it (clears `closedAt` and the reason). Every stage
-change is kept in the deal's stage history, which feeds the funnel report. A deal's probability
-is its own override, or else its stage's probability.
+change is kept in the deal's stage history, which feeds the funnel report; its newest entry is when
+the deal entered its stage (`stageEnteredAt`). A deal's probability is its own override, or else
+its stage's probability.
 
 ### Task
 
@@ -103,13 +105,15 @@ is its own override, or else its stage's probability.
 conflict. Overdue means `OPEN` with `dueAt` in the past (computed, not stored). In-app reminders
 show the caller's overdue tasks, tasks due within 24 hours, and their open leads whose follow-up
 date is today or earlier in the workspace's time zone (task due times are instants and need none).
-Nothing is emailed.
+Nothing is emailed. A task takes its company and, on a converted lead, its contact as an activity
+does (below), so a company's task list shows the tasks on its contacts and deals.
 
 ### Activity
 
 A call, email, meeting or note logged by a member against a company, contact, lead or deal (at
 least one). It belongs to the company its contact or deal belongs to, unless the request names
-another, so a company's timeline lists what happened on its contacts and deals too. The author is
+another, so a company's timeline lists what happened on its contacts and deals too; one logged on a
+converted lead without a contact joins the contact the lead became. The author is
 the member who logged it; only they or someone with `RECORDS_EDIT_ANY` can edit or delete it.
 
 ### Records: archive, never delete
@@ -137,5 +141,7 @@ per endpoint in [api.md](api.md).
 
 Important changes (records created, edited, archived, restored, converted, stage moves, task
 completion, membership, roles, invitations and settings) are written to an append-only audit trail
-in the same transaction as the change. Owners and admins can read the whole trail; every member can
-read the history of a record they can see.
+in the same transaction as the change. An edit's event lists the stored fields it changed, not what
+follows from them (a full name, an overdue flag, a count, the probability a deal takes from its
+stage). Owners and admins can read the whole trail; every member can read the history of a record
+they can see.

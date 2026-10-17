@@ -61,28 +61,29 @@ What the existing ITs cover:
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
-| `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types |
-| `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index |
+| `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types; request money is a string; never-null response fields are required, nullable ones optional |
+| `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index, a stage or source delete that loses the race to its foreign key |
 | `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
 | `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |
 | `workspace/invitation/InvitationIT` | Invite, preview, accept as an existing account, register through the link, revoke, expiry, owner rules, concurrent accepts, tokens stored hashed and kept out of logs |
 | `workspace/TenantIsolationIT` | `@TenantId`: another workspace's ids are 404, queries without a workspace context return nothing, inserts without one fail |
 | `workspace/WorkspaceEndpointsGuardIT` | Takes every `/api/v1/workspaces/{workspaceId}/...` endpoint from the running application: 404 for a non-member, 401 without a token |
 | `audit/AuditTrailIT` | Audit events written with the change, append-only (the database refuses `UPDATE`/`DELETE`), refuses to run outside a transaction |
-| `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, permissions, versions, validation |
+| `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, concurrent deletes of the last two open stages, permissions, versions, validation |
 | `crm/settings/LeadSourceIT` | Default sources, create/rename/archive/delete, duplicate names, permissions, versions |
 | `workspace/MemberDirectoryIT` | Owner, assignee and author names: only members of the current workspace resolve |
 | `crm/common/RecordLinksIT` | Record links: the workspace's pass, any other (or unknown) id is a 400 on its field |
 | `crm/common/ListHelpersIT` | The list helpers on real queries: literal search, sorting with the id tie-breaker in both directions, nulls last |
+| `crm/common/UnassignedFilterIT` | `unassigned=true` on every list with an owner (or assignee) filter, and its 400 together with an owner |
 | `crm/company/CompanyIT` | Create/get/update, validation, search, filters, sorting, paging, archive/restore, duplicate warning, owner rules, a removed member's companies become unassigned, stale version (409), other workspace (404) |
 | `crm/contact/ContactIT` | The same for contacts, plus tags (normalized, filtered, listed), sorting by name and company, duplicates by email and phone, company links, the company's contact count, the composite foreign keys (company, source, owner of another workspace) |
 | `crm/lead/LeadIT` | Create/update, validation, estimated value and currency, the status lifecycle and its rules, follow-up date, filters, search, sorting (nulls last, priority), archive/restore, owner rules, a removed member's leads become unassigned, versions |
 | `crm/lead/LeadConversionIT` | Conversion into company, contact and deal in one transaction (rollback on a bad deal), links to existing records, the owner of the new records, the lead's activities and tasks linked to the contact (bulk updates bound to the workspace), retry returns the first result, concurrent conversions create once, an archived qualified lead converts, a converted lead is read-only, permissions |
-| `crm/deal/DealIT` | Create/update, money as strings, default stage and currency, moves with the stage history, won/lost rules, filters, sorting, archive/restore, stage and source in use, rep rules, links and stage of another workspace |
+| `crm/deal/DealIT` | Create/update, money as strings, default stage and currency, moves with the stage history, `stageEnteredAt` (deal, list, board; the query stays in the workspace), won/lost rules, filters, sorting, archive/restore, stage and source in use, rep rules, links and stage of another workspace |
 | `crm/deal/DealBoardIT` | The pipeline board: a column per stage, totals per currency, the card cap with the full count, archived deals left out |
-| `crm/task/TaskIT` | Create/assign/update, assignee-or-creator edit rights, complete/reopen/cancel with their audit events, the overdue flag, sorting (due date nulls last, priority), filters, links, a removed member's tasks become unassigned, no delete |
+| `crm/task/TaskIT` | Create/assign/update, assignee-or-creator edit rights, complete/reopen/cancel with their audit events (no derived fields), the overdue flag, sorting (due date nulls last, priority), filters (`dueFrom` inclusive / `dueTo` exclusive), links (the company from the contact or deal, the contact of a converted lead), a removed member's tasks become unassigned, no delete |
 | `crm/task/ReminderIT` | The caller's overdue and due-soon tasks and follow-up leads: ordering, the cap of 20, the workspace time zone |
-| `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
+| `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), the contact of a converted lead, a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
 `WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one
 answers a non-member with anything but 404. If it fails, fix the endpoint, not the test. Only its

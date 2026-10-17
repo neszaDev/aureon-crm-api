@@ -11,7 +11,8 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
 - Ids are 64-bit integers. Instants are ISO-8601 UTC (`2026-10-17T09:30:00Z`); calendar dates are
   `YYYY-MM-DD`.
 - **Money** is a string with up to 13 integer and 2 fraction digits (`"1250.00"`), plus `currency`
-  (ISO 4217, upper case). Totals are lists of `{ currency, amount }`.
+  (ISO 4217, upper case), in requests and responses alike. Totals are lists of
+  `{ currency, amount }`.
 - **Updates** are `PUT` with every editable field (an omitted or null optional field is cleared,
   `ownerId` included) and the `version` the client last read. A different version means someone
   else changed the record: **409**, reload and retry. State changes (archive, convert, move,
@@ -22,13 +23,22 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   does creating a record for someone else; an id that isn't a member of the workspace is a 400 on
   that field.
 - **Required fields** must be present: leaving out a required number or boolean (a stage's
-  `probability`, a lead source's `archived`) is a 400 on that field, never `0` or `false`.
-- **Lists** take `page` (≥ 0, default 0), `size` (1-100, default 20), `sort` (an upper-case
-  field name allowed for that list) and `direction` (`ASC` or `DESC`), and return a Spring
-  `Page` (`content`, `totalElements`, `totalPages`, `number`, `size`, ...). Without `direction`
-  a sort takes its own: `DESC` for `CREATED_AT`, `UPDATED_AT` and `PRIORITY`, `ASC` for `NAME`,
-  `COMPANY`, `FOLLOW_UP_DATE` and `DUE_AT`. The id is always a tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
-  Text search `q` is trimmed; blank means no search.
+  `probability`, a lead source's `archived`) is a 400 on that field, never `0` or `false`. In
+  responses a field that can be null is left out (written `field?` below, optional in the OpenAPI
+  spec); every other field is always there (`required` in the spec).
+- **Links** (`companyId`, `contactId`, `sourceId`, ...) must name a record of the workspace (400 on
+  that field). They may name an archived record (archiving hides a record, it doesn't end its
+  history), except a conversion's `companyId` and `contactId`, which must be active.
+- **Lists** take `page` (≥ 0, default 0; `page` × `size` at most 2147483647, else a 400 on
+  `page`), `size` (1-100, default 20), `sort` (an upper-case field name allowed for that list) and
+  `direction` (`ASC` or `DESC`), and return a Spring `Page` (`content`, `totalElements`,
+  `totalPages`, `number`, `size`, ...). Without `direction` a sort takes its own: `DESC` for
+  `CREATED_AT`, `UPDATED_AT`, `AMOUNT` and `PRIORITY`, `ASC` for `NAME`, `COMPANY`,
+  `FOLLOW_UP_DATE`, `DUE_AT` and `EXPECTED_CLOSE_DATE`. The id is always a tie-breaker. Archived
+  records are excluded unless `archived=true` (then only archived ones). Text search `q` is
+  trimmed; blank means no search. A list with an owner filter (`ownerId`; tasks: `assigneeId`)
+  also takes `unassigned=true`: only the records without one; together with an owner (tasks: or
+  `mine=true`) it is a 400 on `unassigned`.
 - **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...). 400 invalid
   input or query parameter; 401 no valid token; 403 member without the permission; 404 unknown
   record, **or not a member of the workspace**; 409 version conflict, duplicate name, or a rule
@@ -42,7 +52,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `code` | Status | Meaning |
   |---|---|---|
   | `VALIDATION_FAILED` | 400 | Invalid input or query parameter: `fieldErrors` names the fields when it can (bean validation, a link not in this workspace, a blank required text, `page`/`size` out of range, ...) |
-  | `TEXT_INVALID` | 400 | The database refused a value: text with a NUL character, a value too long or a number out of range for its column |
+  | `TEXT_INVALID` | 400 | The database refused a value: text with a NUL character, a value too long, a number out of range for its column, or a date or time it can't hold (such as the year 300000) |
   | `PIPELINE_CHANGED` | 400 | `PUT /pipeline-stages/order`: `stageIds` isn't exactly the current open stages (someone added or deleted one): reload the pipeline |
   | `FORBIDDEN` | 403 | The role lacks the permission, or the record isn't the caller's to edit; admin-only endpoints |
   | `REGISTRATION_DISABLED` | 403 | `POST /auth/register` with `REGISTRATION_ENABLED=false` (invite-only) |
@@ -59,8 +69,8 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `INVITATION_NOT_PENDING` | 409 | Accepting, registering through or revoking an invitation that was accepted or revoked (accept/register: or expired) |
   | `DUPLICATE_NAME` | 409 | A pipeline stage or lead source with this name (any case) exists, also when two requests race |
   | `STAGE_PROTECTED` | 409 | Deleting `WON` or `LOST` (`The Won and Lost stages can't be deleted`) or the last open stage (`The pipeline needs an open stage`): one code, the message says which |
-  | `STAGE_IN_USE` | 409 | Deleting a stage that holds deals, archived ones too |
-  | `SOURCE_IN_USE` | 409 | Deleting a lead source a lead, contact or deal uses: archive it instead |
+  | `STAGE_IN_USE` | 409 | Deleting a stage that holds deals, archived ones too (also when a deal took it while it was being deleted) |
+  | `SOURCE_IN_USE` | 409 | Deleting a lead source a lead, contact or deal uses: archive it instead (also when one took it while it was being deleted) |
   | `LEAD_CONVERTED` | 409 | Editing a converted lead or changing its status |
   | `LEAD_NOT_QUALIFIED` | 409 | Converting a lead that isn't `QUALIFIED` |
   | `TASK_STATUS_CONFLICT` | 409 | `complete` or `cancel` a task that isn't `OPEN`, `reopen` one that is |
@@ -72,7 +82,8 @@ Common shapes:
 ```ts
 MemberRef  = { userId, email, displayName? }          // owner, assignee, author
 MoneyTotal = { currency, amount }                     // amount as a string
-Ref        = { id, name }                             // company, stage, source
+PersonRef  = { id, fullName }                         // contact, lead
+Ref        = { id, name }                             // company, stage, source, deal
 ```
 
 ## Account (boilerplate, extended)
@@ -122,7 +133,7 @@ Invitation rules:
 | `POST /workspaces/{w}/pipeline-stages` | `{ name (1-60), probability (0-100) }` → 201 `Stage` (an `OPEN` stage, placed after the open ones) | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/{id}` | `{ name, probability, version }` → `Stage` | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/order` | `{ stageIds: [...] }` all `OPEN` stage ids in the new order → `Stage[]` | `SETTINGS_MANAGE` |
-| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, or a deal in it (archived ones too: `Stage has deals; move them first`). Deals' stage history keeps the stage's name; its id there becomes null | `SETTINGS_MANAGE` |
+| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, or a deal in it (archived ones too: `Stage has deals; move them first`). Deals' stage history keeps the stage's name; its id there becomes null. Deletes and reorders of one pipeline run one after the other, so two deletes at once can't leave it without an open stage | `SETTINGS_MANAGE` |
 | `GET /workspaces/{w}/lead-sources` | `?includeArchived` → `LeadSource[]` (`id, name, archived, version`) | member |
 | `POST /workspaces/{w}/lead-sources` | `{ name (1-60) }` → 201 | `SETTINGS_MANAGE`; 409 duplicate name |
 | `PUT /workspaces/{w}/lead-sources/{id}` | `{ name, archived, version }` | `SETTINGS_MANAGE` |
@@ -134,8 +145,8 @@ Invitation rules:
 
 | Method and path | Body → response |
 |---|---|
-| `GET /` | `?q` (name, website, phone), `ownerId`, `industry`, `archived`, paging; `sort`: `NAME` (default, `ASC`), `CREATED_AT`, `UPDATED_AT` → `Page<CompanySummary>` |
-| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case first, then same website host (case and a leading `www.` aside; hosts under 3 characters and a bare `www` match nothing) |
+| `GET /` | `?q` (name, website, phone), `ownerId`, `unassigned`, `industry`, `archived`, paging; `sort`: `NAME` (default, `ASC`), `CREATED_AT`, `UPDATED_AT` → `Page<CompanySummary>` |
+| `GET /duplicates` | `?name&website` → up to 5 active companies as `CompanyRef` (`id, name, website?`): same name ignoring case first, then same website host (case and a leading `www.` aside; hosts under 3 characters and a bare `www` match nothing). The record being edited is among them when it matches: the client leaves out its own id |
 | `POST /` | `CompanyInput` → 201 `Company` |
 | `GET /{id}` | → `Company` |
 | `PUT /{id}` | `CompanyInput` + `version` → `Company` |
@@ -152,14 +163,15 @@ Company        = CompanySummary + { address?, employeeCount?, notes?, archivedAt
 
 ## Contacts
 
-`/workspaces/{w}/contacts`: the same endpoints as companies (`duplicates` takes `?email&phone` →
-up to 5 active contacts as `ContactRef` (`id, fullName, email?, phone?`): same email ignoring case
-first, then the same digits of the phone, at least 6 of them), plus `GET /tags` → the tags of the
-workspace's active contacts, each once, sorted. List filters: `q` (first and last name, both
-together, email, phone, company name), `companyId`, `ownerId`, `sourceId`, `tag` (exactly, any
-case), `archived`; `sort`: `NAME` (default; last name, then first name, ignoring case), `COMPANY`
-(company name ignoring case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`NAME`) or
-a company (`COMPANY`) come last ascending and first descending.
+`/workspaces/{w}/contacts`: the same endpoints as companies (`duplicates` takes `?email&phone` → up
+to 5 active contacts as `ContactRef` (`id, fullName, email?, phone?`): same email ignoring case
+first, then the same digits of the phone, at least 6 of them; as for companies, the contact being
+edited can be among them), plus `GET /tags` → the tags of the workspace's active contacts, each
+once, sorted. List filters: `q` (first and last name, both together, email, phone, company name),
+`companyId`, `ownerId`, `unassigned`, `sourceId`, `tag` (exactly, any case), `archived`; `sort`:
+`NAME` (default; last name, then first name, ignoring case), `COMPANY` (company name ignoring
+case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`NAME`) or a company (`COMPANY`)
+come last ascending and first descending.
 
 ```ts
 ContactInput   = { firstName (1-100), lastName? (≤100), email? (≤254, stored lower case), phone? (≤50),
@@ -173,31 +185,32 @@ Contact        = ContactSummary + { source?: Ref, notes?, archivedAt?, createdAt
 ## Leads
 
 `/workspaces/{w}/leads`: list, create, get, update, archive, restore, export as above. List
-filters: `q` (names, company name, email, phone), `status` (repeatable), `ownerId`, `sourceId`,
-`priority`, `followUpBefore` (date), `archived`; `sort`: `CREATED_AT` (default, `DESC`),
-`UPDATED_AT`, `FOLLOW_UP_DATE`, `PRIORITY`, `NAME`. Converted leads can't be updated (409).
-The list returns full `Lead`s. `NAME` is last name, then first name, ignoring case; `PRIORITY`
-descending lists HIGH first. Leads without a follow-up date come last in both directions;
-`followUpBefore` is inclusive and never matches them. Archiving and restoring are allowed on
-converted leads (they are not edits).
+filters: `q` (names, company name, email, phone), `status` (repeatable), `ownerId`, `unassigned`,
+`sourceId`, `priority`, `followUpBefore` (date), `archived`; `sort`: `CREATED_AT` (default,
+`DESC`), `UPDATED_AT`, `FOLLOW_UP_DATE`, `PRIORITY`, `NAME`. Converted leads can't be updated
+(409). The list returns full `Lead`s. `NAME` is last name, then first name, ignoring case;
+`PRIORITY` descending lists HIGH first. Leads without a follow-up date come last in both
+directions; `followUpBefore` is inclusive and never matches them. Archiving and restoring are
+allowed on converted leads (they are not edits).
 
 | Method and path | Body → response |
 |---|---|
-| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409 (both before the version is compared); the lead's current status again is a 200 that changes nothing, except UNQUALIFIED with a different reason, which saves the reason (new version, `STATUS_CHANGE` audit) |
-| `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; needs the right to edit the lead (403, checked first, on a retry too); 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true`, nothing written (an archived record is still listed). An archived `QUALIFIED` lead can still be converted (archiving hides a lead, it doesn't lock it). One transaction: an error (e.g. 400 on `deal.stageId`) leaves no company, contact or deal behind. The new records belong to the lead's owner, or to the caller when the lead has none. Concurrent conversions of one lead run one after the other: the later one gets `alreadyConverted: true`. The lead's activities and tasks join the contact, and the company (onto an existing contact without `companyId`: the contact's) and deal where they have none (a link they have stays), in the same transaction: the contact's timeline and tasks show the lead's history; their `version` and `updatedAt` change; a retry links nothing again. Audit: `CREATE` for each new record, `CONVERT` on the lead (status and `converted*` changes, plus `linkedActivities` / `linkedTasks` `{ from: null, to: <count> }` when there were any; no event per activity or task) |
+| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409, UNQUALIFIED without a reason a 400 (field `reason`), all before the version is compared (as a deal's lost reason); the lead's current status again is a 200 that changes nothing, except UNQUALIFIED with a different reason, which saves the reason (new version, `STATUS_CHANGE` audit) |
+| `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; needs the right to edit the lead (403, checked first, on a retry too); 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true`, nothing written (an archived record is still listed). An archived `QUALIFIED` lead can still be converted (archiving hides a lead, it doesn't lock it). One transaction: an error (e.g. 400 on `deal.stageId`) leaves no company, contact or deal behind. The new records belong to the lead's owner, or to the caller when the lead has none. Concurrent conversions of one lead run one after the other: the later one gets `alreadyConverted: true`. Onto an existing contact without a company from `companyId` or `createCompany`, the contact's company is the conversion's: the deal's, `convertedCompany` and the history's. The lead's activities and tasks join the contact, and the company and deal where they have none (a link they have stays), in the same transaction: the contact's timeline and tasks show the lead's history; their `version` and `updatedAt` change; a retry links nothing again. Audit: `CREATE` for each new record, `CONVERT` on the lead (status and `converted*` changes, plus `linkedActivities` / `linkedTasks` `{ from: null, to: <count> }` when there were any; no event per activity or task) |
 
 ```ts
 LeadInput   = { firstName, lastName?, companyName?, email?, phone?, jobTitle?, sourceId?, ownerId?,
                 priority (default MEDIUM), followUpDate?, estimatedValue?, currency?, notes? }
 Lead        = { id, ...LeadInput fields, source?: Ref, owner?: MemberRef, status, unqualifiedReason?,
-                convertedAt?, convertedCompany?: Ref, convertedContact?: Ref, convertedDeal?: Ref,
-                archived, archivedAt?, createdAt, updatedAt, version }
+                convertedAt?, convertedCompany?: Ref, convertedContact?: PersonRef,
+                convertedDeal?: Ref, archived, archivedAt?, createdAt, updatedAt, version }
 // estimatedValue and currency: both or neither. A value alone takes the workspace's currency (on a
 // PUT too: an omitted currency is not kept); a currency alone is a 400 on estimatedValue.
 LeadConversionInput = {
   companyId?,            // link to this active company (400 when unknown or archived), or
   createCompany,         // required; create one from companyName (none without a companyName;
-                         // ignored when companyId is set)
+                         // ignored when companyId is set); with neither, onto an existing
+                         // contact, the company is that contact's
   contactId?,            // link to this active contact (400 when unknown or archived), else one is
                          // created from the lead's names, email, phone, job title and source, with
                          // the company
@@ -206,15 +219,16 @@ LeadConversionInput = {
                          // currency), errors on deal.<field>; it gets the company, contact,
                          // source and lead
 }
-LeadConversion = { leadId, company?: Ref, contact: { id, fullName }, deal?: Ref, alreadyConverted }
+LeadConversion = { leadId, company?: Ref, contact: PersonRef, deal?: Ref, alreadyConverted }
 ```
 
 ## Deals
 
 `/workspaces/{w}/deals`: list, create, get, update (not the stage), archive, restore, export.
 List filters: `q` (name, company name), `stageId`, `status` (`OPEN`, `WON`, `LOST`), `ownerId`,
-`companyId`, `contactId`, `closeFrom` / `closeTo` (expected close date), `archived`; `sort`:
-`UPDATED_AT` (default, `DESC`), `NAME`, `AMOUNT`, `EXPECTED_CLOSE_DATE`, `CREATED_AT`.
+`unassigned`, `companyId`, `contactId`, `closeFrom` / `closeTo` (expected close date),
+`archived`; `sort`: `UPDATED_AT` (default, `DESC`), `NAME`, `AMOUNT`, `EXPECTED_CLOSE_DATE`,
+`CREATED_AT`.
 The list returns `DealSummary`s. Without `direction`, `UPDATED_AT`, `CREATED_AT` and `AMOUNT`
 descend, `NAME` (ignoring case) and `EXPECTED_CLOSE_DATE` ascend; deals without an expected close
 date come last in both directions, and `closeFrom` / `closeTo` are inclusive and never match them.
@@ -233,25 +247,31 @@ DealInput   = { name (1-200), amount (≥ 0), currency? (default the workspace's
                 stageId? (create only; an OPEN stage (400 otherwise), default the open stage with
                 the lowest position), probability? (0-100), expectedCloseDate?, ownerId?,
                 companyId?, contactId?, sourceId?, notes? (≤5000) }
-DealSummary = { id, name, amount, currency, stage: Stage-ref { id, name, kind }, status,
-                probability, expectedCloseDate?, owner?: MemberRef, company?: Ref,
-                contact?: { id, fullName }, closedAt?, archived, updatedAt, version }
-Deal        = DealSummary + { probabilityOverride?, source?: Ref, lostReason?, lead?: Ref, notes?,
-                archivedAt?, createdAt }
+DealSummary = { id, name, amount, currency, stage: Stage-ref { id, name, kind }, stageEnteredAt,
+                status, probability, expectedCloseDate?, owner?: MemberRef, company?: Ref,
+                contact?: PersonRef, closedAt?, archived, updatedAt, version }
+Deal        = DealSummary + { probabilityOverride?, source?: Ref, lostReason?, lead?: PersonRef,
+                notes?, archivedAt?, createdAt }
+// stageEnteredAt: when the deal entered its current stage, the changedAt of its newest history
+// entry (a create or a move to another stage; a new lost reason is no move).
 ```
 
 ## Tasks and reminders
 
 `/workspaces/{w}/tasks`: list, create, get, update, and the status actions below. Tasks are
 cancelled, never deleted (there is no `DELETE`). List filters: `q` (title), `status` (repeatable),
-`assigneeId`, `mine` (assigned to the caller; with `assigneeId` both must hold), `overdue`
-(`true`: open tasks due in the past; `false`: all the others, those without a due time included;
-omitted: both), `dueFrom` / `dueTo` (instants, inclusive, never matching tasks without a due
-time), `companyId`, `contactId`, `leadId`, `dealId`; `sort`: `DUE_AT` (default, `ASC`; tasks
-without a due time come last in both directions), `PRIORITY` (HIGH first descending), `CREATED_AT`,
-`UPDATED_AT`. The list returns full `Task`s. Due times are kept in microseconds, as stored. Whoever
-may edit a task (its assignee, its creator, or `RECORDS_EDIT_ANY`; 403 otherwise, checked first)
-may also complete, reopen and cancel it; an unassigned task whose creator left is a manager's.
+`assigneeId`, `unassigned`, `mine` (assigned to the caller; with `assigneeId` both must hold),
+`overdue` (`true`: open tasks due in the past; `false`: all the others, those without a due time
+included; omitted: both), `dueFrom` / `dueTo` (instants, `dueFrom` inclusive and `dueTo` exclusive
+as activities' `from` and `to`, never matching tasks without a due time), `companyId`, `contactId`,
+`leadId`, `dealId`; `sort`: `DUE_AT` (default, `ASC`; tasks without a due time come last in both
+directions), `PRIORITY` (HIGH first descending), `CREATED_AT`, `UPDATED_AT`. The list returns full
+`Task`s. Due times are kept in microseconds, as stored. Whoever may edit a task (its assignee, its
+creator, or `RECORDS_EDIT_ANY`; 403 otherwise, checked first) may also complete, reopen and cancel
+it; an unassigned task whose creator left is a manager's. Links work as an activity's (below):
+without a `companyId` a task takes its contact's company, else its deal's, so `?companyId=` lists
+the tasks on the company's contacts and deals; on a converted lead without a `contactId` it takes
+the contact the lead became. A `PUT` derives both again.
 
 | Method and path | Body → response |
 |---|---|
@@ -268,7 +288,7 @@ uses the workspace's time zone.
 TaskInput = { title (1-200), description? (≤5000), dueAt?, priority (default MEDIUM), assigneeId?,
               companyId?, contactId?, leadId?, dealId? }       // assigneeId: see Conventions, Owner
 Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberRef, status,
-              overdue, completedAt?, company?: Ref, contact?: { id, fullName }, lead?: { id, fullName },
+              overdue, completedAt?, company?: Ref, contact?: PersonRef, lead?: PersonRef,
               deal?: Ref, createdAt, updatedAt, version }
 // overdue: computed, OPEN with dueAt in the past. assignee and createdBy are missing once that
 // person left the workspace. An edit (PUT) can't change the status: only the actions do.
@@ -288,6 +308,8 @@ Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberR
   `fieldErrors.links`: `Link the activity to a company, contact, lead or deal`. Each must be a
   record of this workspace (400 on that field). Archived records can still be linked: archiving
   hides a record, it doesn't end its history. An edit can't drop the last link either.
+- **Converted lead**: an activity on a converted lead without a `contactId` gets the contact the
+  lead became (its `dealId` stays as sent), and then that contact's company, as below.
 - **Company timeline**: a company's timeline includes the activities logged on its contacts and
   deals, because the service fills `companyId` in when the request sends none: the contact's
   company, else the deal's. A `PUT` works the same way: `companyId` null derives it again from the
@@ -309,7 +331,7 @@ Task      = { id, ...TaskInput fields, assignee?: MemberRef, createdBy?: MemberR
 ActivityInput = { type: CALL | EMAIL | MEETING | NOTE, subject (1-200), body? (≤5000), occurredAt?
                   (default now), companyId?, contactId?, leadId?, dealId? }  // at least one link
 Activity      = { id, ...ActivityInput fields, author?: MemberRef, company?: Ref,
-                  contact?: { id, fullName }, lead?: { id, fullName }, deal?: Ref,
+                  contact?: PersonRef, lead?: PersonRef, deal?: Ref,
                   createdAt, updatedAt, version }
 // PUT takes ActivityInput + version (every field; an omitted body or link is cleared)
 ```

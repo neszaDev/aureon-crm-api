@@ -114,7 +114,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   join from a tenant-owned entity, must bind `WorkspaceContext.workspaceId()` explicitly. Outside
   one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
 - **Audit changes:** an update's event stores `AuditChanges.recordDiff(before, after)` of the
-  response DTOs (it drops `version`, `createdAt`, `updatedAt`) and nothing when that is empty; a
+  response DTOs (it drops `version`, `createdAt`, `updatedAt` and the components marked
+  `@Derived`: what follows from other fields, such as `fullName`, `overdue`, a count, `archived`
+  next to `archivedAt`) and nothing when that is empty; a
   create stores empty changes and the record's label; every delete (an activity, a pipeline
   stage, a lead source) stores `recordDiff(last, Map.of())`, the record's last state (every field
   as a `from`, `to` null), because nothing else keeps what was there. Entities assign money
@@ -142,7 +144,11 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   `@NotBlank` and `strip()` miss Unicode spaces such as U+3000 and U+00A0.
 - **Error bodies** use `RequestPaths.safePath(request)` for `ApiError.path`, never the raw URI.
 - **Request DTOs** use boxed types with `@NotNull` for required numbers and booleans: a primitive
-  would turn an omitted field into `0` or `false` instead of a 400.
+  would turn an omitted field into `0` or `false` instead of a 400. Money fields take
+  `@Schema(type = "string")` like the responses' money.
+- **Response DTOs** put `@NotNull` on every component that is never null; with the primitives
+  (`OpenApiConfig`) those are `required` in the OpenAPI spec, the rest optional (Jackson leaves
+  nulls out), so the frontend's generated types say which fields it can count on.
 - **Configuration** binds to validated `@ConfigurationProperties` records (`AuthProperties`,
   `CorsProperties`), not `@Value`. Validation failures must not echo secret values.
 - **Formatting** is google-java-format via Spotless. Don't hand-format; run `make fmt`.
