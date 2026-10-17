@@ -149,11 +149,11 @@ public class LeadService {
     if (current != target && !current.canMoveTo(target)) {
       throw new ConflictException(ErrorCode.LEAD_CONVERTED, "Converted leads can't change status");
     }
-    Versions.check(lead, r.version());
     String reason = Texts.optional(r.reason());
     if (target == LeadStatus.UNQUALIFIED && reason == null && current != target) {
       throw new FieldValidationException("reason", "is required to mark a lead unqualified");
     }
+    Versions.check(lead, r.version());
     boolean newReason =
         target == LeadStatus.UNQUALIFIED
             && reason != null

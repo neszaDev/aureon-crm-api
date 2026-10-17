@@ -76,6 +76,6 @@ public class DealBoardService {
   private static Specification<Deal> matching(
       String q, Long stageId, Long ownerId, Long companyId) {
     return DealSpecifications.matching(
-        new DealFilter(q, stageId, null, ownerId, companyId, null, null, null, false));
+        new DealFilter(q, stageId, null, ownerId, false, companyId, null, null, null, false));
   }
 }

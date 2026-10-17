@@ -30,17 +30,27 @@ public class GlobalExceptionHandler {
   private static final String DATA_EXCEPTION_CLASS = "22";
   private static final String CHARACTER_NOT_IN_REPERTOIRE = "22021";
 
-  /** Too long, out of range, a NUL character, an untranslatable character. */
+  /**
+   * Too long, out of range, a NUL character, an untranslatable character, a date or time the
+   * database can't hold (invalid format, out of range).
+   */
   private static final Set<String> CLIENT_DATA_EXCEPTIONS =
-      Set.of("22001", "22003", CHARACTER_NOT_IN_REPERTOIRE, "22P05");
+      Set.of("22001", "22003", CHARACTER_NOT_IN_REPERTOIRE, "22P05", "22007", "22008");
 
-  /** Unique indexes behind a rule the service checks first: a violation lost a race to it. */
-  private static final Map<String, ErrorCode> UNIQUE_RULES =
+  /**
+   * Unique indexes and foreign keys behind a rule the service checks first: a violation lost a race
+   * to it (a stage or source deleted while a deal, lead or contact took it).
+   */
+  private static final Map<String, ErrorCode> CONSTRAINT_RULES =
       Map.of(
           "uq_pipeline_stages_name", ErrorCode.DUPLICATE_NAME,
           "uq_lead_sources_name", ErrorCode.DUPLICATE_NAME,
           "users_email_key", ErrorCode.EMAIL_TAKEN,
-          "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED);
+          "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED,
+          "deals_workspace_id_stage_id_fkey", ErrorCode.STAGE_IN_USE,
+          "deals_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
+          "leads_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
+          "contacts_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE);
 
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
@@ -52,8 +62,8 @@ public class GlobalExceptionHandler {
    * PostgreSQL data exceptions are the client's mistake instead (a value too long or out of range,
    * text with a NUL character, which PostgreSQL refuses in any text column or parameter), and
    * Spring reports them as integrity violations too. The rest of SQLSTATE class 22 (division by
-   * zero, an invalid regex, ...) is a server bug: 500. A unique index named in {@link
-   * #UNIQUE_RULES} answers with that rule's code.
+   * zero, an invalid regex, ...) is a server bug: 500. A constraint named in {@link
+   * #CONSTRAINT_RULES} answers with that rule's code.
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
@@ -71,7 +81,8 @@ public class GlobalExceptionHandler {
       return error(HttpStatus.BAD_REQUEST, ErrorCode.TEXT_INVALID, message, r, Map.of());
     }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
-    return error(HttpStatus.CONFLICT, uniqueRule(e), "Conflicts with existing data", r, Map.of());
+    return error(
+        HttpStatus.CONFLICT, constraintRule(e), "Conflicts with existing data", r, Map.of());
   }
 
   @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -197,14 +208,14 @@ public class GlobalExceptionHandler {
   }
 
   /** The rule of the constraint Hibernate names (read from PostgreSQL's message), else CONFLICT. */
-  private static ErrorCode uniqueRule(Throwable e) {
+  private static ErrorCode constraintRule(Throwable e) {
     // shortcut: Hibernate's PostgreSQL dialect parses the constraint name out of the English
     // server message, so localized lc_messages fall back to CONFLICT; upgrade to pgjdbc's
     // ServerErrorMessage.getConstraint() if the database may speak another language.
     for (Throwable t = e; t != null; t = t.getCause()) {
       if (t instanceof org.hibernate.exception.ConstraintViolationException c
           && c.getConstraintName() != null) {
-        return UNIQUE_RULES.getOrDefault(c.getConstraintName(), ErrorCode.CONFLICT);
+        return CONSTRAINT_RULES.getOrDefault(c.getConstraintName(), ErrorCode.CONFLICT);
       }
     }
     return ErrorCode.CONFLICT;

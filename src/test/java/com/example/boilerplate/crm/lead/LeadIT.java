@@ -389,8 +389,12 @@ class LeadIT extends WorkspaceTestSupport {
     long w = createWorkspace(token, "Acme");
     long id = create(token, w, Map.of("firstName", "Ada"));
 
-    // UNQUALIFIED needs a reason that is not blank, however it is spelled.
+    // UNQUALIFIED needs a reason that is not blank, however it is spelled; checked before the
+    // version, as a deal's lost reason.
     setStatus(token, w, id, "UNQUALIFIED", null, 0)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.reason").exists());
+    setStatus(token, w, id, "UNQUALIFIED", null, 7)
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.fieldErrors.reason").exists());
     setStatus(token, w, id, "UNQUALIFIED", "　 ", 0)

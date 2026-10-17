@@ -30,6 +30,7 @@ public class LeadController {
       @RequestParam(required = false) String q,
       @RequestParam(required = false) List<LeadStatus> status,
       @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long sourceId,
       @RequestParam(required = false) Priority priority,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -40,7 +41,8 @@ public class LeadController {
       @RequestParam(defaultValue = "CREATED_AT") LeadSort sort,
       @RequestParam(required = false) Direction direction) {
     return service.list(
-        new LeadFilter(q, status, ownerId, sourceId, priority, followUpBefore, archived),
+        new LeadFilter(
+            q, status, ownerId, unassigned, sourceId, priority, followUpBefore, archived),
         page,
         size,
         sort,

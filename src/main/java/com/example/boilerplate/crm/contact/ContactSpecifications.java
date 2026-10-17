@@ -39,6 +39,7 @@ final class ContactSpecifications {
       }
       if (f.companyId() != null) where.add(cb.equal(root.get("companyId"), f.companyId()));
       if (f.ownerId() != null) where.add(cb.equal(root.get("ownerId"), f.ownerId()));
+      if (f.unassigned()) where.add(cb.isNull(root.get("ownerId")));
       if (f.sourceId() != null) where.add(cb.equal(root.get("sourceId"), f.sourceId()));
       if (tag != null) {
         // shortcut: array_position scans the workspace's contacts (GIN unused); switch tags to

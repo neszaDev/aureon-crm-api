@@ -25,6 +25,7 @@ public class ContactController {
       @RequestParam(required = false) String q,
       @RequestParam(required = false) Long companyId,
       @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long sourceId,
       @RequestParam(required = false) String tag,
       @RequestParam(defaultValue = "false") boolean archived,
@@ -33,7 +34,7 @@ public class ContactController {
       @RequestParam(defaultValue = "NAME") ContactSort sort,
       @RequestParam(required = false) Direction direction) {
     return service.list(
-        new ContactFilter(q, companyId, ownerId, sourceId, tag, archived),
+        new ContactFilter(q, companyId, ownerId, unassigned, sourceId, tag, archived),
         page,
         size,
         sort,

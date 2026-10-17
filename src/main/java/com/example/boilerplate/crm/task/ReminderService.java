@@ -65,7 +65,7 @@ public class ReminderService {
         dueSoon,
         leads
             .list(
-                new LeadFilter(null, OPEN_LEADS, caller, null, null, today, false),
+                new LeadFilter(null, OPEN_LEADS, caller, false, null, null, today, false),
                 0,
                 LIMIT,
                 LeadSort.FOLLOW_UP_DATE,
@@ -79,6 +79,7 @@ public class ReminderService {
         null,
         List.of(TaskStatus.OPEN),
         null,
+        false,
         true,
         overdue,
         dueFrom,

@@ -30,6 +30,7 @@ public class DealController {
       @RequestParam(required = false) Long stageId,
       @RequestParam(required = false) DealStatus status,
       @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long companyId,
       @RequestParam(required = false) Long contactId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -43,7 +44,16 @@ public class DealController {
       @RequestParam(required = false) Direction direction) {
     return service.list(
         new DealFilter(
-            q, stageId, status, ownerId, companyId, contactId, closeFrom, closeTo, archived),
+            q,
+            stageId,
+            status,
+            ownerId,
+            unassigned,
+            companyId,
+            contactId,
+            closeFrom,
+            closeTo,
+            archived),
         page,
         size,
         sort,

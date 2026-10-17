@@ -24,6 +24,7 @@ public class CompanyController {
       @PathVariable long workspaceId,
       @RequestParam(required = false) String q,
       @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) String industry,
       @RequestParam(defaultValue = "false") boolean archived,
       @RequestParam(defaultValue = "0") int page,
@@ -31,7 +32,7 @@ public class CompanyController {
       @RequestParam(defaultValue = "NAME") CompanySort sort,
       @RequestParam(required = false) Direction direction) {
     return service.list(
-        new CompanyFilter(q, ownerId, industry, archived),
+        new CompanyFilter(q, ownerId, unassigned, industry, archived),
         page,
         size,
         sort,

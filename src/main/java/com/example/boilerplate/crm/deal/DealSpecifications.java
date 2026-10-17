@@ -36,6 +36,7 @@ final class DealSpecifications {
         where.add(cb.equal(root.join("stage").get("kind"), f.status().kind()));
       }
       if (f.ownerId() != null) where.add(cb.equal(root.get("ownerId"), f.ownerId()));
+      if (f.unassigned()) where.add(cb.isNull(root.get("ownerId")));
       if (f.companyId() != null) where.add(cb.equal(root.get("companyId"), f.companyId()));
       if (f.contactId() != null) where.add(cb.equal(root.get("contactId"), f.contactId()));
       if (f.closeFrom() != null) {

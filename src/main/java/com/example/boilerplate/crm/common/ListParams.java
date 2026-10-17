@@ -56,5 +56,9 @@ public final class ListParams {
     if (size < 1 || size > MAX_SIZE) {
       throw new FieldValidationException("size", "must be between 1 and " + MAX_SIZE);
     }
+    // The query takes the offset as an int.
+    if ((long) page * size > Integer.MAX_VALUE) {
+      throw new FieldValidationException("page", "is too large");
+    }
   }
 }

@@ -31,6 +31,7 @@ final class CompanySpecifications {
                 contains(cb, root, "phone", p)));
       }
       if (f.ownerId() != null) where.add(cb.equal(root.get("ownerId"), f.ownerId()));
+      if (f.unassigned()) where.add(cb.isNull(root.get("ownerId")));
       if (industry != null) {
         where.add(cb.equal(cb.lower(root.get("industry")), cb.lower(cb.literal(industry))));
       }

@@ -22,8 +22,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 class PipelineStageIT extends WorkspaceTestSupport {
   static final String STAGES = "/api/v1/workspaces/{workspaceId}/pipeline-stages";
@@ -188,6 +196,55 @@ class PipelineStageIT extends WorkspaceTestSupport {
     send(token, get(STAGES, w))
         .andExpect(jsonPath("$[*].name", contains("Negotiation", "Won", "Lost")))
         .andExpect(jsonPath("$[*].position", contains(1, 2, 3)));
+  }
+
+  /**
+   * Two deletes at once of the last two open stages: deletes and reorders take the pipeline's lock,
+   * so the second sees one open stage left and refuses. Several rounds, so a lucky ordering can't
+   * hide a race.
+   */
+  @Test
+  void concurrentDeletesKeepAnOpenStage() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    List<Long> open = openIds(token, w);
+    for (long id : open.subList(2, open.size())) {
+      send(token, delete(STAGE, w, id)).andExpect(status().isNoContent());
+    }
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      for (int round = 0; round < 5; round++) {
+        List<Long> pair = openIds(token, w);
+        assertThat(pair).hasSize(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<ResultActions>> futures = new ArrayList<>();
+        for (long id : pair) {
+          Callable<ResultActions> deleteIt =
+              () -> {
+                start.await();
+                return send(token, delete(STAGE, w, id));
+              };
+          futures.add(pool.submit(deleteIt));
+        }
+        start.countDown();
+        List<String> answers = new ArrayList<>();
+        for (Future<ResultActions> f : futures) {
+          MvcResult r = f.get(30, TimeUnit.SECONDS).andReturn();
+          int status = r.getResponse().getStatus();
+          answers.add(
+              status == 204
+                  ? "204"
+                  : status + " " + json.readTree(r.getResponse().getContentAsString()).get("code"));
+        }
+
+        assertThat(answers).containsExactlyInAnyOrder("204", "409 \"STAGE_PROTECTED\"");
+        assertThat(openIds(token, w)).hasSize(1);
+        send(token, post(STAGES, w), Map.of("name", "Round " + round, "probability", 10))
+            .andExpect(status().isCreated());
+      }
+    } finally {
+      pool.shutdownNow();
+    }
   }
 
   @Test

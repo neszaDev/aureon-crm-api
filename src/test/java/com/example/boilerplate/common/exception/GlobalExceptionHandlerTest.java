@@ -39,7 +39,8 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void aValueTooLongOrOutOfRangeIsTheClientsMistake() {
-    for (String state : new String[] {"22001", "22003", "22P05"}) {
+    // Too long, out of range, untranslatable; a date or time the database can't hold.
+    for (String state : new String[] {"22001", "22003", "22P05", "22007", "22008"}) {
       ResponseEntity<ApiError> r = answer(state);
       assertThat(r.getStatusCode()).as(state).isEqualTo(HttpStatus.BAD_REQUEST);
       assertThat(r.getBody().message()).as(state).isEqualTo("Invalid value");
@@ -84,15 +85,22 @@ class GlobalExceptionHandlerTest {
     }
   }
 
-  /** A unique index behind a rule the service checks first: the race loser gets the rule's code. */
+  /**
+   * A unique index or foreign key behind a rule the service checks first: the race loser gets the
+   * rule's code.
+   */
   @Test
-  void aUniqueIndexOfARuleAnswersWithItsCode() {
+  void aConstraintOfARuleAnswersWithItsCode() {
     Map<String, ErrorCode> rules =
         Map.of(
             "uq_pipeline_stages_name", ErrorCode.DUPLICATE_NAME,
             "uq_lead_sources_name", ErrorCode.DUPLICATE_NAME,
             "users_email_key", ErrorCode.EMAIL_TAKEN,
             "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED,
+            "deals_workspace_id_stage_id_fkey", ErrorCode.STAGE_IN_USE,
+            "leads_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
+            "contacts_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
+            "deals_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
             "deals_workspace_id_lead_id_key", ErrorCode.CONFLICT);
     rules.forEach(
         (constraint, code) -> {

@@ -132,6 +132,10 @@ class ListParamsTest {
     assertInvalid("size", () -> ListParams.pageable(0, 101, Direction.ASC, "name"));
     assertInvalid("page", () -> ListParams.unsorted(-1, 20));
     assertInvalid("size", () -> ListParams.unsorted(0, 101));
+    // The offset (page * size) must fit an int: the database query takes it as one.
+    assertThat(ListParams.unsorted(Integer.MAX_VALUE / 100, 100)).isNotNull();
+    assertInvalid("page", () -> ListParams.unsorted(Integer.MAX_VALUE / 100 + 1, 100));
+    assertInvalid("page", () -> ListParams.pageable(Integer.MAX_VALUE, 20, Direction.ASC, "name"));
   }
 
   private static void assertInvalid(String field, Runnable call) {

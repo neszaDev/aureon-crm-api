@@ -27,6 +27,7 @@ final class TaskSpecifications {
         where.add(root.get("status").in(f.statuses()));
       }
       if (f.assigneeId() != null) where.add(cb.equal(root.get("assigneeId"), f.assigneeId()));
+      if (f.unassigned()) where.add(cb.isNull(root.get("assigneeId")));
       if (f.mine()) where.add(cb.equal(root.get("assigneeId"), caller));
       Expression<Instant> due = root.get("dueAt");
       if (f.overdue() != null) {

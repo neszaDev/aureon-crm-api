@@ -593,6 +593,10 @@ class ActivityIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.totalPages").value(3));
     list(token, w, "size", "2", "page", "2").andExpect(subjects("call 1"));
     list(token, w, "page", "-1").andExpect(status().isBadRequest());
+    // A page beyond what an offset can hold is the client's mistake too.
+    list(token, w, "page", String.valueOf(Integer.MAX_VALUE))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.page").exists());
     list(token, w, "size", "0").andExpect(status().isBadRequest());
     list(token, w, "size", "101").andExpect(status().isBadRequest());
   }

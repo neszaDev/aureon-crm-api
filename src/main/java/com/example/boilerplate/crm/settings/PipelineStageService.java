@@ -88,6 +88,7 @@ public class PipelineStageService {
 
   public List<StageResponse> reorder(ReorderStagesRequest r) {
     access.require(Permission.SETTINGS_MANAGE);
+    stages.lockAll();
     List<PipelineStage> all = stages.findAllByOrderByPositionAscIdAsc();
     Map<Long, PipelineStage> open =
         open(all).stream().collect(Collectors.toMap(PipelineStage::getId, Function.identity()));
@@ -107,9 +108,13 @@ public class PipelineStageService {
     return after;
   }
 
-  /** The event keeps what the stage was, every field as the "from" of a change to nothing. */
+  /**
+   * The event keeps what the stage was, every field as the "from" of a change to nothing. Under the
+   * pipeline's lock: two deletes at once can't both see another open stage and leave none.
+   */
   public void delete(long id) {
     access.require(Permission.SETTINGS_MANAGE);
+    stages.lockAll();
     PipelineStage stage = stage(id);
     if (stage.getKind() != StageKind.OPEN) {
       throw new ConflictException(

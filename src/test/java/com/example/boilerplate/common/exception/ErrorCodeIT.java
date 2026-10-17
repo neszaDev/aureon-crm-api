@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.boilerplate.crm.settings.LeadSource;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
+import com.example.boilerplate.crm.settings.PipelineStageRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.Membership;
 import com.example.boilerplate.workspace.WorkspaceContext;
@@ -38,6 +39,7 @@ class ErrorCodeIT extends WorkspaceTestSupport {
   static final String MEMBER = W + "/members/{userId}";
 
   @Autowired LeadSourceRepository sources;
+  @Autowired PipelineStageRepository stages;
   @Autowired GlobalExceptionHandler handler;
 
   @Test
@@ -57,6 +59,14 @@ class ErrorCodeIT extends WorkspaceTestSupport {
         "VALIDATION_FAILED");
     expect(send(owner, get(LEADS, w).param("size", "1000")), 400, "VALIDATION_FAILED");
     expect(send(owner, post(SOURCES, w), Map.of("name", "Trade\u0000show")), 400, "TEXT_INVALID");
+    // A time the database can't hold (PostgreSQL ends in the year 294276).
+    expect(
+        send(
+            owner,
+            post(W + "/tasks", w),
+            Map.of("title", "Far", "dueAt", "+300000-01-01T00:00:00Z")),
+        400,
+        "TEXT_INVALID");
     expect(
             send(owner, put(STAGES + "/order", w), Map.of("stageIds", List.of(won))),
             400,
@@ -188,6 +198,45 @@ class ErrorCodeIT extends WorkspaceTestSupport {
     var answer = handler.integrity(race, new MockHttpServletRequest("POST", "/x"));
     assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(json.writeValueAsString(answer.getBody())).contains("\"code\":\"DUPLICATE_NAME\"");
+  }
+
+  /**
+   * A delete that got past the service's in-use check (a deal or lead written at the same moment)
+   * meets the foreign key, and answers with the same code as the check.
+   */
+  @Test
+  void inUseRaceHasItsCode() throws Exception {
+    String email = uniqueEmail();
+    String owner = tokenFor(email);
+    long w = createWorkspace(owner, "Acme");
+    Membership m = new Membership(w, userId(email), email, WorkspaceRole.OWNER);
+    long stage = openStageIds(owner, w).get(0);
+    long source = sourceId(owner, w, "Website");
+    send(owner, post(W + "/deals", w), Map.of("name", "D", "amount", "1", "stageId", stage))
+        .andExpect(status().isCreated());
+    send(owner, post(LEADS, w), Map.of("firstName", "Ada", "sourceId", source))
+        .andExpect(status().isCreated());
+
+    Map<String, Runnable> deletes =
+        Map.of(
+            "STAGE_IN_USE", () -> stages.deleteAllByIdInBatch(List.of(stage)),
+            "SOURCE_IN_USE", () -> sources.deleteAllByIdInBatch(List.of(source)));
+    for (var delete : deletes.entrySet()) {
+      DataIntegrityViolationException race =
+          catchThrowableOfType(
+              DataIntegrityViolationException.class,
+              () ->
+                  WorkspaceContext.runAs(
+                      m,
+                      () -> {
+                        delete.getValue().run();
+                        return null;
+                      }));
+
+      var answer = handler.integrity(race, new MockHttpServletRequest("DELETE", "/x"));
+      assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(answer.getBody().code()).hasToString(delete.getKey());
+    }
   }
 
   @Test
