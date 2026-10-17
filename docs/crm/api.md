@@ -40,7 +40,7 @@ Ref        = { id, name }                             // company, stage, source
 |---|---|---|
 | `GET /users/me` | → `UserResponse` + `displayName?` | |
 | `PUT /users/me` | `{ displayName? (≤100) }` → `UserResponse` | |
-| `POST /users/me/password` | `{ currentPassword, newPassword (8-72) }` → `AuthTokensResponse` | 401 wrong current password; revokes every other session and starts a new one |
+| `POST /users/me/password` | `{ currentPassword, newPassword (6-72, as registration) }` → `AuthTokensResponse` | 400 with `fieldErrors.currentPassword` when it is wrong (not 401: that would end the session); wrong attempts count toward the per-email sign-in failure limit (429); revokes every other session and starts a new one |
 | `POST /auth/register` | unchanged | 403 when `REGISTRATION_ENABLED=false` (invite-only) |
 
 ## Workspaces, members, invitations
