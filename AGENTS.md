@@ -33,7 +33,8 @@ src/main/java/com/example/boilerplate/
   workspace/   workspaces, members, roles + permissions, WorkspaceContext, the access
                interceptor and tenant resolver; invitation/ (links, preview, accept, register)
   audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
-  crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources
+  crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources;
+               common/ = what every record type shares (CrmRecord, ListParams, TextSearch, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
                InvitationService
@@ -99,6 +100,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   extend `WorkspaceOwnedEntity`. Inside a workspace route every query on them, including a JPQL
   join from a tenant-owned entity, must bind `WorkspaceContext.workspaceId()` explicitly. Outside
   one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
+- **Audit changes:** an update's event stores `AuditChanges.recordDiff(before, after)` of the
+  response DTOs (it drops `version`, `createdAt`, `updatedAt`) and nothing when that is empty; a
+  create stores empty changes and the record's label.
 - **Native SQL** is not filtered by `@TenantId`: it must bind the workspace id explicitly, needs a
   cross-workspace test, and must never load workspace-owned entities.
 - **`WorkspaceContext.runAs(...)`** (seeders, tests) only outside a transaction: Hibernate reads

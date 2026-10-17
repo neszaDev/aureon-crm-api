@@ -1,7 +1,9 @@
 package com.example.boilerplate.workspace;
 
+import com.example.boilerplate.workspace.dto.MemberRef;
 import com.example.boilerplate.workspace.dto.MemberResponse;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +20,15 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
   Optional<Membership> findMembership(long workspaceId, String email);
 
   Optional<WorkspaceMember> findByWorkspaceIdAndUserId(long workspaceId, long userId);
+
+  /** Who of {@code userIds} is a member of the workspace; one row per member. */
+  @Query(
+      """
+      select new com.example.boilerplate.workspace.dto.MemberRef(u.id, u.email, u.displayName)
+      from WorkspaceMember m
+      join User u on u.id = m.userId
+      where m.workspaceId = :workspaceId and m.userId in :userIds""")
+  List<MemberRef> findRefs(long workspaceId, Collection<Long> userIds);
 
   boolean existsByWorkspaceIdAndUserId(long workspaceId, long userId);
 
