@@ -12,6 +12,13 @@ class TextsTest {
   static final List<String> BLANKS = List.of("", "   ", "\t\n", "　", " ", " 　  ");
 
   @Test
+  void nextLineIsASpaceToo() {
+    // U+0085 is neither Character.isWhitespace nor isSpaceChar, yet (?U)\s matches it.
+    assertThat(Texts.optional("ada@example.com\u0085")).isEqualTo("ada@example.com");
+    assertThat(Texts.optional("\u0085")).isNull();
+  }
+
+  @Test
   void requiredStripsEveryKindOfSpace() {
     assertThat(Texts.required("name", "  Acme \t")).isEqualTo("Acme");
     assertThat(Texts.required("name", "　Acme Corp ")).isEqualTo("Acme Corp");

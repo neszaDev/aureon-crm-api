@@ -220,9 +220,8 @@ public class ContactService {
     return List.copyOf(tags);
   }
 
-  /** What responses show besides the contact's own columns: one query each for a whole page. */
-  private record Related(
-      Map<Long, MemberRef> owners, Map<Long, Ref> companies, Map<Long, Ref> sources) {
+  /** What a page shows besides the contacts' own columns: one query each for a whole page. */
+  private record Related(Map<Long, MemberRef> owners, Map<Long, Ref> companies) {
     MemberRef owner(Contact c) {
       return c.getOwnerId() == null ? null : owners.get(c.getOwnerId());
     }
@@ -230,27 +229,17 @@ public class ContactService {
     Ref company(Contact c) {
       return c.getCompanyId() == null ? null : companies.get(c.getCompanyId());
     }
-
-    Ref source(Contact c) {
-      return c.getSourceId() == null ? null : sources.get(c.getSourceId());
-    }
   }
 
   private Related related(List<Contact> page) {
     return new Related(
         directory.refs(page.stream().map(Contact::getOwnerId).toList()),
         companies.findAllById(ids(page, Contact::getCompanyId)).stream()
-            .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getName()))),
-        sources.findAllById(ids(page, Contact::getSourceId)).stream()
-            .collect(Collectors.toMap(s -> s.getId(), s -> new Ref(s.getId(), s.getName()))));
+            .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getName()))));
   }
 
   private static List<Long> ids(List<Contact> page, Function<Contact, Long> link) {
     return page.stream().map(link).filter(Objects::nonNull).distinct().toList();
-  }
-
-  private ContactResponse response(Contact c) {
-    return response(c, related(List.of(c)));
   }
 
   private static ContactSummary summary(Contact c, Related r) {
@@ -269,7 +258,16 @@ public class ContactService {
         c.getUpdatedAt());
   }
 
-  private static ContactResponse response(Contact c, Related r) {
+  /** One contact: what its row shows, and its source (which only this shows). */
+  private ContactResponse response(Contact c) {
+    Related r = related(List.of(c));
+    Ref source =
+        c.getSourceId() == null
+            ? null
+            : sources
+                .findById(c.getSourceId())
+                .map(s -> new Ref(s.getId(), s.getName()))
+                .orElse(null);
     return new ContactResponse(
         c.getId(),
         c.getFirstName(),
@@ -283,7 +281,7 @@ public class ContactService {
         c.getTags(),
         c.isArchived(),
         c.getUpdatedAt(),
-        r.source(c),
+        source,
         c.getNotes(),
         c.getArchivedAt(),
         c.getCreatedAt(),

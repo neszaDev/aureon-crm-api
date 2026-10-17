@@ -41,8 +41,9 @@ final class ContactSpecifications {
       if (f.ownerId() != null) where.add(cb.equal(root.get("ownerId"), f.ownerId()));
       if (f.sourceId() != null) where.add(cb.equal(root.get("sourceId"), f.sourceId()));
       if (tag != null) {
-        // Hibernate's array_position answers 0, not null, for a missing element. (Its
-        // array_contains would cast the tag to varchar[], which text[] has no @> operator for.)
+        // shortcut: array_position scans the workspace's contacts (GIN unused); switch tags to
+        // varchar(40)[] + array_contains when a workspace reaches tens of thousands of contacts.
+        // Hibernate's array_position answers 0, not null, for a missing element.
         where.add(
             cb.greaterThan(
                 cb.function(

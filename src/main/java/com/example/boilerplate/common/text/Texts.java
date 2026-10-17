@@ -28,7 +28,8 @@ public final class Texts {
     return start == end ? null : value.substring(start, end);
   }
 
+  // U+0085 (next line) is neither, yet a Unicode space to regexes with (?U), as in email patterns.
   private static boolean isSpace(char c) {
-    return Character.isWhitespace(c) || Character.isSpaceChar(c);
+    return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '\u0085';
   }
 }

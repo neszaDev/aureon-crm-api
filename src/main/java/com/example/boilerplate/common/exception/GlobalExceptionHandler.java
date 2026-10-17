@@ -30,24 +30,33 @@ public class GlobalExceptionHandler {
   private static final String DATA_EXCEPTION_CLASS = "22";
   private static final String CHARACTER_NOT_IN_REPERTOIRE = "22021";
 
+  /** Too long, out of range, a NUL character, an untranslatable character. */
+  private static final Set<String> CLIENT_DATA_EXCEPTIONS =
+      Set.of("22001", "22003", CHARACTER_NOT_IN_REPERTOIRE, "22P05");
+
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
     return error(HttpStatus.CONFLICT, e.getMessage(), r, Map.of());
   }
 
   /**
-   * A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). A
-   * PostgreSQL data exception (SQLSTATE class 22: a value too long or out of range, text with a NUL
-   * character, which PostgreSQL refuses in any text column or parameter) is the client's mistake
-   * instead, and Spring reports it as an integrity violation too.
+   * A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). Some
+   * PostgreSQL data exceptions are the client's mistake instead (a value too long or out of range,
+   * text with a NUL character, which PostgreSQL refuses in any text column or parameter), and
+   * Spring reports them as integrity violations too. The rest of SQLSTATE class 22 (division by
+   * zero, an invalid regex, ...) is a server bug: 500.
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
     if (NestedExceptionUtils.getMostSpecificCause(e) instanceof SQLException sql
         && sql.getSQLState() != null
         && sql.getSQLState().startsWith(DATA_EXCEPTION_CLASS)) {
+      String state = sql.getSQLState();
+      if (!CLIENT_DATA_EXCEPTIONS.contains(state)) return generic(e, r);
+      // The state, not the message: it can quote the value.
+      log.warn("Data exception {} on {} {}", state, r.getMethod(), route(r));
       String message =
-          CHARACTER_NOT_IN_REPERTOIRE.equals(sql.getSQLState())
+          CHARACTER_NOT_IN_REPERTOIRE.equals(state)
               ? "Text must not contain null characters"
               : "Invalid value";
       return error(HttpStatus.BAD_REQUEST, message, r, Map.of());
