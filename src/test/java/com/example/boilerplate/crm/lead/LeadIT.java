@@ -3,6 +3,7 @@ package com.example.boilerplate.crm.lead;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.contains;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -829,6 +830,27 @@ class LeadIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.firstName").value("B's"))
         .andExpect(jsonPath("$.status").value("NEW"))
         .andExpect(jsonPath("$.version").value(0));
+  }
+
+  @Test
+  void removingAMemberLeavesTheirLeadsUnassigned() throws Exception {
+    String ownerToken = tokenFor(uniqueEmail());
+    long w = createWorkspace(ownerToken, "Acme");
+    String repEmail = uniqueEmail();
+    String rep = tokenFor(repEmail);
+    addMember(w, repEmail, WorkspaceRole.SALES_REP);
+    long id = create(rep, w, Map.of("firstName", "Rep's"));
+
+    send(
+            ownerToken,
+            delete("/api/v1/workspaces/{workspaceId}/members/{userId}", w, userId(repEmail)))
+        .andExpect(status().isNoContent());
+
+    send(ownerToken, get(LEAD, w, id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.firstName").value("Rep's"))
+        .andExpect(jsonPath("$.owner").doesNotExist());
+    list(ownerToken, w).andExpect(names("Rep's"));
   }
 
   private long userId(String email) {

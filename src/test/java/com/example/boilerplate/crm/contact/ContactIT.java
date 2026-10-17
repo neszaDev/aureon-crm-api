@@ -1,7 +1,9 @@
 package com.example.boilerplate.crm.contact;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.contains;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -23,6 +25,8 @@ import java.util.Map;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -33,6 +37,7 @@ class ContactIT extends WorkspaceTestSupport {
   static final String COMPANIES = "/api/v1/workspaces/{workspaceId}/companies";
 
   @Autowired AuditEventRepository events;
+  @Autowired JdbcTemplate jdbc;
 
   @Test
   void createGetUpdate() throws Exception {
@@ -495,6 +500,56 @@ class ContactIT extends WorkspaceTestSupport {
     send(b, get(CONTACT, wb, ofB))
         .andExpect(jsonPath("$.firstName").value("B's"))
         .andExpect(jsonPath("$.version").value(0));
+  }
+
+  /** The service checks the links (400); the composite foreign keys are the backstop. */
+  @Test
+  void linksToAnotherWorkspaceFailInTheDatabase() throws Exception {
+    String a = tokenFor(uniqueEmail());
+    long wa = createWorkspace(a, "A");
+    String bEmail = uniqueEmail();
+    String b = tokenFor(bEmail);
+    long wb = createWorkspace(b, "B");
+    long own = create(a, wa, Map.of("firstName", "Ada"));
+    Map<String, Long> theirs =
+        Map.of(
+            "company_id", company(b, wb, "B's"),
+            "source_id", firstSource(b, wb).get("id").asLong(),
+            "owner_id", userId(bEmail));
+
+    theirs.forEach(
+        (column, value) ->
+            assertThatThrownBy(
+                    () ->
+                        jdbc.update(
+                            "UPDATE contacts SET " + column + " = ? WHERE id = ?", value, own))
+                .as(column)
+                .isInstanceOf(DataIntegrityViolationException.class));
+    send(a, get(CONTACT, wa, own))
+        .andExpect(jsonPath("$.company").doesNotExist())
+        .andExpect(jsonPath("$.source").doesNotExist())
+        .andExpect(jsonPath("$.version").value(0));
+  }
+
+  @Test
+  void removingAMemberLeavesTheirContactsUnassigned() throws Exception {
+    String ownerToken = tokenFor(uniqueEmail());
+    long w = createWorkspace(ownerToken, "Acme");
+    String repEmail = uniqueEmail();
+    String rep = tokenFor(repEmail);
+    addMember(w, repEmail, WorkspaceRole.SALES_REP);
+    long id = create(rep, w, Map.of("firstName", "Rep's"));
+
+    send(
+            ownerToken,
+            delete("/api/v1/workspaces/{workspaceId}/members/{userId}", w, userId(repEmail)))
+        .andExpect(status().isNoContent());
+
+    send(ownerToken, get(CONTACT, w, id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.firstName").value("Rep's"))
+        .andExpect(jsonPath("$.owner").doesNotExist());
+    list(ownerToken, w).andExpect(jsonPath("$.content[*].id", contains((int) id)));
   }
 
   private long userId(String email) {
