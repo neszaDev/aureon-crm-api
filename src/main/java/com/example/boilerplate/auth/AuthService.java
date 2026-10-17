@@ -8,6 +8,7 @@ import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
 import com.example.boilerplate.user.dto.ChangePasswordRequest;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -41,7 +42,7 @@ public class AuthService {
     if (!registrationEnabled) throw new AccessDeniedException("Registration is disabled");
     requireHashable("password", r.password());
     rateLimiter.consume(Policy.REGISTER_PER_IP, clientIp);
-    if (users.existsByEmail(r.email().toLowerCase()))
+    if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
       throw new ConflictException("Email is already registered");
     return refreshTokens.create(users.save(new User(r.email(), encoder.encode(r.password()))));
   }
@@ -51,7 +52,7 @@ public class AuthService {
    * is slow from any number of IPs. A blocked email stays blocked for the right password too.
    */
   public AuthTokensResponse login(LoginRequest r, String clientIp) {
-    String email = r.email().toLowerCase();
+    String email = r.email().toLowerCase(Locale.ROOT);
     rateLimiter.consume(Policy.LOGIN_PER_IP, clientIp);
     rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
     User u =

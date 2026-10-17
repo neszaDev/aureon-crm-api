@@ -8,6 +8,7 @@ import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.settings.dto.*;
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -118,7 +119,7 @@ public class PipelineStageService {
 
   /** The name without blanks around it, unless another stage has it (any case); 0: a new one. */
   private String uniqueName(String name, long exceptId) {
-    String stripped = name.strip();
+    String stripped = Texts.required("name", name);
     if (stages.existsByNameIgnoreCaseAndIdNot(stripped, exceptId)) {
       throw new ConflictException("A stage with this name already exists");
     }

@@ -93,6 +93,20 @@ class WorkspaceIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.fieldErrors.timezone").exists());
   }
 
+  /** {@code @NotBlank} trims only ASCII blanks; the service rejects an ideographic space too. */
+  @Test
+  void nameOfUnicodeSpacesIs400() throws Exception {
+    String token = tokenFor(uniqueEmail());
+
+    create(token, workspace("　", "EUR", "Europe/Paris"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.name").value("must not be blank"));
+    long id = createWorkspace(token, "Acme");
+    update(token, id, workspace("　 ", "EUR", "Europe/Paris"), 0L)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.name").value("must not be blank"));
+  }
+
   @Test
   void nonMemberGets404() throws Exception {
     String owner = tokenFor(uniqueEmail());

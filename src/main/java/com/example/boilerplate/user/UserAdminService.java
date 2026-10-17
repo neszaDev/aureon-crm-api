@@ -4,6 +4,7 @@ import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
+import java.util.Locale;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,7 +56,7 @@ public class UserAdminService {
     User target = notSelf(requireAdmin(actorEmail), user(id), "You cannot change your own account");
     boolean changed = false;
     if (r.email() != null && !r.email().equalsIgnoreCase(target.getEmail())) {
-      if (users.existsByEmail(r.email().toLowerCase()))
+      if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
         throw new ConflictException("Email is already registered");
       target.changeEmail(r.email());
       changed = true;

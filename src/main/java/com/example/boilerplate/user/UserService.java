@@ -1,5 +1,6 @@
 package com.example.boilerplate.user;
 
+import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.user.dto.UpdateProfileRequest;
 import com.example.boilerplate.user.dto.UserResponse;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -21,12 +22,11 @@ public class UserService {
     return mapper.toResponse(find(email));
   }
 
-  /** Trims the name; a blank one clears it. */
+  /** Strips the name; a blank one clears it. */
   @Transactional
   public UserResponse updateProfile(String email, UpdateProfileRequest r) {
     User user = find(email);
-    String name = r.displayName() == null ? "" : r.displayName().strip();
-    user.changeDisplayName(name.isEmpty() ? null : name);
+    user.changeDisplayName(Texts.optional(r.displayName()));
     return mapper.toResponse(user);
   }
 

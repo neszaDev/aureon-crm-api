@@ -6,6 +6,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.crm.settings.WorkspaceDefaults;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
@@ -53,7 +54,8 @@ public class WorkspaceService {
   public WorkspaceResponse create(String email, CreateWorkspaceRequest r) {
     User user = users.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
     Workspace w =
-        workspaces.save(new Workspace(r.name().strip(), r.defaultCurrency(), r.timezone()));
+        workspaces.save(
+            new Workspace(Texts.required("name", r.name()), r.defaultCurrency(), r.timezone()));
     members.save(new WorkspaceMember(w.getId(), user.getId(), WorkspaceRole.OWNER));
     defaults.seed(w.getId());
     // No workspace context yet: the workspace is being created.
@@ -80,7 +82,7 @@ public class WorkspaceService {
     Workspace w = workspace(m.workspaceId());
     Versions.check(w, r.version());
     Map<String, Object> before = auditChanges.snapshot(response(w, m.role()));
-    w.update(r.name().strip(), r.defaultCurrency(), r.timezone());
+    w.update(Texts.required("name", r.name()), r.defaultCurrency(), r.timezone());
     // Flush so the response carries the new version and updatedAt.
     WorkspaceResponse after = response(workspaces.saveAndFlush(w), m.role());
     Map<String, Map<String, Object>> changes =

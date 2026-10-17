@@ -2,6 +2,7 @@ package com.example.boilerplate.user;
 
 import com.example.boilerplate.common.entity.AuditableEntity;
 import jakarta.persistence.*;
+import java.util.Locale;
 
 @Entity
 @Table(name = "users")
@@ -22,12 +23,12 @@ public class User extends AuditableEntity {
   protected User() {}
 
   public User(String email, String passwordHash) {
-    this.email = email.toLowerCase();
+    this.email = email.toLowerCase(Locale.ROOT);
     this.passwordHash = passwordHash;
   }
 
   public void changeEmail(String email) {
-    this.email = email.toLowerCase();
+    this.email = email.toLowerCase(Locale.ROOT);
   }
 
   public void changeDisplayName(String displayName) {

@@ -12,6 +12,7 @@ import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.security.Tokens;
+import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.User;
@@ -184,8 +185,7 @@ public class InvitationService {
     if (users.existsByEmail(i.getEmail()))
       throw new ConflictException("Email is already registered");
     User user = new User(i.getEmail(), encoder.encode(r.password()));
-    String name = r.displayName() == null ? "" : r.displayName().strip();
-    user.changeDisplayName(name.isEmpty() ? null : name);
+    user.changeDisplayName(Texts.optional(r.displayName()));
     join(i, users.save(user));
     return refreshTokens.create(user);
   }
