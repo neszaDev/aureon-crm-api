@@ -61,7 +61,9 @@ Rules beyond the matrix:
   permission needed), another member reassigns and null unassigns, both with `RECORDS_ASSIGN`
   only. A new owner must be a member of the workspace (400). So a sales rep owns what they create
   and can't hand it on. An unowned record (its owner left the workspace) can be edited only with
-  `RECORDS_EDIT_ANY`.
+  `RECORDS_EDIT_ANY`. A task is the exception: its creator can still edit it after the assignee
+  left. An activity is not: its author is the record of who wrote it, never reassigned, so an
+  activity whose author left can be edited or deleted only with `RECORDS_EDIT_ANY`.
 - Tasks: editing needs `RECORDS_EDIT_ANY`, or being the task's assignee or its creator
   (`WorkspaceAccess.requireEditableBy`); completing, reopening and cancelling are edits. Another
   member only reads it. Tasks are never deleted.
