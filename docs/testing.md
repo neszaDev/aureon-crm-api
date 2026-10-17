@@ -61,6 +61,7 @@ What the existing ITs cover:
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
+| `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types |
 | `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index |
 | `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
 | `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |

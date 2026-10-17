@@ -39,7 +39,9 @@ class SecurityIT extends AbstractIntegrationTest {
         .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
         .andExpect(jsonPath("$.status").value(401))
         .andExpect(jsonPath("$.message").value("Authentication required"))
-        .andExpect(jsonPath("$.path").value("/api/v1/users/me"));
+        .andExpect(jsonPath("$.path").value("/api/v1/users/me"))
+        // Not a rule of the API: no machine-readable code, the status says it all.
+        .andExpect(jsonPath("$.code").doesNotExist());
     mvc.perform(get("/api/v1/test-results")).andExpect(status().isUnauthorized());
     mvc.perform(get("/actuator/metrics")).andExpect(status().isUnauthorized());
   }

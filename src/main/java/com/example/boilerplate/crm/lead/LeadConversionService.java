@@ -108,7 +108,7 @@ public class LeadConversionService {
     long owner =
         lead.getOwnerId() != null ? lead.getOwnerId() : WorkspaceContext.require().userId();
 
-    checkContact(r.contactId());
+    Contact existing = existingContact(r.contactId());
     Long companyId = company(lead, r, owner);
     long contactId = r.contactId() != null ? r.contactId() : newContact(lead, companyId, owner);
     Long dealId = r.deal() == null ? null : newDeal(lead, r.deal(), companyId, contactId, owner);
@@ -118,7 +118,10 @@ public class LeadConversionService {
     lead.markConverted(companyId, contactId, dealId, now);
     LeadResponse after = leadService.response(leads.saveAndFlush(lead));
     Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
-    changes.putAll(linkHistory(id, contactId, companyId, dealId, now));
+    // As an activity logged on the contact: without a company in the request, the contact's.
+    Long historyCompany =
+        companyId == null && existing != null ? existing.getCompanyId() : companyId;
+    changes.putAll(linkHistory(id, contactId, historyCompany, dealId, now));
     audit.record(AuditAction.CONVERT, AuditEntityType.LEAD, id, lead.getFullName(), changes);
     return result(lead, false);
   }
@@ -140,14 +143,15 @@ public class LeadConversionService {
   }
 
   /** The contact to link, if any: of this workspace and active, like the company. */
-  private void checkContact(Long id) {
-    if (id == null) return;
+  private Contact existingContact(Long id) {
+    if (id == null) return null;
     Contact contact =
         contacts
             .findById(id)
             .orElseThrow(
                 () -> new FieldValidationException("contactId", "is not found in this workspace"));
     if (contact.isArchived()) throw new FieldValidationException("contactId", "is archived");
+    return contact;
   }
 
   /** The given company (active, of this workspace), a new one from the lead, or none. */

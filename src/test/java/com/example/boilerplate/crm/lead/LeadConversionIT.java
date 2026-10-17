@@ -591,6 +591,38 @@ class LeadConversionIT extends WorkspaceTestSupport {
   }
 
   /**
+   * Onto an existing contact without a company in the request: the lead's history gets the
+   * contact's company, as an activity logged on that contact would.
+   */
+  @Test
+  void historyOfAnExistingContactGetsItsCompany() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long initech = id(send(token, post(COMPANIES, w), Map.of("name", "Initech")));
+    long contact =
+        id(send(token, post(CONTACTS, w), Map.of("firstName", "Grace", "companyId", initech)));
+    long lead = qualifiedLead(token, w, Map.of("firstName", "Grace", "companyName", "Ignored"));
+    long call =
+        id(
+            send(
+                token,
+                post(ACTIVITIES, w),
+                Map.of("type", "CALL", "subject", "Intro", "leadId", lead)));
+    long task = id(send(token, post(TASKS, w), Map.of("title", "Follow up", "leadId", lead)));
+
+    convert(token, w, lead, conversion(null, false, contact, null))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.company").doesNotExist());
+
+    send(token, get(ACTIVITIES + "/{id}", w, call))
+        .andExpect(jsonPath("$.contact.id").value(contact))
+        .andExpect(jsonPath("$.company.id").value(initech));
+    send(token, get(TASKS + "/{id}", w, task))
+        .andExpect(jsonPath("$.contact.id").value(contact))
+        .andExpect(jsonPath("$.company.id").value(initech));
+  }
+
+  /**
    * The bulk updates bind the workspace: another one's rows stay untouched whatever the lead id.
    */
   @Test

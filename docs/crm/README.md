@@ -70,10 +70,12 @@ derived products rename it (frontend `AppConfig.name` and locale copy).
 Any of the first four may move to any other of the four. `CONVERTED` is reached only through
 conversion, which requires `QUALIFIED`. Conversion runs in one transaction: it links to or creates
 the company, links to or creates the contact, optionally creates a deal, and marks the lead
-converted. The lead's history comes along: its activities and tasks are linked to the contact
-(and to the company and deal, where they have none), so the contact's timeline shows them.
-Retrying a conversion that already happened returns the existing result and creates nothing. The new records belong to the lead's owner; an unassigned lead's go to whoever converts
-it (only a member who may edit any record can).
+converted. The lead's history comes along: its activities and tasks are linked to the contact (and
+to the company and deal, where they have none; onto an existing contact without a company in the
+request, the contact's company), so the contact's timeline shows them. Retrying a conversion that
+already happened returns the existing result and creates nothing. The new records belong to the
+lead's owner; an unassigned lead's go to whoever converts it (only a member who may edit any record
+can).
 
 ### Deal
 

@@ -198,6 +198,9 @@ public class GlobalExceptionHandler {
 
   /** The rule of the constraint Hibernate names (read from PostgreSQL's message), else CONFLICT. */
   private static ErrorCode uniqueRule(Throwable e) {
+    // shortcut: Hibernate's PostgreSQL dialect parses the constraint name out of the English
+    // server message, so localized lc_messages fall back to CONFLICT; upgrade to pgjdbc's
+    // ServerErrorMessage.getConstraint() if the database may speak another language.
     for (Throwable t = e; t != null; t = t.getCause()) {
       if (t instanceof org.hibernate.exception.ConstraintViolationException c
           && c.getConstraintName() != null) {

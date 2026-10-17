@@ -43,7 +43,8 @@ class ErrorHandlingIT extends AbstractIntegrationTest {
                 .content("{not json"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.status").value(400))
-        .andExpect(jsonPath("$.path").value("/api/v1/test-results"));
+        .andExpect(jsonPath("$.path").value("/api/v1/test-results"))
+        .andExpect(jsonPath("$.code").doesNotExist());
   }
 
   @Test
