@@ -14,7 +14,7 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
-| 403 | Valid token without the required role (admin endpoints) |
+| 403 | Valid token without the required role (admin endpoints); `POST /auth/register` when `REGISTRATION_ENABLED=false` |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
 | 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
 | 413 | Upload larger than `FILES_MAX_SIZE` |
@@ -113,6 +113,28 @@ curl --request PATCH 'http://localhost:8080/api/v1/test-results/<id>' \
 curl --request DELETE 'http://localhost:8080/api/v1/test-results/<id>' \
   --header "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+## Your account
+
+```sh
+# Set or clear your display name (trimmed; blank or missing clears it; up to 100 characters)
+curl --request PUT 'http://localhost:8080/api/v1/users/me' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" --header 'Content-Type: application/json' \
+  --data-raw '{"displayName":"Ada Lovelace"}'
+
+# Change your password; the response is a new token pair, like login
+curl --request POST 'http://localhost:8080/api/v1/users/me/password' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" --header 'Content-Type: application/json' \
+  --data-raw '{"currentPassword":"a-secure-password","newPassword":"another-password"}'
+```
+
+- `GET` and `PUT /users/me` return `id`, `email`, `displayName` (absent when unset), `role` and
+  `createdAt`.
+- A wrong `currentPassword` is a 400 with `fieldErrors.currentPassword`, never a 401: a 401 would
+  tell the client its session is gone. Wrong attempts count toward the per-email sign-in failure
+  limit (429 once it is used up). `newPassword` follows the registration rules (6-72 characters).
+- On success every refresh token of the user is revoked and a new pair is returned, so other
+  devices must sign in again. Their access tokens keep working until they expire.
 
 ## User management (admins)
 

@@ -38,7 +38,8 @@ class RefreshTokenServiceTest {
             jwt,
             new AuthProperties(
                 new AuthProperties.Jwt("x".repeat(32), Duration.ofMinutes(15)),
-                Duration.ofDays(30)));
+                Duration.ofDays(30),
+                true));
   }
 
   @Test

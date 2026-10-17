@@ -26,6 +26,7 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `JWT_SECRET` | dev-only placeholder | yes | At least **32 bytes** (HS256). Checked at startup; the value is never logged. Generate one with `openssl rand -hex 32`. |
 | `JWT_ACCESS_TOKEN_TTL` | `PT15M` | no | ISO-8601 duration, must be positive |
 | `REFRESH_TOKEN_TTL` | `P30D` | no | ISO-8601 duration, must be positive |
+| `REGISTRATION_ENABLED` | `true` | no | `false` makes the API invite-only: `POST /auth/register` answers 403 (`Registration is disabled`). Existing accounts still sign in. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | yes | Comma-separated; must not be empty |
 | `APP_VERSION` | `dev` | recommended | Shown at `/actuator/info` |
 | `FILES_DIR` | `data/files` | recommended | Upload storage; relative to the working directory (`/app` in the image, which has a volume there in compose). Must be writable. One instance only: use shared storage before scaling out. |

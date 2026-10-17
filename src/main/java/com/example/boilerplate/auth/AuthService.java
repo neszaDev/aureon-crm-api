@@ -2,10 +2,14 @@ package com.example.boilerplate.auth;
 
 import com.example.boilerplate.auth.dto.*;
 import com.example.boilerplate.common.exception.ConflictException;
+import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
+import com.example.boilerplate.user.dto.ChangePasswordRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,19 +21,23 @@ public class AuthService {
   private final PasswordEncoder encoder;
   private final RefreshTokenService refreshTokens;
   private final RateLimiter rateLimiter;
+  private final boolean registrationEnabled;
 
   public AuthService(
       UserRepository users,
       PasswordEncoder encoder,
       RefreshTokenService refreshTokens,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      AuthProperties properties) {
     this.users = users;
     this.encoder = encoder;
     this.refreshTokens = refreshTokens;
     this.rateLimiter = rateLimiter;
+    this.registrationEnabled = properties.registrationEnabled();
   }
 
   public AuthTokensResponse register(RegisterRequest r, String clientIp) {
+    if (!registrationEnabled) throw new AccessDeniedException("Registration is disabled");
     rateLimiter.consume(Policy.REGISTER_PER_IP, clientIp);
     if (users.existsByEmail(r.email().toLowerCase()))
       throw new ConflictException("Email is already registered");
@@ -53,6 +61,24 @@ public class AuthService {
       rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email);
       throw new BadCredentialsException("Invalid email or password");
     }
+    return refreshTokens.create(u);
+  }
+
+  /**
+   * A wrong current password counts toward the same per-email failure limit as a wrong sign-in
+   * password, and is a 400 on the field, never a 401: a 401 tells the client the session is gone.
+   * Every session is revoked and a new one returned.
+   */
+  public AuthTokensResponse changePassword(String email, ChangePasswordRequest r) {
+    rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
+    User u =
+        users.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    if (!encoder.matches(r.currentPassword(), u.getPasswordHash())) {
+      rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email);
+      throw new FieldValidationException("currentPassword", "is incorrect");
+    }
+    u.changePasswordHash(encoder.encode(r.newPassword()));
+    refreshTokens.revokeAll(u.getId());
     return refreshTokens.create(u);
   }
 

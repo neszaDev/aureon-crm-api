@@ -28,6 +28,8 @@ app:
     secret: ${JWT_SECRET:development-only-change-this-secret-to-at-least-32-bytes}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
   security.refresh-token-ttl: ${REFRESH_TOKEN_TTL:P30D}
+  # false = invite-only: POST /auth/register answers 403.
+  security.registration-enabled: ${REGISTRATION_ENABLED:true}
   cors.allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
   files:
     # Relative paths resolve against the working directory (/app in the image).

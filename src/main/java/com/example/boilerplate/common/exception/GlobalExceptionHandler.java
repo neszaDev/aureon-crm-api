@@ -96,6 +96,12 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.UNAUTHORIZED, e.getMessage(), r, Map.of());
   }
 
+  /** A field rejected by a service (e.g. a wrong current password), shaped like bean validation. */
+  @ExceptionHandler(FieldValidationException.class)
+  ResponseEntity<ApiError> fieldInvalid(FieldValidationException e, HttpServletRequest r) {
+    return error(HttpStatus.BAD_REQUEST, "Validation failed", r, Map.of(e.field(), e.getMessage()));
+  }
+
   @ExceptionHandler(MethodArgumentNotValidException.class)
   ResponseEntity<ApiError> validation(MethodArgumentNotValidException e, HttpServletRequest r) {
     Map<String, String> fields = new LinkedHashMap<>();

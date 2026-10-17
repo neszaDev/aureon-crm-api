@@ -36,6 +36,7 @@ Migrations run automatically at application startup, in every profile.
 | `V3__make_refresh_token_hash_varchar.sql` | `token_hash` CHAR(64) → VARCHAR(64) |
 | `V4__add_test_results.sql` | `test_results` (owner FK, score check 0–100, owner/date index) |
 | `V5__add_stored_files.sql` | `stored_files` (file metadata; owner FK cascades; the bytes live in `FILES_DIR`) |
+| `V6__user_display_name.sql` | `users.display_name` (optional, up to 100 characters) |
 
 ## Local database
 

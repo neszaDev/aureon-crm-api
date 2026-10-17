@@ -2,12 +2,10 @@ package com.example.boilerplate.auth;
 
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
+import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserAccessChangedEvent;
-import java.nio.charset.StandardCharsets;
-import java.security.*;
 import java.time.*;
-import java.util.Base64;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +14,6 @@ public class RefreshTokenService {
   private final RefreshTokenRepository tokens;
   private final JwtService jwt;
   private final Duration ttl;
-  private final SecureRandom random = new SecureRandom();
 
   public RefreshTokenService(
       RefreshTokenRepository tokens, JwtService jwt, AuthProperties properties) {
@@ -27,14 +24,16 @@ public class RefreshTokenService {
 
   public AuthTokensResponse create(User user) {
     tokens.deleteByExpiresAtBefore(Instant.now());
-    String raw = generate();
-    tokens.save(new RefreshToken(user, hash(raw), Instant.now().plus(ttl)));
+    String raw = Tokens.random();
+    tokens.save(new RefreshToken(user, Tokens.sha256Hex(raw), Instant.now().plus(ttl)));
     return response(user, raw);
   }
 
   public AuthTokensResponse rotate(String raw) {
     RefreshToken token =
-        tokens.findByTokenHashForUpdate(hash(raw)).orElseThrow(InvalidRefreshTokenException::new);
+        tokens
+            .findByTokenHashForUpdate(Tokens.sha256Hex(raw))
+            .orElseThrow(InvalidRefreshTokenException::new);
     if (token.getExpiresAt().isBefore(Instant.now())) {
       tokens.delete(token);
       throw new InvalidRefreshTokenException();
@@ -45,33 +44,22 @@ public class RefreshTokenService {
   }
 
   public void revoke(String raw) {
-    tokens.findByTokenHashForUpdate(hash(raw)).ifPresent(tokens::delete);
+    tokens.findByTokenHashForUpdate(Tokens.sha256Hex(raw)).ifPresent(tokens::delete);
   }
 
-  /** A changed email or role signs the user out everywhere (runs in the caller's transaction). */
+  /** Signs the user out everywhere (runs in the caller's transaction). */
+  public void revokeAll(long userId) {
+    tokens.deleteByUserId(userId);
+  }
+
+  /** A changed email or role signs the user out everywhere. */
   @EventListener
-  void revokeAll(UserAccessChangedEvent event) {
-    tokens.deleteByUserId(event.userId());
+  void onUserAccessChanged(UserAccessChangedEvent event) {
+    revokeAll(event.userId());
   }
 
   private AuthTokensResponse response(User user, String refresh) {
     return new AuthTokensResponse(
         jwt.issue(user), "Bearer", jwt.expiresInSeconds(), refresh, ttl.toSeconds());
-  }
-
-  private String generate() {
-    byte[] bytes = new byte[32];
-    random.nextBytes(bytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-  }
-
-  private String hash(String value) {
-    try {
-      return java.util.HexFormat.of()
-          .formatHex(
-              MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 is unavailable", e);
-    }
   }
 }

@@ -20,7 +20,7 @@ class JwtServiceTest {
 
   private static AuthProperties props(String secret) {
     return new AuthProperties(
-        new AuthProperties.Jwt(secret, Duration.ofMinutes(15)), Duration.ofDays(30));
+        new AuthProperties.Jwt(secret, Duration.ofMinutes(15)), Duration.ofDays(30), true);
   }
 
   @Test

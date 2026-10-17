@@ -42,7 +42,7 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
-                    .requestMatchers("/api/v1/users/me")
+                    .requestMatchers("/api/v1/users/me", "/api/v1/users/me/password")
                     .authenticated()
                     // User management; UserAdminService re-checks the role in the database.
                     .requestMatchers("/api/v1/users", "/api/v1/users/**")

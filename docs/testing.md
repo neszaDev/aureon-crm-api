@@ -41,6 +41,8 @@ What the existing ITs cover:
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
 | `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For` |
 | `file/FileIT` | Upload, download headers, owner isolation, type/size rejection, blob cleanup |
+| `user/ProfileIT` | Display name set/clear/limit, password change (sessions rotated, wrong password is a 400 field error) |
+| `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
 

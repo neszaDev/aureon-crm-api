@@ -1,6 +1,8 @@
 package com.example.boilerplate.user;
 
+import com.example.boilerplate.user.dto.UpdateProfileRequest;
 import com.example.boilerplate.user.dto.UserResponse;
+import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,5 +18,10 @@ public class UserController {
   @GetMapping("/me")
   UserResponse me(Authentication authentication) {
     return service.currentUser(authentication.getName());
+  }
+
+  @PutMapping("/me")
+  UserResponse updateMe(Authentication authentication, @Valid @RequestBody UpdateProfileRequest r) {
+    return service.updateProfile(authentication.getName(), r);
   }
 }
