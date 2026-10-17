@@ -13,7 +13,8 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
 3. Hibernate's `@TenantId` on every workspace-owned entity adds `workspace_id = <current>` to every
    query and sets it on insert, so a repository query can't return another workspace's rows even
    if a filter is forgotten. Requests without a workspace context use a tenant id that matches
-   nothing; only startup code and the demo seeder run as the root tenant, explicitly.
+   nothing. There is no root tenant: code outside a request (the demo seeder, tests) runs each
+   workspace's inserts inside `WorkspaceContext.runAs(...)`, and only outside a transaction.
    This covers load by id too: in Hibernate 6.6.53, `findById` / `EntityManager.find` add the
    tenant restriction, so another workspace's id is not found (404) and services use the plain
    repository `findById` (verified by `TenantIsolationIT`). Hibernate does not re-check the tenant
@@ -47,6 +48,9 @@ explicitly; each such query has a cross-workspace test.
 Rules beyond the matrix:
 
 - An admin can't invite, promote to, demote or remove an **owner**. Only owners manage owners.
+- Invitations: an admin can't create or revoke an **owner** invitation (403). Revoking an accepted
+  or an already revoked invitation is 409; an expired one can be revoked. The pending list hides
+  expired invitations and shows the newest first.
 - The last owner can't be demoted or removed, and can't leave. An account that is the last owner
   of a workspace can't be deleted by a system admin (409) until another owner exists.
 - Anyone can leave a workspace (remove their own membership), except the last owner.

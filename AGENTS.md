@@ -5,15 +5,24 @@ Keep this file the single source of truth; `CLAUDE.md` only imports it.
 
 ## What this is
 
-A Spring Boot 3.5 / Java 21 REST API on PostgreSQL: JWT access tokens + rotating refresh
-tokens, sign-in rate limits, admin user management, owner-scoped file uploads and a
-`test-results` CRUD example, Flyway migrations, Actuator/Prometheus, Docker. Architecture
-overview: [docs/architecture.md](docs/architecture.md). Why the repo is set up this way:
+Aureon CRM API: the backend of a multi-tenant CRM (Spring Boot 3.5 / Java 21 / PostgreSQL).
+Every business is a **workspace** with members, roles and invitation links; its data is
+isolated per request by a tenant boundary, changes are written to an append-only audit trail,
+and the CRM features (pipeline stages and lead sources so far) live under
+`/api/v1/workspaces/{workspaceId}/...`. The CRM specification, data model, permission matrix and
+API contract are in [docs/crm/](docs/crm/README.md).
+
+The repo was built from `spring-postgres-boilerplate`, so its accounts (JWT access tokens +
+rotating refresh tokens, sign-in rate limits, admin user management), owner-scoped file uploads,
+`test-results` example, Flyway migrations, Actuator/Prometheus and Docker setup are still here.
+The Java package stays `com.example.boilerplate`. Architecture overview:
+[docs/architecture.md](docs/architecture.md). Why the repo is set up this way:
 [docs/plans/0001-repository-hardening.md](docs/plans/0001-repository-hardening.md).
 
 Deeper guides, read the relevant one before changing that area:
 [configuration](docs/configuration.md) · [database/migrations](docs/database.md) ·
 [testing](docs/testing.md) · [CI](docs/ci.md) · [API](docs/api.md) · [deployment](docs/deployment.md)
+· [CRM](docs/crm/README.md) (spec, data model, permissions, API contract)
 
 ## Layout
 
@@ -21,11 +30,16 @@ Deeper guides, read the relevant one before changing that area:
 src/main/java/com/example/boilerplate/
   auth/        register/login/refresh/logout, JwtService, RefreshToken*, AuthProperties
   user/        User entity, /api/v1/users/me, admin user management, AdminBootstrap
+  workspace/   workspaces, members, roles + permissions, WorkspaceContext, the access
+               interceptor and tenant resolver; invitation/ (links, preview, accept, register)
+  audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
+  crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService
   file/        owner-scoped uploads (/api/v1/files), FileStorage + LocalFileStorage
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
-  common/      AuditableEntity, GlobalExceptionHandler + ApiError, request-id filter
+  common/      AuditableEntity, WorkspaceOwnedEntity, GlobalExceptionHandler + ApiError,
+               request-id filter, validation constraints, Tokens
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
 infra/         Azure: main.bicep (one environment of both apps) + deploy.sh, docs/deployment.md
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make
@@ -36,7 +50,8 @@ src/main/resources/
   db/migration/V*__*.sql  Flyway, the only schema authority
 src/test/java/.../
   **/*Test.java  unit tests (Surefire): no Spring context, no Docker
-  **/*IT.java    integration tests (Failsafe): extend support/AbstractIntegrationTest
+  **/*IT.java    integration tests (Failsafe): extend support/AbstractIntegrationTest, or
+                 support/WorkspaceTestSupport for workspace endpoints
 ```
 
 ## Commands
@@ -73,6 +88,19 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   mistakes must never produce a 500.
 - **Owner scoping.** Queries for user-owned data filter by the authenticated email
   (`findByIdAndOwnerEmail`). Another user's row is a 404, not a 403.
+- **Workspace endpoints** live under `/api/v1/workspaces/{workspaceId}/...`. `WorkspaceAccessInterceptor`
+  resolves the caller's membership (no membership: 404) into `WorkspaceContext`; the scope of every
+  query comes from that context (Hibernate's `@TenantId` on entities that extend
+  `WorkspaceOwnedEntity`), never from the path variable the controller receives or from a request
+  body. Services check permissions with `WorkspaceAccess.require(Permission)`.
+- **Native SQL** is not filtered by `@TenantId`: it must bind the workspace id explicitly, needs a
+  cross-workspace test, and must never load workspace-owned entities.
+- **`WorkspaceContext.runAs(...)`** (seeders, tests) only outside a transaction: Hibernate reads
+  the tenant when the session opens.
+- **Invitation tokens are never logged**, nor put in an error message or an audit event. Only
+  their SHA-256 hash is stored, and a URI under `/api/v1/invitations/{token}` counts as the token.
+- **Request DTOs** use boxed types with `@NotNull` for required numbers and booleans: a primitive
+  would turn an omitted field into `0` or `false` instead of a 400.
 - **Configuration** binds to validated `@ConfigurationProperties` records (`AuthProperties`,
   `CorsProperties`), not `@Value`. Validation failures must not echo secret values.
 - **Formatting** is google-java-format via Spotless. Don't hand-format; run `make fmt`.
@@ -83,6 +111,8 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 |---|---|
 | `src/main/resources/db/migration/` | **Applied migrations are immutable.** Add `V{next}__description.sql`; never edit, rename or delete an existing one. `ddl-auto` stays `validate`. |
 | `security/SecurityConfig.java`, `auth/` | Any change to access rules or token handling needs an IT (`SecurityIT`, `AuthFlowIT`). |
+| `workspace/` (interceptor, `WorkspaceWebConfig`, tenant resolver), `common/entity/WorkspaceOwnedEntity` | The tenant boundary. Keep `WorkspaceEndpointsGuardIT` and `TenantIsolationIT` green; a new workspace controller is picked up by the guard automatically and must pass it unchanged. |
+| `audit/`, `V8__audit_events.sql` | The trail is append-only (a trigger refuses `UPDATE`/`DELETE`). Write events with `AuditTrail` inside the transaction of the change, never separately. |
 | `application-prod.yml` | No default values for secrets (`DB_*`, `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`). |
 | `logback-spring.xml` | Prod must emit JSON to stdout. Confirm by starting the jar with `SPRING_PROFILES_ACTIVE=prod`. |
 | `docker/` (Dockerfile, compose files) | Keep the runtime image non-root. Check with `make smoke`. Compose must run with `--project-directory .` (the `make` targets do this). |
@@ -95,6 +125,8 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   `-Werror`, or excluding files from Spotless to get a green build.
 - Editing an applied Flyway migration, or `ddl-auto` other than `validate`.
 - Widening `permitAll()` matchers or catching `JwtException` more broadly to "fix" a 401.
+- Reading the workspace from a path variable or request body instead of `WorkspaceContext`, or
+  skipping the interceptor for a workspace route.
 - Committing secrets. `env/.env` is git-ignored; `env/.env.example` holds placeholders only.
 - Force-pushing or committing directly to `dev` or `main`: use a branch and a PR into `dev`.
 - Adding a framework or tool because another repo has it.
@@ -107,4 +139,4 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   `target/classes` during Maven's run. This is not a code bug. Re-run without `clean`, or
   verify in a fresh clone.
 - **API changes:** check the running app with `make up`, then Swagger UI at
-  `http://localhost:8080/swagger-ui/index.html`.
+  `http://localhost:8080/swagger-ui/index.html` (the host port is `APP_PORT`, default 8080).

@@ -16,6 +16,8 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   and the `version` the client last read. A different version means someone else changed the
   record: **409**, reload and retry. State changes (archive, convert, move, complete, ...) are
   `POST` actions; those that act on a version take it in the body too.
+- **Required fields** must be present: leaving out a required number or boolean (a stage's
+  `probability`, a lead source's `archived`) is a 400 on that field, never `0` or `false`.
 - **Lists** take `page` (≥ 0, default 0), `size` (1-100, default 20), `sort` (an upper-case
   field name allowed for that list) and `direction` (`ASC` or `DESC`), and return a Spring
   `Page` (`content`, `totalElements`, `totalPages`, `number`, `size`, ...). The id is always a
@@ -40,7 +42,7 @@ Ref        = { id, name }                             // company, stage, source
 |---|---|---|
 | `GET /users/me` | → `UserResponse` + `displayName?` | |
 | `PUT /users/me` | `{ displayName? (≤100) }` → `UserResponse` | |
-| `POST /users/me/password` | `{ currentPassword, newPassword (6-72, as registration) }` → `AuthTokensResponse` | 400 with `fieldErrors.currentPassword` when it is wrong (not 401: that would end the session); wrong attempts count toward the per-email sign-in failure limit (429); revokes every other session and starts a new one |
+| `POST /users/me/password` | `{ currentPassword, newPassword (6-72 characters and at most 72 UTF-8 bytes, as registration) }` → `AuthTokensResponse` | 400 with `fieldErrors.currentPassword` when it is wrong (not 401: that would end the session); wrong attempts count toward the per-email sign-in failure limit (429); revokes every other session and starts a new one |
 | `POST /auth/register` | unchanged | 403 when `REGISTRATION_ENABLED=false` (invite-only) |
 
 ## Workspaces, members, invitations
@@ -54,12 +56,24 @@ Ref        = { id, name }                             // company, stage, source
 | `GET /workspaces/{w}/members` | → `Member[]` (`userId, email, displayName?, role, joinedAt`) | member |
 | `PUT /workspaces/{w}/members/{userId}` | `{ role }` → `Member` | `MEMBERS_MANAGE` + owner rules |
 | `DELETE /workspaces/{w}/members/{userId}` | → 204 | `MEMBERS_MANAGE`, or the caller themselves |
-| `GET /workspaces/{w}/invitations` | → `Invitation[]` pending (`id, email, role, invitedBy: MemberRef?, createdAt, expiresAt`) | `MEMBERS_MANAGE` |
-| `POST /workspaces/{w}/invitations` | `{ email, role }` → 201 `Invitation` + `token` (shown once) | `MEMBERS_MANAGE`; 409 already a member or invited |
-| `DELETE /workspaces/{w}/invitations/{id}` | → 204 (revoked) | `MEMBERS_MANAGE` |
+| `GET /workspaces/{w}/invitations` | → `Invitation[]` pending (`id, email, role, invitedBy: MemberRef?, createdAt, expiresAt`), newest first; expired ones are not listed | `MEMBERS_MANAGE` |
+| `POST /workspaces/{w}/invitations` | `{ email, role }` → 201 `Invitation` + `token` (shown once) | `MEMBERS_MANAGE`, owner for role `OWNER` (403); 409 already a member or already has a pending invitation (an expired one is replaced) |
+| `DELETE /workspaces/{w}/invitations/{id}` | → 204 (revoked) | `MEMBERS_MANAGE`, owner for an `OWNER` invitation (403); 409 when it was already accepted or revoked (a pending or an expired one can be revoked) |
 | `GET /invitations/{token}` | → `{ workspaceId, workspaceName, email, role, expiresAt, status }`, status `PENDING`, `ACCEPTED`, `REVOKED` or `EXPIRED` | **public**; 404 unknown token |
 | `POST /invitations/{token}/accept` | → `{ workspaceId }` | signed in, email must match (403); 409 not pending |
-| `POST /invitations/{token}/register` | `{ password, displayName? }` → 201 `AuthTokensResponse` | **public**, rate-limited like registration; creates the account and the membership; 409 email already registered |
+| `POST /invitations/{token}/register` | `{ password (6-72 characters, at most 72 UTF-8 bytes), displayName? (≤100) }` → 201 `AuthTokensResponse` | **public**, rate-limited like registration; creates the account and the membership; 409 email already registered |
+
+Invitation rules:
+
+- A link works once, for 7 days, and only for the invited email (lower case). The token is shown
+  only in the response that creates the invitation; the server keeps its SHA-256 hash.
+- An admin can't invite someone as `OWNER` or revoke an `OWNER` invitation: only owners manage
+  owners (403).
+- The pending list hides expired invitations and is sorted newest first.
+- Revoking an accepted or an already revoked invitation is 409; an expired one can be revoked.
+  Inviting an email whose earlier invitation expired replaces it.
+- Accepting or registering through a link that is no longer `PENDING` is 409. The preview still
+  answers, with its status.
 
 ## Reference data
 

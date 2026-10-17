@@ -8,19 +8,24 @@ flowchart LR
   RID --> JWT[JwtAuthenticationFilter<br/>Bearer token → principal]
   JWT --> SEC{SecurityConfig<br/>permitAll or authenticated}
   SEC -->|no valid token| E401[401 ApiError<br/>ApiAuthenticationEntryPoint]
-  SEC --> CTRL[Controller<br/>@Valid, DTO records]
+  SEC --> WS{WorkspaceAccessInterceptor<br/>/workspaces/id/... only}
+  WS -->|not a member| E404[404 ApiError]
+  WS -->|membership into WorkspaceContext| CTRL[Controller<br/>@Valid, DTO records]
   CTRL --> SVC[Service<br/>@Transactional, rules]
   SVC --> REPO[Spring Data repository]
   REPO --> PG[(PostgreSQL<br/>schema by Flyway)]
   CTRL -. exceptions .-> GEH[GlobalExceptionHandler<br/>ApiError JSON]
 ```
 
+The workspace step applies only to paths under `/api/v1/workspaces/{workspaceId}`; every other
+route goes straight to its controller. See [Workspaces and tenancy](#workspaces-and-tenancy).
+
 ## Feature layout
 
-The code is organized by feature. `auth`, `user`, `testresult` and `file` each own their controller,
-service, repository, entity and `dto/` records. Cross-cutting code lives in `security`
-(filter chain, JWT filter, CORS) and `common` (base entity, error handling, request-id
-filter).
+The code is organized by feature. `auth`, `user`, `testresult`, `file`, `workspace` and the
+areas under `crm` each own their controller, service, repository, entity and `dto/` records.
+Cross-cutting code lives in `security` (filter chain, JWT filter, CORS), `audit` (the audit
+trail) and `common` (base entities, error handling, request-id filter, validation constraints).
 
 - **Controllers** only deserialize, validate (`@Valid`) and return API contracts. They never
   return JPA entities.
@@ -33,6 +38,35 @@ filter).
 - **Files** (`file`): metadata in `stored_files`, bytes behind the `FileStorage` interface
   (`LocalFileStorage`: one file per random key in `FILES_DIR`). Bytes are deleted only after
   the database change commits.
+
+## Workspaces and tenancy
+
+A workspace is one business's CRM. `workspace` owns workspaces, members, roles, permissions and
+invitations; `crm` holds the CRM features that live inside a workspace (`crm/settings`: pipeline
+stages and lead sources). The full model is in [docs/crm/](crm/README.md); the mechanism is:
+
+- **Membership per request.** `WorkspaceAccessInterceptor` (registered by `WorkspaceWebConfig` for
+  `/api/v1/workspaces/*` and below) reads the caller's membership of `{workspaceId}` from the
+  database and stores it in `WorkspaceContext`, a thread-local cleared when the request ends. No
+  membership, an unknown workspace and a non-numeric id are all the same 404, so ids can't be
+  probed. Roles are read on every request, so a role change applies at once.
+- **Tenant filter.** Entities that extend `WorkspaceOwnedEntity` carry a Hibernate `@TenantId`
+  `workspace_id`; `WorkspaceTenantResolver` supplies the current workspace, or `-1` (matches no
+  row; an insert fails on the foreign key) when there is none. There is no root tenant. Native SQL
+  is not filtered and must bind the workspace id itself.
+- **Permissions.** Services call `WorkspaceAccess.require(Permission)`; lacking one is a 403.
+  `WorkspaceRole` maps roles to permissions ([matrix](crm/permissions.md)).
+- **Invitations.** A link carries a random token whose SHA-256 hash is stored. Preview and
+  sign-up through the link are public (`SecurityConfig`), accepting needs a signed-in account
+  with the invited email. No workspace context exists there, so those lookups name the
+  workspace explicitly, and tokens never reach the logs.
+- **Audit trail.** `AuditTrail.record` joins the transaction of the change (it refuses to run
+  without one) and writes to `audit_events`, which a database trigger makes append-only.
+- **Account deletion.** `WorkspaceUserDeletionGuard` listens to `UserDeletionEvent` and refuses (409)
+  to delete the last owner of a workspace. `user` doesn't depend on `workspace`.
+- **Tests.** `TenantIsolationIT` proves the tenant filter; `WorkspaceEndpointsGuardIT` takes every
+  workspace endpoint from the running application and requires 404 for non-members and 401
+  without a token ([testing](testing.md)).
 
 ## Security
 
@@ -48,15 +82,16 @@ filter).
   instance. The client IP comes from `X-Forwarded-For` of trusted proxies only.
 - **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` from the token, and
   `UserAdminService` re-checks it in the database. `ApiAccessDeniedHandler` answers 403 with an
-  `ApiError` body.
+  `ApiError` body. The account role is separate from workspace roles: a system admin has no
+  access to a workspace it isn't a member of.
 - For a production deployment, supply `JWT_SECRET` from a secret manager. Replace this module
   with an OIDC resource server when centralized identity or SSO is needed.
 
 ## Persistence
 
 `AuditableEntity` supplies database-assigned IDs, UTC audit timestamps and optimistic-locking
-versions. Flyway is the sole schema authority: JPA validates the schema and never alters it.
-See [docs/database.md](database.md).
+versions; `WorkspaceOwnedEntity` adds the tenant column. Flyway is the sole schema authority: JPA
+validates the schema and never alters it. See [docs/database.md](database.md).
 
 ## Configuration and errors
 

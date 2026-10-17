@@ -12,7 +12,10 @@ The naming rule matters: Surefire is configured to exclude `*IT`, and Failsafe o
 
 Plain JUnit 5 + Mockito + AssertJ. No Spring context. Construct the class under test directly,
 as in `auth/JwtServiceTest` and `auth/RefreshTokenServiceTest`. To test configuration binding,
-use `ApplicationContextRunner` (see `auth/AuthPropertiesTest`).
+use `ApplicationContextRunner` (see `auth/AuthPropertiesTest`). The workspace layer has its own:
+`workspace/WorkspaceRoleTest` (permissions per role), `WorkspaceAccessTest` (permission and
+ownership checks, `runAs`), `WorkspaceAccessInterceptorTest` (the context is cleared after a
+request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs).
 
 ## Integration tests
 
@@ -27,6 +30,12 @@ Extend `support/AbstractIntegrationTest`. It provides:
 - rate limits **off** (`application-test.yml`), since every IT registers from one address
 - an admin account (`ADMIN_EMAIL`), created by `AdminBootstrap` from `application-test.yml`;
   never change or delete it in a test
+
+Tests of workspace endpoints extend `support/WorkspaceTestSupport` (itself an
+`AbstractIntegrationTest`), which adds `tokenFor(email)` (register, get the access token),
+`createWorkspace(token, name)` (the token's user becomes the owner), `addMember(workspaceId, email,
+role)` (straight into the database; invitations are the real way in), `send(token, request[,
+body])` and `body(result)`. Give each test its own users and workspaces, like any other IT.
 
 All IT classes share **one** Spring context and one database, and nothing is cleaned between
 tests. Isolate tests with fresh users (`uniqueEmail()`), and never assert on global counts.
@@ -45,6 +54,18 @@ What the existing ITs cover:
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
+| `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
+| `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |
+| `workspace/invitation/InvitationIT` | Invite, preview, accept as an existing account, register through the link, revoke, expiry, owner rules, concurrent accepts, tokens stored hashed and kept out of logs |
+| `workspace/TenantIsolationIT` | `@TenantId`: another workspace's ids are 404, queries without a workspace context return nothing, inserts without one fail |
+| `workspace/WorkspaceEndpointsGuardIT` | Takes every `/api/v1/workspaces/{workspaceId}/...` endpoint from the running application: 404 for a non-member, 401 without a token |
+| `audit/AuditTrailIT` | Audit events written with the change, append-only (the database refuses `UPDATE`/`DELETE`), refuses to run outside a transaction |
+| `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, permissions, versions, validation |
+| `crm/settings/LeadSourceIT` | Default sources, create/rename/archive/delete, duplicate names, permissions, versions |
+
+`WorkspaceEndpointsGuardIT` needs no edit when a workspace controller is added: it finds the new
+endpoints itself and fails if one answers a non-member with anything but 404. If it fails, fix the
+endpoint, not the test.
 
 ## Reports
 

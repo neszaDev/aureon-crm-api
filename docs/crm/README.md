@@ -1,9 +1,9 @@
 # Aureon CRM: product specification
 
-Aureon CRM is a multi-user CRM starter for small and medium-sized businesses. It is built on top of
-this API boilerplate and its sibling frontend
-([nextjs-boilerplate](https://github.com/neszaDev/nextjs-boilerplate)). "Aureon CRM" is a
-placeholder name: derived products rename it (frontend `AppConfig.name` and locale copy).
+Aureon CRM is a multi-user CRM starter for small and medium-sized businesses. This repository is
+its API (Aureon CRM API, built from `spring-postgres-boilerplate`); the sibling frontend is
+[aureon-crm-web](https://github.com/neszaDev/aureon-crm-web). "Aureon CRM" is a placeholder name:
+derived products rename it (frontend `AppConfig.name` and locale copy).
 
 | Document | Contents |
 |---|---|
@@ -34,6 +34,8 @@ placeholder name: derived products rename it (frontend `AppConfig.name` and loca
 
 - Email sending, calendar sync, telephony, file attachments on CRM records, custom fields defined
   by users, multiple pipelines per workspace, currency conversion, billing or plans.
+- Deleting a workspace: workspaces are never hard-deleted, which keeps the audit trail append-only
+  (see [data-model.md](data-model.md)).
 - Public marketing site beyond the existing landing and about pages.
 
 ## Anti-goals

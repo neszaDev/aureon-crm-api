@@ -3,7 +3,10 @@
 Interactive docs: run the app (`make up`) and open `http://localhost:8080/swagger-ui/index.html`.
 The OpenAPI spec is at `/v3/api-docs`.
 
-All endpoints are under `/api/v1`. Errors always use the same JSON shape:
+All endpoints are under `/api/v1`. This guide covers accounts, sign-in, files and the
+`test-results` example. The CRM endpoints (workspaces, members, invitations, pipeline stages,
+lead sources and the rest of the CRM) are in the [CRM API contract](crm/api.md); see
+[Workspaces](#workspaces) below for a first request. Errors always use the same JSON shape:
 
 ```json
 {"timestamp":"...","status":400,"error":"Bad Request","message":"Validation failed",
@@ -14,9 +17,9 @@ All endpoints are under `/api/v1`. Errors always use the same JSON shape:
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
-| 403 | Valid token without the required role (admin endpoints); `POST /auth/register` when `REGISTRATION_ENABLED=false` |
-| 404 | Unknown route, or a resource that doesn't exist *or belongs to another user* |
-| 409 | Email already registered; an admin changing or deleting their own account; a concurrent update |
+| 403 | Valid token without the required role (admin endpoints) or workspace permission; `POST /auth/register` when `REGISTRATION_ENABLED=false` |
+| 404 | Unknown route, or a resource that doesn't exist *or belongs to another user*; anything under a workspace the caller is not a member of |
+| 409 | Email already registered; an admin changing or deleting their own account; a concurrent update; a rule of the CRM (last owner, duplicate name, an invitation that is no longer pending, ...) |
 | 413 | Upload larger than `FILES_MAX_SIZE` |
 | 415 | Upload type not in `FILES_ALLOWED_TYPES`, or its content doesn't match the type; wrong request `Content-Type` |
 | 429 | Too many sign-in or registration attempts; wait `Retry-After` seconds |
@@ -46,6 +49,26 @@ all at once. Once an email is blocked, even the right password gets 429 until it
 is what makes password guessing slow from many IPs, at the cost of letting someone delay a
 victim's sign-in. Behind a proxy the client IP comes from `X-Forwarded-For` (see
 [configuration](configuration.md#rate-limits)).
+
+## Workspaces
+
+Every CRM endpoint lives under `/api/v1/workspaces/{workspaceId}` and needs a member of that
+workspace. Anyone signed in can create a workspace and becomes its owner; others join through an
+invitation link ([CRM API contract](crm/api.md#workspaces-members-invitations)).
+
+```sh
+# $ACCESS_TOKEN: the accessToken from register or login
+# Create a workspace; it starts with default pipeline stages and lead sources
+curl --request POST 'http://localhost:8080/api/v1/workspaces' \
+  --header "Authorization: Bearer $ACCESS_TOKEN" --header 'Content-Type: application/json' \
+  --data-raw '{"name":"Acme","defaultCurrency":"EUR","timezone":"Europe/Paris"}'
+
+# Read its pipeline (use the id from the response)
+curl 'http://localhost:8080/api/v1/workspaces/<workspaceId>/pipeline-stages' \
+  --header "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+A caller who is not a member gets 404, the same answer as for a workspace that doesn't exist.
 
 ## Refresh tokens and logout
 

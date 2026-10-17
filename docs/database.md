@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V6__add_user_display_name.sql`. Note the **two**
+   highest existing version + 1. Example: `V11__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -37,6 +37,15 @@ Migrations run automatically at application startup, in every profile.
 | `V4__add_test_results.sql` | `test_results` (owner FK, score check 0–100, owner/date index) |
 | `V5__add_stored_files.sql` | `stored_files` (file metadata; owner FK cascades; the bytes live in `FILES_DIR`) |
 | `V6__user_display_name.sql` | `users.display_name` (optional, up to 100 characters) |
+| `V7__workspaces.sql` | `workspaces` and `workspace_members` (role check; `UNIQUE (workspace_id, user_id)`, the target of the CRM tables' composite foreign keys; deleting an account cascades to its memberships) |
+| `V8__audit_events.sql` | `audit_events` (plain FK to the workspace, no FK to users; a trigger refuses `UPDATE` and `DELETE`; indexes by workspace/time and by entity) |
+| `V9__crm_reference_data.sql` | `pipeline_stages` (kind and probability checks, unique name per workspace, one Won and one Lost stage per workspace) and `lead_sources` (unique name per workspace, `archived_at`) |
+| `V10__workspace_invitations.sql` | `workspace_invitations` (SHA-256 of the link token, unique; partial unique index: one open invitation per email and workspace) |
+
+Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
+tenant boundary, the composite foreign keys and the rest of the CRM tables are described in
+[docs/crm/data-model.md](crm/data-model.md). Workspaces are never hard-deleted, so
+`audit_events.workspace_id` is a plain foreign key and the trail stays append-only.
 
 ## Local database
 
