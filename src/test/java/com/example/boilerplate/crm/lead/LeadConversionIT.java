@@ -463,6 +463,25 @@ class LeadConversionIT extends WorkspaceTestSupport {
     convert(other, w, lead, conversion(null, true, null, null)).andExpect(status().isForbidden());
   }
 
+  /** Archiving hides a lead, it doesn't lock it: an archived QUALIFIED lead converts. */
+  @Test
+  void archivedQualifiedLeadConverts() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long lead = qualifiedLead(token, w, Map.of("firstName", "Ada"));
+    send(token, post(LEAD + "/archive", w, lead))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.archived").value(true));
+
+    convert(token, w, lead, conversion(null, false, null, null))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.alreadyConverted").value(false));
+    send(token, get(LEAD, w, lead))
+        .andExpect(jsonPath("$.status").value("CONVERTED"))
+        .andExpect(jsonPath("$.archived").value(true));
+    assertThat(count("contacts", w)).isEqualTo(1);
+  }
+
   @Test
   void convertedLeadIsReadOnly() throws Exception {
     String email = uniqueEmail();
