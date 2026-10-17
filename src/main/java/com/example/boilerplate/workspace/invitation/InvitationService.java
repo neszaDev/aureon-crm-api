@@ -3,6 +3,7 @@ package com.example.boilerplate.workspace.invitation;
 import static com.example.boilerplate.workspace.WorkspaceRole.OWNER;
 
 import com.example.boilerplate.audit.AuditAction;
+import com.example.boilerplate.audit.AuditChanges;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.auth.AuthService;
@@ -113,7 +114,7 @@ public class InvitationService {
                 Tokens.sha256Hex(token),
                 inviter,
                 now.plus(TTL)));
-    audit.record(AuditAction.INVITE, AuditEntityType.INVITATION, i.getId(), i.getEmail(), Map.of());
+    audit.record(AuditAction.INVITE, AuditEntityType.INVITATION, i.getId(), i.getEmail(), role(i));
     InvitationResponse v = response(i);
     return new CreatedInvitationResponse(
         v.id(), v.email(), v.role(), v.invitedBy(), v.createdAt(), v.expiresAt(), token);
@@ -200,7 +201,12 @@ public class InvitationService {
         AuditEntityType.MEMBER,
         user.getId(),
         user.getEmail(),
-        Map.of());
+        role(i));
+  }
+
+  /** {@code {role: {from: null, to: <the invitation's role>}}}. */
+  private static Map<String, Map<String, Object>> role(Invitation i) {
+    return AuditChanges.diff(Map.of(), Map.of("role", i.getRole().name()));
   }
 
   private Invitation byToken(String token) {

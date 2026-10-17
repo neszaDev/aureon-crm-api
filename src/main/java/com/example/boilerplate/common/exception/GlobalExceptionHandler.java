@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.HandlerMapping;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -32,7 +33,7 @@ public class GlobalExceptionHandler {
   /** A unique constraint lost a race with a concurrent request (e.g. two sign-ups, one email). */
   @ExceptionHandler(DataIntegrityViolationException.class)
   ResponseEntity<ApiError> integrity(DataIntegrityViolationException e, HttpServletRequest r) {
-    log.warn("Constraint violation on {} {}", r.getMethod(), r.getRequestURI());
+    log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
     return error(HttpStatus.CONFLICT, "Conflicts with existing data", r, Map.of());
   }
 
@@ -132,8 +133,17 @@ public class GlobalExceptionHandler {
       HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
       return error(status, status.getReasonPhrase(), r, Map.of());
     }
-    log.error("Unhandled exception on {} {}", r.getMethod(), r.getRequestURI(), e);
+    log.error("Unhandled exception on {} {}", r.getMethod(), route(r), e);
     return error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error", r, Map.of());
+  }
+
+  /**
+   * The matched route (e.g. {@code /api/v1/invitations/{token}/accept}), never the raw URI: paths
+   * carry secrets such as invitation tokens, and logs must not.
+   */
+  private static Object route(HttpServletRequest r) {
+    Object pattern = r.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+    return pattern != null ? pattern : "<unmatched>";
   }
 
   private ResponseEntity<ApiError> error(

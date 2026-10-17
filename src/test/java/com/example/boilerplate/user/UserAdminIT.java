@@ -179,8 +179,14 @@ class UserAdminIT extends WorkspaceTestSupport {
   @Test
   void cannotDeleteLastOwnerOfAWorkspace() throws Exception {
     String ownerEmail = uniqueEmail();
-    long w = createWorkspace(tokenFor(ownerEmail), "Acme");
+    String owner = tokenFor(ownerEmail);
+    long w = createWorkspace(owner, "Acme");
     long id = idOf(ownerEmail);
+    // Co-owning another workspace doesn't help: one sole ownership is enough to refuse.
+    long shared = createWorkspace(owner, "Shared");
+    String partnerEmail = uniqueEmail();
+    tokenFor(partnerEmail);
+    addMember(shared, partnerEmail, WorkspaceRole.OWNER);
 
     mvc.perform(auth(delete("/api/v1/users/{id}", id), admin))
         .andExpect(status().isConflict())

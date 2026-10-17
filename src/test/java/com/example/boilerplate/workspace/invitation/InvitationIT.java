@@ -27,7 +27,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.ResultActions;
@@ -81,10 +84,12 @@ class InvitationIT extends WorkspaceTestSupport {
     assertThat(trail.get(0).getEntityType()).isEqualTo(AuditEntityType.MEMBER);
     assertThat(trail.get(0).getEntityId()).isEqualTo(inviteeId);
     assertThat(trail.get(0).getActorEmail()).isEqualTo(inviteeEmail);
+    assertRoleSet(trail.get(0), "MANAGER");
     assertThat(trail.get(1).getAction()).isEqualTo(AuditAction.INVITE);
     assertThat(trail.get(1).getEntityType()).isEqualTo(AuditEntityType.INVITATION);
     assertThat(trail.get(1).getEntityLabel()).isEqualTo(inviteeEmail);
     assertThat(trail.get(1).getActorEmail()).isEqualTo(ownerEmail);
+    assertRoleSet(trail.get(1), "MANAGER");
   }
 
   @Test
@@ -116,6 +121,7 @@ class InvitationIT extends WorkspaceTestSupport {
     assertThat(join.getAction()).isEqualTo(AuditAction.JOIN);
     assertThat(join.getActorId()).isEqualTo(userId);
     assertThat(join.getEntityId()).isEqualTo(userId);
+    assertRoleSet(join, "SALES_REP");
   }
 
   @Test
@@ -369,6 +375,36 @@ class InvitationIT extends WorkspaceTestSupport {
     } finally {
       pool.shutdownNow();
     }
+  }
+
+  /** Logs name the route, never the URI: the path holds the token, which works as a password. */
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void constraintViolationLogsTheRouteNotTheToken(CapturedOutput output) throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    String email = uniqueEmail();
+    tokenFor(email);
+    JsonNode created = invite(owner, w, email, "OWNER");
+    String link = created.get("token").asText();
+    // An upper-case copy of a registered email passes the service's check, then the insert of the
+    // (lower-cased) account hits users.email's unique key: the handler's constraint-violation log.
+    jdbc.update(
+        "UPDATE workspace_invitations SET email = upper(email) WHERE id = ?",
+        created.get("id").asLong());
+
+    register(link, Map.of("password", PASSWORD)).andExpect(status().isConflict());
+
+    assertThat(output)
+        .contains("Constraint violation on POST /api/v1/invitations/{token}/register")
+        .doesNotContain(link);
+  }
+
+  private static void assertRoleSet(AuditEvent event, String role) {
+    Map<String, Object> change = new HashMap<>();
+    change.put("from", null);
+    change.put("to", role);
+    assertThat(event.getChanges()).isEqualTo(Map.of("role", change));
   }
 
   private JsonNode invite(String token, long workspaceId, String email, String role)

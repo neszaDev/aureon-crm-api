@@ -49,16 +49,15 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
         and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER""")
   List<WorkspaceMember> lockOwners(long workspaceId);
 
-  /** Whether the user is an owner of a workspace that has no other owner. */
+  /** Locks the owner rows of every workspace {@code userId} owns, as {@link #lockOwners} does. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       """
-      select count(m) > 0 from WorkspaceMember m
-      where m.userId = :userId
-        and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER
-        and not exists (
-          select 1 from WorkspaceMember o
-          where o.workspaceId = m.workspaceId
-            and o.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER
-            and o.userId <> :userId)""")
-  boolean isSoleOwnerOfAWorkspace(long userId);
+      select o from WorkspaceMember o
+      where o.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER
+        and o.workspaceId in (
+          select m.workspaceId from WorkspaceMember m
+          where m.userId = :userId
+            and m.role = com.example.boilerplate.workspace.WorkspaceRole.OWNER)""")
+  List<WorkspaceMember> lockOwnersOfWorkspacesOwnedBy(long userId);
 }
