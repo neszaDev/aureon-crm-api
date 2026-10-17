@@ -1,11 +1,17 @@
 package com.example.boilerplate.workspace;
 
+import com.example.boilerplate.audit.AuditAction;
+import com.example.boilerplate.audit.AuditChanges;
+import com.example.boilerplate.audit.AuditEntityType;
+import com.example.boilerplate.audit.AuditTrail;
 import com.example.boilerplate.common.entity.Versions;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.dto.*;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,16 +22,22 @@ public class WorkspaceService {
   private final WorkspaceMemberRepository members;
   private final UserRepository users;
   private final WorkspaceAccess access;
+  private final AuditTrail audit;
+  private final AuditChanges auditChanges;
 
   public WorkspaceService(
       WorkspaceRepository workspaces,
       WorkspaceMemberRepository members,
       UserRepository users,
-      WorkspaceAccess access) {
+      WorkspaceAccess access,
+      AuditTrail audit,
+      AuditChanges auditChanges) {
     this.workspaces = workspaces;
     this.members = members;
     this.users = users;
     this.access = access;
+    this.audit = audit;
+    this.auditChanges = auditChanges;
   }
 
   @Transactional(readOnly = true)
@@ -40,6 +52,16 @@ public class WorkspaceService {
         workspaces.save(new Workspace(r.name().strip(), r.defaultCurrency(), r.timezone()));
     members.save(new WorkspaceMember(w.getId(), user.getId(), WorkspaceRole.OWNER));
     seedDefaults(w.getId());
+    // No workspace context yet: the workspace is being created.
+    audit.record(
+        w.getId(),
+        user.getId(),
+        user.getEmail(),
+        AuditAction.CREATE,
+        AuditEntityType.WORKSPACE,
+        w.getId(),
+        w.getName(),
+        Map.of());
     return response(w, WorkspaceRole.OWNER);
   }
 
@@ -53,9 +75,18 @@ public class WorkspaceService {
     Membership m = access.require(Permission.WORKSPACE_MANAGE);
     Workspace w = workspace(m.workspaceId());
     Versions.check(w, r.version());
+    Map<String, Object> before = auditChanges.snapshot(response(w, m.role()));
     w.update(r.name().strip(), r.defaultCurrency(), r.timezone());
     // Flush so the response carries the new version and updatedAt.
-    return response(workspaces.saveAndFlush(w), m.role());
+    WorkspaceResponse after = response(workspaces.saveAndFlush(w), m.role());
+    Map<String, Map<String, Object>> changes =
+        AuditChanges.diff(before, auditChanges.snapshot(after));
+    // Every edit bumps these; they say nothing about what was edited.
+    changes.keySet().removeAll(Set.of("version", "updatedAt"));
+    if (!changes.isEmpty()) {
+      audit.record(AuditAction.UPDATE, AuditEntityType.WORKSPACE, w.getId(), w.getName(), changes);
+    }
+    return after;
   }
 
   private void seedDefaults(long id) {
