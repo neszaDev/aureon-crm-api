@@ -5,11 +5,11 @@ import java.util.List;
 import org.springframework.data.domain.Sort.Direction;
 
 /**
- * The {@code sort} of the lead list, each with the direction it takes when the request names none.
- * {@code NAME}: last name, then first name, ignoring case; leads without a last name come last
- * ascending and first descending (PostgreSQL's null order). {@code FOLLOW_UP_DATE} and {@code
- * PRIORITY} have no keys: the list orders them in its specification, leads without a follow-up date
- * last in both directions and HIGH before MEDIUM before LOW descending.
+ * The {@code sort} of the lead list. {@code NAME}: last name, then first name, ignoring case; leads
+ * without a last name come last ascending and first descending (PostgreSQL's null order). {@code
+ * FOLLOW_UP_DATE} and {@code PRIORITY} have no keys: the list orders them in its specification,
+ * leads without a follow-up date last in both directions and HIGH before MEDIUM before LOW
+ * descending.
  */
 public enum LeadSort implements SortField {
   CREATED_AT(Direction.DESC, Key.of("createdAt")),
@@ -26,6 +26,7 @@ public enum LeadSort implements SortField {
     this.keys = List.of(keys);
   }
 
+  @Override
   public Direction defaultDirection() {
     return defaultDirection;
   }

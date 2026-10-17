@@ -1,5 +1,6 @@
 package com.example.boilerplate.crm.company;
 
+import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.company.dto.*;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -28,9 +29,13 @@ public class CompanyController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "NAME") CompanySort sort,
-      @RequestParam(defaultValue = "ASC") Direction direction) {
+      @RequestParam(required = false) Direction direction) {
     return service.list(
-        new CompanyFilter(q, ownerId, industry, archived), page, size, sort, direction);
+        new CompanyFilter(q, ownerId, industry, archived),
+        page,
+        size,
+        sort,
+        ListParams.direction(direction, sort));
   }
 
   // A literal segment outranks {id}.

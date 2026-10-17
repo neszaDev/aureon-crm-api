@@ -1,5 +1,6 @@
 package com.example.boilerplate.crm.lead;
 
+import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.common.Priority;
 import com.example.boilerplate.crm.lead.dto.*;
 import jakarta.validation.Valid;
@@ -41,7 +42,7 @@ public class LeadController {
         page,
         size,
         sort,
-        direction == null ? sort.defaultDirection() : direction);
+        ListParams.direction(direction, sort));
   }
 
   @PostMapping

@@ -172,9 +172,11 @@ class CompanyIT extends WorkspaceTestSupport {
     // Names sort ignoring case, whatever the database collation does with "beta" vs "Gamma".
     list(token, w).andExpect(names("Alpha", "beta", "Gamma"));
     list(token, w, "sort", "NAME", "direction", "DESC").andExpect(names("Gamma", "beta", "Alpha"));
-    list(token, w, "sort", "CREATED_AT").andExpect(names("beta", "Alpha", "Gamma"));
-    list(token, w, "sort", "CREATED_AT", "direction", "DESC")
-        .andExpect(names("Gamma", "Alpha", "beta"));
+    list(token, w, "sort", "CREATED_AT", "direction", "ASC")
+        .andExpect(names("beta", "Alpha", "Gamma"));
+    // Without a direction a sort takes its natural one: the dates newest first.
+    list(token, w, "sort", "CREATED_AT").andExpect(names("Gamma", "Alpha", "beta"));
+    list(token, w, "sort", "UPDATED_AT").andExpect(names("Gamma", "Alpha", "beta"));
 
     list(token, w, "size", "2")
         .andExpect(names("Alpha", "beta"))

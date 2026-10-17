@@ -240,6 +240,47 @@ class LeadIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void aPutWithoutACurrencyResetsItToTheWorkspaceDefault() throws Exception {
+    String email = uniqueEmail();
+    String token = tokenFor(email);
+    long w = createWorkspace(token, "Acme");
+    long id =
+        create(token, w, Map.of("firstName", "Ada", "estimatedValue", "100", "currency", "USD"));
+
+    // A PUT replaces every field: with a value and no currency, the workspace's (EUR) applies.
+    send(token, put(LEAD, w, id), edit("Ada", userId(email), 0, "estimatedValue", "100"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.estimatedValue").value("100.00"))
+        .andExpect(jsonPath("$.currency").value("EUR"))
+        .andExpect(jsonPath("$.version").value(1));
+    AuditEvent update = trail(w, id).get(0);
+    assertThat(update.getAction()).isEqualTo(AuditAction.UPDATE);
+    assertThat(update.getChanges())
+        .containsOnlyKeys("currency")
+        .containsEntry("currency", Map.of("from", "USD", "to", "EUR"));
+  }
+
+  @Test
+  void anEditKeepsTheStatusAndTheReason() throws Exception {
+    String email = uniqueEmail();
+    String token = tokenFor(email);
+    long w = createWorkspace(token, "Acme");
+    long id = create(token, w, Map.of("firstName", "Ada"));
+    setStatus(token, w, id, "UNQUALIFIED", "No budget", 0).andExpect(status().isOk());
+
+    send(token, put(LEAD, w, id), edit("Ada B", userId(email), 1))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.firstName").value("Ada B"))
+        .andExpect(jsonPath("$.status").value("UNQUALIFIED"))
+        .andExpect(jsonPath("$.unqualifiedReason").value("No budget"))
+        .andExpect(jsonPath("$.version").value(2));
+    send(token, get(LEAD, w, id))
+        .andExpect(jsonPath("$.status").value("UNQUALIFIED"))
+        .andExpect(jsonPath("$.unqualifiedReason").value("No budget"));
+    assertThat(trail(w, id).get(0).getChanges()).containsOnlyKeys("firstName");
+  }
+
+  @Test
   void sourceFromAnotherWorkspaceIs400() throws Exception {
     String email = uniqueEmail();
     String a = tokenFor(email);
@@ -360,10 +401,11 @@ class LeadIT extends WorkspaceTestSupport {
     setStatus(token, w, id, "UNQUALIFIED", "x".repeat(500), 0)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.unqualifiedReason").value("x".repeat(500)));
-    // CONVERTED is only reached through conversion.
+    // CONVERTED is only reached through conversion, whatever the version.
     setStatus(token, w, id, "CONVERTED", null, 1)
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.fieldErrors.status").exists());
+    setStatus(token, w, id, "CONVERTED", null, 0).andExpect(status().isBadRequest());
     // The request needs a status that exists and the version last read.
     send(token, post(LEAD + "/status", w, id), Map.of("version", 1))
         .andExpect(status().isBadRequest())
@@ -375,10 +417,9 @@ class LeadIT extends WorkspaceTestSupport {
     // A stale version is a conflict.
     setStatus(token, w, id, "NEW", null, 0).andExpect(status().isConflict());
 
-    // The same status again: 200, nothing changes (not even the reason), no audit event.
-    setStatus(token, w, id, "UNQUALIFIED", "Another reason", 1)
+    // The same status again changes nothing: no new version, no audit event.
+    setStatus(token, w, id, "UNQUALIFIED", "x".repeat(500), 1)
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.unqualifiedReason").value("x".repeat(500)))
         .andExpect(jsonPath("$.version").value(1));
     setStatus(token, w, id, "NEW", null, 1).andExpect(jsonPath("$.version").value(2));
     setStatus(token, w, id, "NEW", null, 2)
@@ -391,6 +432,45 @@ class LeadIT extends WorkspaceTestSupport {
     long other = create(token, w, Map.of("firstName", "Bob"));
     setStatus(token, w, other, "NEW", null, 0).andExpect(jsonPath("$.version").value(0));
     assertThat(trail(w, other)).hasSize(1);
+  }
+
+  @Test
+  void reEnteringUnqualifiedWithANewReasonEditsTheReason() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long id = create(token, w, Map.of("firstName", "Ada"));
+    setStatus(token, w, id, "UNQUALIFIED", "No budget", 0)
+        .andExpect(jsonPath("$.version").value(1));
+
+    // The same status with a different reason (stripped) saves it: a new version and an audit
+    // event that shows only the reason.
+    setStatus(token, w, id, "UNQUALIFIED", "  Went with a rival　", 1)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("UNQUALIFIED"))
+        .andExpect(jsonPath("$.unqualifiedReason").value("Went with a rival"))
+        .andExpect(jsonPath("$.version").value(2));
+    List<AuditEvent> trail = trail(w, id);
+    assertThat(trail)
+        .extracting(AuditEvent::getAction)
+        .containsExactly(AuditAction.STATUS_CHANGE, AuditAction.STATUS_CHANGE, AuditAction.CREATE);
+    assertThat(trail.get(0).getChanges())
+        .containsOnlyKeys("unqualifiedReason")
+        .containsEntry("unqualifiedReason", Map.of("from", "No budget", "to", "Went with a rival"));
+
+    // Every other same-status call is a no-op: the reason as it is (stripped), none, a blank one.
+    for (String reason : new String[] {"Went with a rival", " Went with a rival ", null, "　 "}) {
+      setStatus(token, w, id, "UNQUALIFIED", reason, 2)
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.unqualifiedReason").value("Went with a rival"))
+          .andExpect(jsonPath("$.version").value(2));
+    }
+    // A reason sent with a status that has none changes nothing either.
+    setStatus(token, w, id, "NEW", null, 2).andExpect(jsonPath("$.version").value(3));
+    setStatus(token, w, id, "NEW", "ignored", 3)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.unqualifiedReason").doesNotExist())
+        .andExpect(jsonPath("$.version").value(3));
+    assertThat(trail(w, id)).hasSize(4);
   }
 
   @Test
@@ -434,9 +514,25 @@ class LeadIT extends WorkspaceTestSupport {
     for (String target : List.of("NEW", "CONTACTED", "QUALIFIED", "UNQUALIFIED")) {
       setStatus(token, w, id, target, "reason", 2).andExpect(status().isConflict());
     }
+    // Likewise with a stale version: the lead is converted, not changed by someone else.
+    setStatus(token, w, id, "NEW", null, 0)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").value("Converted leads can't change status"));
     // CONVERTED as a target is still the request's mistake.
     setStatus(token, w, id, "CONVERTED", null, 2).andExpect(status().isBadRequest());
     send(token, get(LEAD, w, id)).andExpect(jsonPath("$.firstName").value("Ada"));
+
+    // Archiving is housekeeping, not an edit: it works on a converted lead, and so does restoring.
+    send(token, post(LEAD + "/archive", w, id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.archived").value(true))
+        .andExpect(jsonPath("$.status").value("CONVERTED"));
+    list(token, w, "archived", "true").andExpect(names("Ada"));
+    send(token, post(LEAD + "/restore", w, id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.archived").value(false))
+        .andExpect(jsonPath("$.status").value("CONVERTED"))
+        .andExpect(jsonPath("$.convertedCompany.id").value(acme));
   }
 
   @Test

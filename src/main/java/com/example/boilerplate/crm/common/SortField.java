@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.common;
 
 import java.util.List;
+import org.springframework.data.domain.Sort.Direction;
 
 /**
  * A sort choice of a list endpoint; each record type has an enum of these (query: {@code sort}).
@@ -11,6 +12,12 @@ public interface SortField {
    * ListParams} adds the id tie-breaker.
    */
   List<Key> keys();
+
+  /**
+   * The direction when the request names none: the natural one of the sort, {@code DESC} for dates
+   * (newest first) and a priority (most urgent first), {@code ASC} otherwise.
+   */
+  Direction defaultDirection();
 
   /**
    * An entity attribute, or a path through a to-one link ({@code company.name}: Spring Data

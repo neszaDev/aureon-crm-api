@@ -280,9 +280,14 @@ class ContactIT extends WorkspaceTestSupport {
     list(token, w, "size", "3", "page", "1")
         .andExpect(names("Zed"))
         .andExpect(jsonPath("$.totalElements").value(4));
-    list(token, w, "sort", "CREATED_AT")
+    list(token, w, "sort", "CREATED_AT", "direction", "ASC")
         .andExpect(names("Bob smith", "alice Smith", "Zed", "Carl Adams"));
     list(token, w, "sort", "UPDATED_AT", "direction", "DESC")
+        .andExpect(names("Carl Adams", "Zed", "alice Smith", "Bob smith"));
+    // Without a direction a sort takes its natural one: the dates newest first.
+    list(token, w, "sort", "CREATED_AT")
+        .andExpect(names("Carl Adams", "Zed", "alice Smith", "Bob smith"));
+    list(token, w, "sort", "UPDATED_AT")
         .andExpect(names("Carl Adams", "Zed", "alice Smith", "Bob smith"));
     list(token, w, "sort", "name").andExpect(status().isBadRequest());
   }

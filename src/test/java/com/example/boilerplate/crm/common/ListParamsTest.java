@@ -14,15 +14,22 @@ import org.springframework.data.domain.Sort.NullHandling;
 
 class ListParamsTest {
   enum Field implements SortField {
-    CREATED_AT(Key.of("createdAt")),
-    NAME(Key.ignoringCase("name")),
-    FULL_NAME(Key.ignoringCase("lastName"), Key.of("firstName")),
-    COMPANY(Key.ignoringCase("company.name"));
+    CREATED_AT(Direction.DESC, Key.of("createdAt")),
+    NAME(Direction.ASC, Key.ignoringCase("name")),
+    FULL_NAME(Direction.ASC, Key.ignoringCase("lastName"), Key.of("firstName")),
+    COMPANY(Direction.ASC, Key.ignoringCase("company.name"));
 
+    private final Direction defaultDirection;
     private final List<Key> keys;
 
-    Field(Key... keys) {
+    Field(Direction defaultDirection, Key... keys) {
+      this.defaultDirection = defaultDirection;
       this.keys = List.of(keys);
+    }
+
+    @Override
+    public Direction defaultDirection() {
+      return defaultDirection;
     }
 
     @Override
@@ -50,6 +57,14 @@ class ListParamsTest {
     assertThat(p.getSort().toList())
         .extracting(Sort.Order::getProperty, Sort.Order::getDirection)
         .containsExactly(tuple("createdAt", Direction.DESC), tuple("id", Direction.DESC));
+  }
+
+  @Test
+  void aRequestWithoutADirectionTakesTheSortsOwn() {
+    assertThat(ListParams.direction(null, Field.CREATED_AT)).isEqualTo(Direction.DESC);
+    assertThat(ListParams.direction(null, Field.NAME)).isEqualTo(Direction.ASC);
+    assertThat(ListParams.direction(Direction.ASC, Field.CREATED_AT)).isEqualTo(Direction.ASC);
+    assertThat(ListParams.direction(Direction.DESC, Field.NAME)).isEqualTo(Direction.DESC);
   }
 
   @Test

@@ -126,26 +126,32 @@ public class LeadService {
   }
 
   /**
-   * Moves the lead to another status of the open four ({@link LeadStatus#canMoveTo}); the same
-   * status again changes nothing, not even the reason. UNQUALIFIED needs a reason, which any other
-   * status clears.
+   * Moves the lead to another status of the open four ({@link LeadStatus#canMoveTo}). UNQUALIFIED
+   * needs a reason, which any other status clears. The same status again changes nothing, except
+   * UNQUALIFIED with a different reason, which saves the reason.
    */
   public LeadResponse changeStatus(long id, LeadStatusRequest r) {
     Lead lead = lead(id);
     access.requireEditable(lead.getOwnerId());
-    Versions.check(lead, r.version());
+    LeadStatus current = lead.getStatus();
     LeadStatus target = r.status();
+    // Before the version check, like a PUT: these don't depend on what the client last read.
     if (target == LeadStatus.CONVERTED) {
       throw new FieldValidationException("status", "can't be set here: convert the lead instead");
     }
-    if (lead.getStatus() == target) return response(lead);
-    if (!lead.getStatus().canMoveTo(target)) {
+    if (current != target && !current.canMoveTo(target)) {
       throw new ConflictException("Converted leads can't change status");
     }
+    Versions.check(lead, r.version());
     String reason = Texts.optional(r.reason());
-    if (target == LeadStatus.UNQUALIFIED && reason == null) {
+    if (target == LeadStatus.UNQUALIFIED && reason == null && current != target) {
       throw new FieldValidationException("reason", "is required to mark a lead unqualified");
     }
+    boolean newReason =
+        target == LeadStatus.UNQUALIFIED
+            && reason != null
+            && !reason.equals(lead.getUnqualifiedReason());
+    if (current == target && !newReason) return response(lead);
     LeadResponse before = response(lead);
     lead.changeStatus(target, reason);
     LeadResponse after = response(leads.saveAndFlush(lead));

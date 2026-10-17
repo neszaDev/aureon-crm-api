@@ -25,8 +25,9 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   `probability`, a lead source's `archived`) is a 400 on that field, never `0` or `false`.
 - **Lists** take `page` (≥ 0, default 0), `size` (1-100, default 20), `sort` (an upper-case
   field name allowed for that list) and `direction` (`ASC` or `DESC`), and return a Spring
-  `Page` (`content`, `totalElements`, `totalPages`, `number`, `size`, ...). The id is always a
-  tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
+  `Page` (`content`, `totalElements`, `totalPages`, `number`, `size`, ...). Without `direction`
+  a sort takes its own: `DESC` for `CREATED_AT`, `UPDATED_AT` and `PRIORITY`, `ASC` for `NAME`,
+  `COMPANY` and `FOLLOW_UP_DATE`. The id is always a tie-breaker. Archived records are excluded unless `archived=true` (then only archived ones).
   Text search `q` is trimmed; blank means no search.
 - **Errors** always use `ApiError` (`status`, `message`, `fieldErrors`, ...). 400 invalid input or
   query parameter; 401 no valid token; 403 member without the permission; 404 unknown record,
@@ -142,14 +143,14 @@ Contact        = ContactSummary + { source?: Ref, notes?, archivedAt?, createdAt
 filters: `q` (names, company name, email, phone), `status` (repeatable), `ownerId`, `sourceId`,
 `priority`, `followUpBefore` (date), `archived`; `sort`: `CREATED_AT` (default, `DESC`),
 `UPDATED_AT`, `FOLLOW_UP_DATE`, `PRIORITY`, `NAME`. Converted leads can't be updated (409).
-The list returns full `Lead`s. Without `direction` a sort takes its natural one: `DESC` for
-`CREATED_AT`, `UPDATED_AT` and `PRIORITY` (HIGH first), `ASC` for `FOLLOW_UP_DATE` and `NAME`
-(last name, then first name, ignoring case). Leads without a follow-up date come last in both
-directions; `followUpBefore` is inclusive and never matches them.
+The list returns full `Lead`s. `NAME` is last name, then first name, ignoring case; `PRIORITY`
+descending lists HIGH first. Leads without a follow-up date come last in both directions;
+`followUpBefore` is inclusive and never matches them. Archiving and restoring are allowed on
+converted leads (they are not edits).
 
 | Method and path | Body → response |
 |---|---|
-| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409, the lead's current status again a 200 that changes nothing |
+| `POST /{id}/status` | `{ status: NEW, CONTACTED, QUALIFIED or UNQUALIFIED, reason? (≤500, required for UNQUALIFIED, dropped for the others), version }` → `Lead`; `CONVERTED` as the target is a 400 (field `status`), a converted lead 409 (both before the version is compared); the lead's current status again is a 200 that changes nothing, except UNQUALIFIED with a different reason, which saves the reason (new version, `STATUS_CHANGE` audit) |
 | `POST /{id}/convert` | `LeadConversionInput` → `LeadConversion`; 409 unless `QUALIFIED`; repeated after success: the first result with `alreadyConverted: true` |
 
 ```ts
@@ -158,8 +159,8 @@ LeadInput   = { firstName, lastName?, companyName?, email?, phone?, jobTitle?, s
 Lead        = { id, ...LeadInput fields, source?: Ref, owner?: MemberRef, status, unqualifiedReason?,
                 convertedAt?, convertedCompany?: Ref, convertedContact?: Ref, convertedDeal?: Ref,
                 archived, archivedAt?, createdAt, updatedAt, version }
-// estimatedValue and currency: both or neither. A value alone takes the workspace's currency;
-// a currency alone is a 400 on estimatedValue.
+// estimatedValue and currency: both or neither. A value alone takes the workspace's currency (on a
+// PUT too: an omitted currency is not kept); a currency alone is a 400 on estimatedValue.
 LeadConversionInput = {
   companyId?,            // link to this existing company, or
   createCompany,         // create one from companyName (ignored when companyId is set)

@@ -1,5 +1,6 @@
 package com.example.boilerplate.crm.contact;
 
+import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.contact.dto.*;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -30,13 +31,13 @@ public class ContactController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(defaultValue = "NAME") ContactSort sort,
-      @RequestParam(defaultValue = "ASC") Direction direction) {
+      @RequestParam(required = false) Direction direction) {
     return service.list(
         new ContactFilter(q, companyId, ownerId, sourceId, tag, archived),
         page,
         size,
         sort,
-        direction);
+        ListParams.direction(direction, sort));
   }
 
   // Literal segments outrank {id}.

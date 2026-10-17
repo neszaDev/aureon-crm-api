@@ -40,6 +40,11 @@ public final class ListParams {
     return PageRequest.of(page, size, sort);
   }
 
+  /** The requested direction ({@code direction}), or the sort's own when the request has none. */
+  public static Direction direction(Direction requested, SortField sort) {
+    return requested == null ? sort.defaultDirection() : requested;
+  }
+
   /** Only the page: the order comes from the specification ({@link Ordering#nullsLast}). */
   public static Pageable unsorted(int page, int size) {
     check(page, size);
