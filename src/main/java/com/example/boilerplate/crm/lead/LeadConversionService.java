@@ -89,12 +89,13 @@ public class LeadConversionService {
   }
 
   /**
-   * Links or creates the company (when asked, from the lead's company name), links or creates the
-   * contact from the lead, creates the deal when one is given, and marks the lead converted. The
-   * new records belong to the lead's owner, or to the caller when the lead has none (only someone
-   * who may edit any record gets that far). A lead converted before returns that first result and
-   * writes nothing; any failure leaves nothing behind. The lead's activities and tasks are linked
-   * to the contact, company and deal ({@link #linkHistory}).
+   * Links or creates the company (when asked, from the lead's company name; onto an existing
+   * contact without one, that contact's company), links or creates the contact from the lead,
+   * creates the deal when one is given, and marks the lead converted. The new records belong to the
+   * lead's owner, or to the caller when the lead has none (only someone who may edit any record
+   * gets that far). A lead converted before returns that first result and writes nothing; any
+   * failure leaves nothing behind. The lead's activities and tasks are linked to the contact,
+   * company and deal ({@link #linkHistory}).
    */
   public LeadConversionResponse convert(long id, LeadConversionInput r) {
     Lead lead = leads.findForUpdate(id).orElseThrow(() -> new NotFoundException("Lead not found"));
@@ -110,6 +111,9 @@ public class LeadConversionService {
 
     Contact existing = existingContact(r.contactId());
     Long companyId = company(lead, r, owner);
+    // No company named or created, onto an existing contact: the contact's, for the deal, the lead
+    // and its history alike (as an activity logged on that contact would get it).
+    if (companyId == null && existing != null) companyId = existing.getCompanyId();
     long contactId = r.contactId() != null ? r.contactId() : newContact(lead, companyId, owner);
     Long dealId = r.deal() == null ? null : newDeal(lead, r.deal(), companyId, contactId, owner);
 
@@ -118,10 +122,7 @@ public class LeadConversionService {
     lead.markConverted(companyId, contactId, dealId, now);
     LeadResponse after = leadService.response(leads.saveAndFlush(lead));
     Map<String, Map<String, Object>> changes = auditChanges.recordDiff(before, after);
-    // As an activity logged on the contact: without a company in the request, the contact's.
-    Long historyCompany =
-        companyId == null && existing != null ? existing.getCompanyId() : companyId;
-    changes.putAll(linkHistory(id, contactId, historyCompany, dealId, now));
+    changes.putAll(linkHistory(id, contactId, companyId, dealId, now));
     audit.record(AuditAction.CONVERT, AuditEntityType.LEAD, id, lead.getFullName(), changes);
     return result(lead, false);
   }

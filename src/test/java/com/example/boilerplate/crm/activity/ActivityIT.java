@@ -395,6 +395,37 @@ class ActivityIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.contact.id").value(noCompany));
   }
 
+  /**
+   * An activity logged on a converted lead joins the contact it became, and that contact's company,
+   * so it shows on their timelines; the deal is left as sent.
+   */
+  @Test
+  void anActivityOnAConvertedLeadJoinsItsContact() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long lead = record(token, LEADS, w, Map.of("firstName", "Ada", "companyName", "Engines"));
+    send(token, post(LEADS + "/{id}/status", w, lead), Map.of("status", "QUALIFIED", "version", 0))
+        .andExpect(status().isOk());
+    JsonNode converted =
+        body(
+            send(
+                    token,
+                    post(LEADS + "/{id}/convert", w, lead),
+                    Map.of("createCompany", true, "deal", Map.of("name", "Engines", "amount", "5")))
+                .andExpect(status().isOk()));
+    long contact = converted.get("contact").get("id").asLong();
+    long company = converted.get("company").get("id").asLong();
+
+    send(token, post(ACTIVITIES, w), activity("CALL", "After the deal", "leadId", lead))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.lead.id").value(lead))
+        .andExpect(jsonPath("$.contact.id").value(contact))
+        .andExpect(jsonPath("$.company.id").value(company))
+        .andExpect(jsonPath("$.deal").doesNotExist());
+    list(token, w, "contactId", String.valueOf(contact)).andExpect(subjects("After the deal"));
+    list(token, w, "companyId", String.valueOf(company)).andExpect(subjects("After the deal"));
+  }
+
   @Test
   void authorEditsOwnRepCannotEditOthers() throws Exception {
     String ownerToken = tokenFor(uniqueEmail());

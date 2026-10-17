@@ -12,10 +12,6 @@ import com.example.boilerplate.crm.activity.dto.*;
 import com.example.boilerplate.crm.common.LinkRefs;
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.common.RecordLinks;
-import com.example.boilerplate.crm.contact.Contact;
-import com.example.boilerplate.crm.contact.ContactRepository;
-import com.example.boilerplate.crm.deal.Deal;
-import com.example.boilerplate.crm.deal.DealRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.WorkspaceContext;
@@ -38,8 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class ActivityService {
   private final ActivityRepository activities;
-  private final ContactRepository contacts;
-  private final DealRepository deals;
   private final LinkRefs linkRefs;
   private final RecordLinks links;
   private final WorkspaceAccess access;
@@ -49,8 +43,6 @@ public class ActivityService {
 
   public ActivityService(
       ActivityRepository activities,
-      ContactRepository contacts,
-      DealRepository deals,
       LinkRefs linkRefs,
       RecordLinks links,
       WorkspaceAccess access,
@@ -58,8 +50,6 @@ public class ActivityService {
       AuditTrail audit,
       AuditChanges auditChanges) {
     this.activities = activities;
-    this.contacts = contacts;
-    this.deals = deals;
     this.linkRefs = linkRefs;
     this.links = links;
     this.access = access;
@@ -155,36 +145,21 @@ public class ActivityService {
   }
 
   /**
-   * Create and update apply the request alike; the links are checked by the caller. {@code
-   * defaultTime} is the time of an activity whose request names none.
+   * Create and update apply the request alike; the links are checked by the caller, and the contact
+   * and company follow from them ({@link RecordLinks#contactFor}, {@link RecordLinks#companyFor}).
+   * {@code defaultTime} is the time of an activity whose request names none.
    */
   private void edit(Activity activity, ActivityInput r, Instant defaultTime) {
+    Long contactId = links.contactFor(r.contactId(), r.leadId());
     activity.update(
         r.type(),
         Texts.required("subject", r.subject()),
         Texts.optional(r.body()),
         r.occurredAt() == null ? defaultTime : r.occurredAt(),
-        companyFor(r),
-        r.contactId(),
+        links.companyFor(r.companyId(), contactId, r.dealId()),
+        contactId,
         r.leadId(),
         r.dealId());
-  }
-
-  /**
-   * The company the request names; without one, that of its contact, else that of its deal, which
-   * puts the activity on the company's timeline. The links are checked, so they load from the
-   * session, not the database.
-   */
-  private Long companyFor(ActivityInput r) {
-    if (r.companyId() != null) return r.companyId();
-    Long ofContact =
-        r.contactId() == null
-            ? null
-            : contacts.findById(r.contactId()).map(Contact::getCompanyId).orElse(null);
-    if (ofContact != null) return ofContact;
-    return r.dealId() == null
-        ? null
-        : deals.findById(r.dealId()).map(Deal::getCompanyId).orElse(null);
   }
 
   /** What a page shows besides the activities' own columns: one query each for a whole page. */

@@ -575,7 +575,8 @@ class LeadConversionIT extends WorkspaceTestSupport {
         .containsEntry("linkedActivities", linked(2))
         .containsEntry("linkedTasks", linked(1));
 
-    // Logged after the conversion: a retry returns the first result and links nothing.
+    // Logged after the conversion, an activity joins the contact as it is written; a retry returns
+    // the first result and links nothing.
     long later =
         id(
             send(
@@ -585,17 +586,18 @@ class LeadConversionIT extends WorkspaceTestSupport {
     convert(token, w, lead, conversion(null, true, null, null))
         .andExpect(jsonPath("$.alreadyConverted").value(true));
     send(token, get(ACTIVITIES + "/{id}", w, later))
-        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.contact.id").value(contact))
         .andExpect(jsonPath("$.version").value(0));
     send(token, get(ACTIVITIES + "/{id}", w, call)).andExpect(jsonPath("$.version").value(1));
   }
 
   /**
-   * Onto an existing contact without a company in the request: the lead's history gets the
-   * contact's company, as an activity logged on that contact would.
+   * Onto an existing contact without a company in the request: the contact's company is the
+   * conversion's, for the deal, the lead's convertedCompany and its history (as an activity logged
+   * on that contact would get it).
    */
   @Test
-  void historyOfAnExistingContactGetsItsCompany() throws Exception {
+  void anExistingContactGivesItsCompany() throws Exception {
     String token = tokenFor(uniqueEmail());
     long w = createWorkspace(token, "Acme");
     long initech = id(send(token, post(COMPANIES, w), Map.of("name", "Initech")));
@@ -610,10 +612,23 @@ class LeadConversionIT extends WorkspaceTestSupport {
                 Map.of("type", "CALL", "subject", "Intro", "leadId", lead)));
     long task = id(send(token, post(TASKS, w), Map.of("title", "Follow up", "leadId", lead)));
 
-    convert(token, w, lead, conversion(null, false, contact, null))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.company").doesNotExist());
+    long deal =
+        body(convert(
+                    token,
+                    w,
+                    lead,
+                    conversion(null, false, contact, deal("D", "1", null, null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.company.id").value(initech)))
+            .get("deal")
+            .get("id")
+            .asLong();
 
+    // The deal and the lead take the contact's company too.
+    send(token, get(DEALS + "/{id}", w, deal)).andExpect(jsonPath("$.company.id").value(initech));
+    send(token, get(LEAD, w, lead))
+        .andExpect(jsonPath("$.convertedCompany.id").value(initech))
+        .andExpect(jsonPath("$.convertedContact.id").value(contact));
     send(token, get(ACTIVITIES + "/{id}", w, call))
         .andExpect(jsonPath("$.contact.id").value(contact))
         .andExpect(jsonPath("$.company.id").value(initech));

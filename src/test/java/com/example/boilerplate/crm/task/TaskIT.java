@@ -580,6 +580,64 @@ class TaskIT extends WorkspaceTestSupport {
     list(token, w, "size", "101").andExpect(status().isBadRequest());
   }
 
+  /**
+   * As an activity: a task on a contact gets the contact's company, else the deal's, so the
+   * company's task list shows it; a company the request names wins, and a PUT derives it again.
+   */
+  @Test
+  void companyComesFromTheContactOrDeal() throws Exception {
+    String email = uniqueEmail();
+    String token = tokenFor(email);
+    long w = createWorkspace(token, "Acme");
+    long a = id(send(token, post(COMPANIES, w), Map.of("name", "A")));
+    long b = id(send(token, post(COMPANIES, w), Map.of("name", "B")));
+    long ann = id(send(token, post(CONTACTS, w), Map.of("firstName", "Ann", "companyId", a)));
+    long dealB =
+        id(send(token, post(DEALS, w), Map.of("name", "DB", "amount", "1", "companyId", b)));
+
+    long call = create(token, w, Map.of("title", "Call Ann", "contactId", ann));
+    create(token, w, Map.of("title", "Pitch", "dealId", dealB));
+    create(token, w, Map.of("title", "Named", "contactId", ann, "companyId", b));
+    list(token, w, "companyId", String.valueOf(a)).andExpect(titles("Call Ann"));
+    list(token, w, "companyId", String.valueOf(b)).andExpect(titlesAnyOrder("Pitch", "Named"));
+
+    send(token, put(TASK, w, call), edit("Call Ann", userId(email), 0, "dealId", dealB))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.company.id").value(b));
+  }
+
+  /** A task logged on a converted lead joins the contact it became, and so that company. */
+  @Test
+  void aTaskOnAConvertedLeadJoinsItsContact() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long lead =
+        id(send(token, post(LEADS, w), Map.of("firstName", "Ada", "companyName", "Engines")));
+    long open = id(send(token, post(LEADS, w), Map.of("firstName", "Bea")));
+    send(token, post(LEADS + "/{id}/status", w, lead), Map.of("status", "QUALIFIED", "version", 0))
+        .andExpect(status().isOk());
+    JsonNode converted =
+        body(
+            send(token, post(LEADS + "/{id}/convert", w, lead), Map.of("createCompany", true))
+                .andExpect(status().isOk()));
+    long contact = converted.get("contact").get("id").asLong();
+    long company = converted.get("company").get("id").asLong();
+
+    long id = create(token, w, Map.of("title", "Follow up", "leadId", lead));
+    send(token, get(TASK, w, id))
+        .andExpect(jsonPath("$.lead.id").value(lead))
+        .andExpect(jsonPath("$.contact.id").value(contact))
+        .andExpect(jsonPath("$.company.id").value(company))
+        .andExpect(jsonPath("$.deal").doesNotExist());
+    list(token, w, "contactId", String.valueOf(contact)).andExpect(titles("Follow up"));
+    // A lead that isn't converted has no contact to give.
+    send(token, post(TASKS, w), Map.of("title", "Open lead", "leadId", open))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.contact").doesNotExist())
+        .andExpect(jsonPath("$.company").doesNotExist());
+  }
+
   @Test
   void filters() throws Exception {
     String ownerEmail = uniqueEmail();
@@ -647,11 +705,14 @@ class TaskIT extends WorkspaceTestSupport {
     list(token, w, "contactId", String.valueOf(contact)).andExpect(titles("Alpha call"));
     list(token, w, "leadId", String.valueOf(lead)).andExpect(titles("Beta mail"));
     list(token, w, "dealId", String.valueOf(deal)).andExpect(titles("Gamma 100%"));
-    // Instants, inclusive at both ends; tasks without a due date never match.
+    // Instants, dueFrom inclusive and dueTo exclusive (as activities' from and to); tasks without
+    // a due date never match.
     list(token, w, "dueFrom", "2031-01-20T09:00:00Z").andExpect(titles("Beta mail", "Gamma 100%"));
-    list(token, w, "dueTo", "2031-01-20T09:00:00Z").andExpect(titles("Alpha call", "Beta mail"));
+    list(token, w, "dueTo", "2031-01-20T09:00:00Z").andExpect(titles("Alpha call"));
+    list(token, w, "dueTo", "2031-01-20T09:00:00.000001Z")
+        .andExpect(titles("Alpha call", "Beta mail"));
     list(token, w, "dueFrom", "2031-01-20T09:00:00Z", "dueTo", "2031-01-20T09:00:00Z")
-        .andExpect(titles("Beta mail"));
+        .andExpect(jsonPath("$.totalElements").value(0));
     list(token, w, "dueFrom", "2031-01-11T00:00:00Z", "dueTo", "2031-01-29T00:00:00Z")
         .andExpect(titles("Beta mail"));
     list(token, w, "dueFrom", "soon").andExpect(status().isBadRequest());

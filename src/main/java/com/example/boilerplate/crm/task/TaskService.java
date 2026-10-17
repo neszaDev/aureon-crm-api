@@ -178,16 +178,18 @@ public class TaskService {
 
   /**
    * Create and update apply the request alike; the assignee is decided and the links are checked by
-   * the caller.
+   * the caller. As an activity's, the contact and company follow from the links ({@link
+   * RecordLinks#contactFor}, {@link RecordLinks#companyFor}).
    */
-  private static void edit(CrmTask task, TaskInput r) {
+  private void edit(CrmTask task, TaskInput r) {
+    Long contactId = links.contactFor(r.contactId(), r.leadId());
     task.update(
         Texts.required("title", r.title()),
         Texts.optional(r.description()),
         r.dueAt(),
         r.priority() == null ? Priority.MEDIUM : r.priority(),
-        r.companyId(),
-        r.contactId(),
+        links.companyFor(r.companyId(), contactId, r.dealId()),
+        contactId,
         r.leadId(),
         r.dealId());
   }

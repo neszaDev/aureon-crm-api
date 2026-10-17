@@ -37,7 +37,8 @@ final class TaskSpecifications {
                 : cb.or(cb.not(open), cb.isNull(due), cb.greaterThanOrEqualTo(due, now)));
       }
       if (f.dueFrom() != null) where.add(cb.greaterThanOrEqualTo(due, f.dueFrom()));
-      if (f.dueTo() != null) where.add(cb.lessThanOrEqualTo(due, f.dueTo()));
+      // Half-open, as activities' from and to: consecutive periods neither overlap nor leave a gap.
+      if (f.dueTo() != null) where.add(cb.lessThan(due, f.dueTo()));
       if (f.companyId() != null) where.add(cb.equal(root.get("companyId"), f.companyId()));
       if (f.contactId() != null) where.add(cb.equal(root.get("contactId"), f.contactId()));
       if (f.leadId() != null) where.add(cb.equal(root.get("leadId"), f.leadId()));
