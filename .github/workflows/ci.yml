@@ -29,7 +29,7 @@ env:
   # Pinned by digest: the trivy-action tags were hijacked in 2026, so no third-party action and
   # no mutable tag runs here.
   TRIVY: aquasec/trivy:0.70.0@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e
-  IMAGE: spring-postgres-boilerplate:ci
+  IMAGE: aureon-crm-api:ci
 
 jobs:
   changes:

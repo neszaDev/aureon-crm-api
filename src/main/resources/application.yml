@@ -1,5 +1,5 @@
 spring:
-  application.name: spring-postgres-boilerplate
+  application.name: aureon-crm-api
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/boilerplate}
     username: ${DB_USERNAME:boilerplate}

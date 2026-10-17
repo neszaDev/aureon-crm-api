@@ -1,9 +1,23 @@
-# Spring Boot + PostgreSQL Boilerplate
+# Aureon CRM API
 
-A production-oriented REST API starter: **Spring Boot 3.5, Java 21, PostgreSQL 17**, Flyway
-migrations, JWT access tokens with rotating refresh tokens, Actuator + Prometheus, JSON logs in
-production, and a multi-stage non-root Docker image. It includes an owner-scoped `test-results`
-CRUD feature as a worked example.
+The backend of **Aureon CRM**, a multi-tenant CRM for small and medium-sized businesses, on
+**Spring Boot 3.5, Java 21 and PostgreSQL 17**. The web app is the sibling repository
+[aureon-crm-web](https://github.com/neszaDev/aureon-crm-web).
+
+Every business is a **workspace**. People join a workspace through an invitation link and get a
+role in it (owner, admin, manager or sales rep); one account can belong to several workspaces.
+A workspace's data is isolated from every other: each request is checked for membership, and the
+database queries are filtered by workspace (Hibernate `@TenantId`) and backed by composite foreign
+keys. Changes are written to an append-only audit trail. On top of that sit the CRM features:
+pipeline stages and lead sources today, and companies, contacts, leads, deals, tasks, activities,
+a dashboard and reports as the contract in [docs/crm/](docs/crm/README.md) is built out. That
+folder holds the specification, data model, permission matrix and REST contract.
+
+It was built from [spring-postgres-boilerplate](https://github.com/neszaDev/spring-postgres-boilerplate),
+so it also has JWT access tokens with rotating refresh tokens, sign-in rate limits, admin user
+management, owner-scoped file uploads, Flyway migrations, Actuator + Prometheus, JSON logs in
+production and a multi-stage non-root Docker image (the `test-results` CRUD is the boilerplate's
+worked example).
 
 ## Prerequisites
 
@@ -19,9 +33,12 @@ make watch   # Postgres + app with hot reload on http://localhost:8080
 ```
 
 Then open Swagger UI at `http://localhost:8080/swagger-ui/index.html`. Health is at
-`/actuator/health`. For a first request, see the [API guide](docs/api.md).
+`/actuator/health`. For a first request, see the [API guide](docs/api.md); the CRM endpoints are
+in the [CRM API contract](docs/crm/api.md). To run the web app against it, follow
+[aureon-crm-web](https://github.com/neszaDev/aureon-crm-web).
 
-If port 5432 is already taken by another database, set `POSTGRES_PORT=5433` in `env/.env`.
+If port 5432 or 8080 is already taken by another project, set `POSTGRES_PORT=5433` or
+`APP_PORT=8081` in `env/.env` (and point the frontend at the new API port).
 
 ## Commands
 
@@ -41,7 +58,8 @@ Targets that need Docker check it first; on macOS they start Docker Desktop if i
 ## Project layout
 
 ```
-src/main/java/.../boilerplate/  feature packages: auth, user, testresult (+ security, common)
+src/main/java/.../boilerplate/  feature packages: auth, user, workspace, audit, crm (+ file, testresult,
+                                security, common)
 src/main/resources/             application*.yml profiles, db/migration (Flyway), logback
 src/test/java/                  *Test = unit, *IT = integration (Testcontainers PostgreSQL)
 docker/                         Dockerfile (+ its .dockerignore) and compose files
@@ -55,8 +73,9 @@ env/                            .env.example (tracked) and your local .env (git-
 
 | Guide | Covers |
 |---|---|
-| [Architecture](docs/architecture.md) | Request flow, feature layout, security model, persistence |
-| [API guide](docs/api.md) | Endpoints, error format, curl walkthrough |
+| [CRM](docs/crm/README.md) | Product specification, [data model](docs/crm/data-model.md), [permissions](docs/crm/permissions.md), [API contract](docs/crm/api.md) |
+| [Architecture](docs/architecture.md) | Request flow, feature layout, workspaces and tenancy, security model, persistence |
+| [API guide](docs/api.md) | Errors, accounts and sign-in, files, curl walkthrough (CRM endpoints: see above) |
 | [Configuration](docs/configuration.md) | Every environment variable and profile |
 | [Database](docs/database.md) | Flyway migrations: adding, naming, rules |
 | [Testing](docs/testing.md) | Unit vs integration tests, Testcontainers, coverage |
@@ -75,3 +94,26 @@ with `SPRING_PROFILES_ACTIVE=prod` and set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD
 `APP_VERSION` (shown at `/actuator/info`) and tag releases with semantic versions
 (`v1.2.0`). `make smoke` is the pre-deployment check. See
 [Configuration](docs/configuration.md).
+
+## Make it yours
+
+The Java package is still `com.example.boilerplate` (and the Maven `groupId` `com.example`) on
+purpose: both are placeholders, and renaming them here would only add churn to every merge from
+the boilerplate. When you build your own product from this repository, rename the package and the
+`groupId`, and the database name and user (`docker/compose.yml`, `env/.env.example`), in a commit
+of their own.
+
+## Pulling changes from the boilerplate
+
+This repository was split off from spring-postgres-boilerplate and keeps it as a Git remote, so
+fixes and dependency updates made there can be merged in:
+
+```sh
+git remote add boilerplate https://github.com/neszaDev/spring-postgres-boilerplate.git   # once
+git fetch boilerplate
+git merge boilerplate/main     # or: git cherry-pick <commit> for one fix
+```
+
+Expect conflicts in `pom.xml`, `application.yml`, the docs and the compose file, which the CRM
+changed; resolve them keeping the CRM's names (`aureon-crm-api`) and run `make verify` before
+pushing.

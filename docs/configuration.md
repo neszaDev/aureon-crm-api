@@ -81,6 +81,7 @@ which is git-ignored. The `make` targets pass it to Compose with `--env-file env
 |---|---|---|
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `boilerplate` | Used by the Postgres container and passed to the app as `DB_*` |
 | `POSTGRES_PORT` | `5432` | Host port only; change it if 5432 is taken |
+| `APP_PORT` | `8080` | Host port of the app in `make watch` and `make up` (the container still listens on 8080), e.g. `APP_PORT=8081` when another project uses 8080. Swagger UI and the API are then on that port, and the frontend's API URL must point at it. |
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
 | `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `RATE_LIMIT_*` | as above | Passed through to the app container |
 
