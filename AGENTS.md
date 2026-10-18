@@ -50,7 +50,7 @@ src/main/java/com/example/boilerplate/
                tenant-filtered JPQL aggregates, the funnel's native SQL in ReportQueries binding
                the workspace itself; the lists through the record services' mappers);
                demo/ = the opt-in demo workspace of the local and dev profiles (DemoDataSeeder:
-               through the services as its members, then the deals back-dated by SQL);
+               through the services as its members, then 21 of its 24 deals back-dated by SQL);
                common/ = what every record type shares (CrmRecord, ListParams, SortField,
                TextSearch, RecordLinks, LinkRefs, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)

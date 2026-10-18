@@ -432,8 +432,9 @@ class ReportIT extends WorkspaceTestSupport {
 
   /**
    * Deals closed around the month borders of Asia/Bangkok, for the period 2026-07-15 to 2026-10-31:
-   * 3 won (July, September twice) and 2 lost (August, October), one more of each just outside, and
-   * an archived one.
+   * 3 won (July, September twice) and 2 lost (August, October) inside it. Only won deals lie
+   * outside the period, one just before and one just after (no lost deal does); an archived won
+   * deal inside it counts nowhere.
    */
   private void closedAcrossMonths(String token, long w) throws Exception {
     Map<String, Long> stage = stages(token, w);

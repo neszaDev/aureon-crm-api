@@ -350,8 +350,9 @@ instants from `from` 00:00 to the day after `to` 00:00 there) where a period app
 dashboard, `won-lost`, `funnel` and `activities`; `pipeline` and `follow-ups` are as of now and
 take none. Without `to`, today there; without `from`, 29 days before `to` (the last 30 days); a
 blank `from=` or `to=` counts as absent. The dashboard and the three period reports return the
-`period` they used (`{ from, to }`), so a call with the defaults can label its range. `from` after `to` is a 400 on `from`, more than 366 days a 400 on `to`, a value that isn't such a
-date a 400 on its field (all `VALIDATION_FAILED` with `fieldErrors`). Every member reads them.
+`period` they used (`{ from, to }`), so a call with the defaults can label its range. `from` after
+`to` is a 400 on `from`, more than 366 days a 400 on `to`, a value that isn't such a date a 400 on
+its field (all `VALIDATION_FAILED` with `fieldErrors`). Every member reads them.
 Archived records count nowhere; totals are per currency, by code, never added across currencies.
 An empty workspace answers zeros and empty lists.
 
@@ -382,10 +383,10 @@ ends and a header row. A value with a quote, comma, semicolon or line break is q
 doubled (RFC 4180; the semicolon because semicolon-locale Excel splits on it but honours quotes);
 a value starting with `=`, `+`, `-`, `@`, tab or carriage return, or with one of `= + - @` after
 leading whitespace (no-break and ideographic spaces included), is prefixed with `'` at its very
-start first, so spreadsheets don't run it as a formula (a phone `+66 ...` reads `'+66 ...`). An empty or absent
-value is empty. Reference: the record reference (Conventions). Owner: the display name, else the
-email; empty once the owner left. Instants ISO-8601 UTC, dates `YYYY-MM-DD`, money as stored
-(`1250.00`), booleans `yes` / `no`.
+start first, so spreadsheets don't run it as a formula (a phone `+66 ...` reads `'+66 ...`). An
+empty or absent value is empty. Reference: the record reference (Conventions). Owner: the display
+name, else the email; empty once the owner left. Instants ISO-8601 UTC, dates `YYYY-MM-DD`, money as
+stored (`1250.00`), booleans `yes` / `no`.
 
 | List | Columns |
 |---|---|

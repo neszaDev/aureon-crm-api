@@ -72,8 +72,9 @@ import org.springframework.stereotype.Component;
  * DEMO_DATA}), at startup, once, in the local and dev profiles only, never together with prod. Four
  * members, one per role, and fictional records written through the services as the owner
  * (activities as their authors), so they follow the same rules and leave the same audit events as
- * any. Then the deals' creation and stage history are spread over the last 180 days by plain SQL;
- * the audit trail keeps the real times (it is append-only).
+ * any. Then the creation and stage history of 21 of the 24 deals are spread over the last 180 days
+ * by plain SQL (the three made by lead conversions keep their real times); the audit trail keeps
+ * the real times (it is append-only).
  *
  * <p>Not {@code @Transactional}: {@link WorkspaceContext#runAs} refuses to run inside a
  * transaction, so a failure part-way leaves what was written; {@code make db-reset} starts over.
