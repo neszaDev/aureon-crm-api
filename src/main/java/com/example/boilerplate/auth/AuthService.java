@@ -74,11 +74,12 @@ public class AuthService {
    * password, and is a 400 on the field, never a 401: a 401 tells the client the session is gone.
    * Every session is revoked and a new one returned.
    */
-  public AuthTokensResponse changePassword(String email, ChangePasswordRequest r) {
+  public AuthTokensResponse changePassword(long userId, ChangePasswordRequest r) {
     requireHashable("newPassword", r.newPassword());
-    rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
     User u =
-        users.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        users.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    String email = u.getEmail();
+    rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
     if (!encoder.matches(r.currentPassword(), u.getPasswordHash())) {
       rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email);
       throw new FieldValidationException("currentPassword", "is incorrect");

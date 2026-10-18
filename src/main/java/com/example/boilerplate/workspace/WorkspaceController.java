@@ -1,5 +1,6 @@
 package com.example.boilerplate.workspace;
 
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.workspace.dto.*;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -18,13 +19,13 @@ public class WorkspaceController {
 
   @GetMapping
   List<WorkspaceSummaryResponse> mine(Authentication a) {
-    return service.mine(a.getName());
+    return service.mine(CurrentUser.id(a));
   }
 
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   WorkspaceResponse create(Authentication a, @Valid @RequestBody CreateWorkspaceRequest r) {
-    return service.create(a.getName(), r);
+    return service.create(CurrentUser.id(a), r);
   }
 
   // workspaceId is declared for the API docs; WorkspaceAccessInterceptor has already resolved it.

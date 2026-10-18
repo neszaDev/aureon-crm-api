@@ -11,8 +11,7 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
       select new com.example.boilerplate.workspace.dto.WorkspaceSummaryResponse(w.id, w.name, m.role)
       from WorkspaceMember m
       join Workspace w on w.id = m.workspaceId
-      join User u on u.id = m.userId
-      where u.email = :email
+      where m.userId = :userId
       order by lower(w.name), w.id""")
-  List<WorkspaceSummaryResponse> findSummariesByMemberEmail(String email);
+  List<WorkspaceSummaryResponse> findSummariesByMemberId(long userId);
 }

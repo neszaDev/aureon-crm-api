@@ -148,14 +148,11 @@ class AuthServiceTest {
 
   @Test
   void changePasswordStoresNewHashRevokesSessionsAndStartsANewOne() {
-    User user = new User("a@example.com", "old-hash");
-    ReflectionTestUtils.setField(user, "id", 7L);
-    when(users.findByEmail("a@example.com")).thenReturn(Optional.of(user));
+    User user = user7();
     when(encoder.matches("current", "old-hash")).thenReturn(true);
     when(encoder.encode("brand-new-password")).thenReturn("new-hash");
 
-    service.changePassword(
-        "a@example.com", new ChangePasswordRequest("current", "brand-new-password"));
+    service.changePassword(7L, new ChangePasswordRequest("current", "brand-new-password"));
 
     assertEquals("new-hash", user.getPasswordHash());
     verify(refreshTokens).revokeAll(7L);
@@ -165,8 +162,7 @@ class AuthServiceTest {
 
   @Test
   void changePasswordWithWrongCurrentPasswordIsAFieldErrorAndCountsAsAFailure() {
-    User user = new User("a@example.com", "old-hash");
-    when(users.findByEmail("a@example.com")).thenReturn(Optional.of(user));
+    User user = user7();
     when(encoder.matches("wrong", "old-hash")).thenReturn(false);
 
     var e =
@@ -174,7 +170,7 @@ class AuthServiceTest {
             FieldValidationException.class,
             () ->
                 service.changePassword(
-                    "a@example.com", new ChangePasswordRequest("wrong", "brand-new-password")));
+                    7L, new ChangePasswordRequest("wrong", "brand-new-password")));
     assertEquals("currentPassword", e.field());
     assertEquals("old-hash", user.getPasswordHash());
     verify(rateLimiter).record(Policy.LOGIN_FAILURES_PER_EMAIL, "a@example.com");
@@ -194,22 +190,29 @@ class AuthServiceTest {
     var change =
         assertThrows(
             FieldValidationException.class,
-            () -> service.changePassword("a@example.com", new ChangePasswordRequest("old", thai)));
+            () -> service.changePassword(7L, new ChangePasswordRequest("old", thai)));
     assertEquals("newPassword", change.field());
     verifyNoInteractions(users, encoder, refreshTokens);
   }
 
   @Test
   void changePasswordIsRefusedWhileTheEmailIsBlocked() {
+    user7();
     doThrow(new RateLimitExceededException(Duration.ofSeconds(30)))
         .when(rateLimiter)
         .check(Policy.LOGIN_FAILURES_PER_EMAIL, "a@example.com");
 
     assertThrows(
         RateLimitExceededException.class,
-        () ->
-            service.changePassword(
-                "a@example.com", new ChangePasswordRequest("right", "brand-new-password")));
-    verifyNoInteractions(users, encoder, refreshTokens);
+        () -> service.changePassword(7L, new ChangePasswordRequest("right", "brand-new-password")));
+    verifyNoInteractions(encoder, refreshTokens);
+  }
+
+  /** User 7, a@example.com with "old-hash", found by its id. */
+  private User user7() {
+    User user = new User("a@example.com", "old-hash");
+    ReflectionTestUtils.setField(user, "id", 7L);
+    when(users.findById(7L)).thenReturn(Optional.of(user));
+    return user;
   }
 }

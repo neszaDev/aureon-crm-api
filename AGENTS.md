@@ -108,8 +108,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   mistakes must never produce a 500. A rule violation carries an `ErrorCode` (`ConflictException`,
   `ForbiddenException`, optionally `FieldValidationException`) that clients translate; a new code
   goes into the table in docs/crm/api.md (Conventions) and `ErrorCodeIT`.
-- **Owner scoping.** Queries for user-owned data filter by the authenticated email
-  (`findByIdAndOwnerEmail`). Another user's row is a 404, not a 403.
+- **Owner scoping.** Queries for user-owned data filter by the caller's user id
+  (`findByIdAndOwnerId`, the id from `CurrentUser.id(authentication)`), never by the token's
+  email: an email can move to another account. Another user's row is a 404, not a 403.
 - **Workspace endpoints** live under `/api/v1/workspaces/{workspaceId}/...`. `WorkspaceAccessInterceptor`
   resolves the caller's membership (no membership: 404) into `WorkspaceContext`; the scope of every
   query comes from that context (Hibernate's `@TenantId` on entities that extend
@@ -119,7 +120,7 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 - **Not tenant-filtered:** `Workspace`, `WorkspaceMember`, `Invitation` and `AuditEvent` don't
   extend `WorkspaceOwnedEntity`. Inside a workspace route every query on them, including a JPQL
   join from a tenant-owned entity, must bind `WorkspaceContext.workspaceId()` explicitly. Outside
-  one (an invitation link, the caller's own workspace list) the token hash or the email scopes it.
+  one (an invitation link, the caller's own workspace list) the token hash or the user id scopes it.
 - **Audit changes:** an update's event stores `AuditChanges.recordDiff(before, after)` of the
   response DTOs (it drops `version`, `createdAt`, `updatedAt` and the components marked
   `@Derived`: what follows from other fields, such as `fullName`, `overdue`, a count, `archived`

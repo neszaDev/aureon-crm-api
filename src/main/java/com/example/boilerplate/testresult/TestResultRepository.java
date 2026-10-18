@@ -5,9 +5,9 @@ import org.springframework.data.domain.*;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TestResultRepository extends JpaRepository<TestResult, Long> {
-  Page<TestResult> findByOwnerEmail(String email, Pageable pageable);
+  Page<TestResult> findByOwnerId(long ownerId, Pageable pageable);
 
-  Optional<TestResult> findByIdAndOwnerEmail(Long id, String email);
+  Optional<TestResult> findByIdAndOwnerId(Long id, long ownerId);
 
-  long countByOwnerEmailAndStatus(String email, TestStatus status);
+  long countByOwnerIdAndStatus(long ownerId, TestStatus status);
 }

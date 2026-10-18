@@ -1,5 +1,6 @@
 package com.example.boilerplate.testresult;
 
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.testresult.dto.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -22,7 +23,7 @@ public class TestResultController {
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   TestResultResponse create(Authentication a, @Valid @RequestBody CreateTestResultRequest r) {
-    return service.create(a.getName(), r);
+    return service.create(CurrentUser.id(a), r);
   }
 
   @GetMapping
@@ -30,28 +31,28 @@ public class TestResultController {
       Authentication a,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-    return service.list(a.getName(), page, size);
+    return service.list(CurrentUser.id(a), page, size);
   }
 
   @GetMapping("/summary")
   TestResultSummaryResponse summary(Authentication a) {
-    return service.summary(a.getName());
+    return service.summary(CurrentUser.id(a));
   }
 
   @GetMapping("/{id}")
   TestResultResponse get(Authentication a, @PathVariable Long id) {
-    return service.get(a.getName(), id);
+    return service.get(CurrentUser.id(a), id);
   }
 
   @PatchMapping("/{id}")
   TestResultResponse update(
       Authentication a, @PathVariable Long id, @Valid @RequestBody UpdateTestResultRequest r) {
-    return service.update(a.getName(), id, r);
+    return service.update(CurrentUser.id(a), id, r);
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void delete(Authentication a, @PathVariable Long id) {
-    service.delete(a.getName(), id);
+    service.delete(CurrentUser.id(a), id);
   }
 }

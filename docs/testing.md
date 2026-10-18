@@ -49,8 +49,9 @@ Extend `support/AbstractIntegrationTest`. It provides:
 Tests of workspace endpoints extend `support/WorkspaceTestSupport` (itself an
 `AbstractIntegrationTest`), which adds `tokenFor(email)` (register, get the access token),
 `createWorkspace(token, name)` (the token's user becomes the owner), `addMember(workspaceId, email,
-role)` (straight into the database; invitations are the real way in), `send(token, request[,
-body])` and `body(result)`. Give each test its own users and workspaces, like any other IT.
+role)` (straight into the database; invitations are the real way in), `membership(workspaceId,
+email)` (the `Membership` the interceptor would resolve, for `WorkspaceContext.runAs`),
+`send(token, request[, body])` and `body(result)`. Give each test its own users and workspaces, like any other IT.
 
 All IT classes share **one** Spring context and one database, and nothing is cleaned between
 tests. Isolate tests with fresh users (`uniqueEmail()`), and never assert on global counts.
@@ -62,6 +63,7 @@ What the existing ITs cover:
 | `BoilerplateApplicationIT` | Migrations applied, schema validates |
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
 | `security/SecurityIT` | Public vs protected endpoints, `X-Request-Id` |
+| `security/TokenBindingIT` | Access tokens bound to the user id: an admin's email swap, a deleted user's re-registered email, a password or role change → 401; a session across refresh |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
 | `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For` |
 | `file/FileIT` | Upload, download headers, owner isolation, type/size rejection, blob cleanup |

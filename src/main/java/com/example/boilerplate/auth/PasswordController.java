@@ -1,6 +1,7 @@
 package com.example.boilerplate.auth;
 
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.user.dto.ChangePasswordRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -19,6 +20,6 @@ public class PasswordController {
   @PostMapping
   AuthTokensResponse change(
       Authentication authentication, @Valid @RequestBody ChangePasswordRequest r) {
-    return service.changePassword(authentication.getName(), r);
+    return service.changePassword(CurrentUser.id(authentication), r);
   }
 }

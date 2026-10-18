@@ -162,15 +162,15 @@ public class InvitationService {
    * Two concurrent accepts may both pass the checks; the membership's unique key (or the
    * invitation's version) makes the second fail with a 409.
    */
-  public AcceptInvitationResponse accept(String token, String email) {
+  public AcceptInvitationResponse accept(String token, long userId) {
     Invitation i = byToken(token);
-    if (!i.getEmail().equals(email)) {
+    User user =
+        users.findById(userId).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    if (!i.getEmail().equals(user.getEmail())) {
       throw new ForbiddenException(
           ErrorCode.INVITATION_EMAIL_MISMATCH, "This invitation is for another email address");
     }
     requirePending(i);
-    User user =
-        users.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
     if (members.existsByWorkspaceIdAndUserId(i.getWorkspaceId(), user.getId())) {
       i.accept(Instant.now());
     } else {

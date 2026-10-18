@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class JwtServiceTest {
   private static final String SECRET = "0123456789abcdef0123456789abcdef";
@@ -24,9 +25,13 @@ class JwtServiceTest {
   }
 
   @Test
-  void issuedTokenParsesBackToSubjectAndRole() {
-    var claims = jwt.parse(jwt.issue(new User("Me@Example.com", "hash")));
+  void issuedTokenParsesBackToSubjectUserIdAndRole() {
+    User user = new User("Me@Example.com", "hash");
+    ReflectionTestUtils.setField(user, "id", 42L);
+    var claims = jwt.parse(jwt.issue(user));
     assertThat(claims.getSubject()).isEqualTo("me@example.com");
+    assertThat(claims.get(JwtService.USER_ID, Long.class)).isEqualTo(42L);
+    assertThat(claims.getIssuedAt()).isNotNull();
     assertThat(claims.get("role", String.class)).isEqualTo("USER");
     assertThat(jwt.expiresInSeconds()).isEqualTo(900);
   }

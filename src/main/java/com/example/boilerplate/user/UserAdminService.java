@@ -36,8 +36,8 @@ public class UserAdminService {
   }
 
   @Transactional(readOnly = true)
-  public Page<UserResponse> list(String actorEmail, String query, int page, int size) {
-    requireAdmin(actorEmail);
+  public Page<UserResponse> list(long actorId, String query, int page, int size) {
+    requireAdmin(actorId);
     String search = Texts.param("q", query);
     var pageable =
         PageRequest.of(
@@ -50,13 +50,13 @@ public class UserAdminService {
   }
 
   @Transactional(readOnly = true)
-  public UserResponse get(String actorEmail, Long id) {
-    requireAdmin(actorEmail);
+  public UserResponse get(long actorId, Long id) {
+    requireAdmin(actorId);
     return mapper.toResponse(user(id));
   }
 
-  public UserResponse update(String actorEmail, Long id, UpdateUserRequest r) {
-    User target = notSelf(requireAdmin(actorEmail), user(id), "You cannot change your own account");
+  public UserResponse update(long actorId, Long id, UpdateUserRequest r) {
+    User target = notSelf(requireAdmin(actorId), user(id), "You cannot change your own account");
     boolean changed = false;
     if (r.email() != null && !r.email().equalsIgnoreCase(target.getEmail())) {
       if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
@@ -72,15 +72,15 @@ public class UserAdminService {
     return mapper.toResponse(target);
   }
 
-  public void delete(String actorEmail, Long id) {
-    User target = notSelf(requireAdmin(actorEmail), user(id), "You cannot delete your own account");
+  public void delete(long actorId, Long id) {
+    User target = notSelf(requireAdmin(actorId), user(id), "You cannot delete your own account");
     events.publishEvent(new UserDeletionEvent(target.getId()));
     users.delete(target);
   }
 
-  private User requireAdmin(String email) {
+  private User requireAdmin(long actorId) {
     User actor =
-        users.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        users.findById(actorId).orElseThrow(() -> new UsernameNotFoundException("User not found"));
     if (actor.getRole() != Role.ADMIN) throw new AccessDeniedException("Admin role required");
     return actor;
   }

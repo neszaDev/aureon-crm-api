@@ -46,8 +46,7 @@ class RecordLinksIT extends WorkspaceTestSupport {
                 Map.of("name", "Renewal", "amount", "1")))
             .get("id")
             .asLong();
-    return new Tenant(
-        members.findMembership(w, email).orElseThrow(), company, source, contact, lead, deal);
+    return new Tenant(membership(w, email), company, source, contact, lead, deal);
   }
 
   @Test

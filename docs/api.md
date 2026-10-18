@@ -25,7 +25,7 @@ refused before routing) the request path with invitation tokens masked.
 | Status | When |
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter |
-| 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user |
+| 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user, of a user whose email changed since, or issued before the user's last email, role or password change |
 | 403 | Valid token without the required role (admin endpoints) or workspace permission; `POST /auth/register` when `REGISTRATION_ENABLED=false` |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user*; anything under a workspace the caller is not a member of |
 | 409 | Email already registered; an admin changing or deleting their own account; a concurrent update; a rule of the CRM (last owner, duplicate name, an invitation that is no longer pending, ...) |
@@ -168,7 +168,8 @@ curl --request POST 'http://localhost:8080/api/v1/users/me/password' \
 - `newPassword` follows the registration rules: 6-72 characters and at most 72 bytes in UTF-8
   (24 Thai characters). Longer is a 400 on `newPassword` (`password` when registering).
 - On success every refresh token of the user is revoked and a new pair is returned, so other
-  devices must sign in again. Their access tokens keep working until they expire.
+  devices must sign in again. Access tokens issued before the change get 401 at once (one issued
+  in the same second still works: a token's `iat` has whole seconds).
 
 ## User management (admins)
 
@@ -195,9 +196,9 @@ curl --request DELETE 'http://localhost:8080/api/v1/users/<id>' \
   --header "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-- Changing a user's email or role signs them out: their refresh tokens are deleted. Their current
-  access token keeps working until it expires (15 minutes by default), but the admin endpoints
-  check the role in the database, so a demoted admin loses admin access immediately.
+- Changing a user's email or role signs them out: their refresh tokens are deleted and their
+  access tokens get 401 at once. Requests take the role from the database, not from the token, and
+  the admin endpoints re-check it, so a demoted admin loses admin access immediately.
 - An admin can't change or delete their own account here (409), so there is always one admin.
 
 ## Files

@@ -1,5 +1,6 @@
 package com.example.boilerplate.user;
 
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
 import jakarta.validation.Valid;
@@ -27,23 +28,23 @@ public class UserAdminController {
       @RequestParam(required = false) @Size(max = 254) String q,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-    return service.list(a.getName(), q, page, size);
+    return service.list(CurrentUser.id(a), q, page, size);
   }
 
   @GetMapping("/{id}")
   UserResponse get(Authentication a, @PathVariable Long id) {
-    return service.get(a.getName(), id);
+    return service.get(CurrentUser.id(a), id);
   }
 
   @PatchMapping("/{id}")
   UserResponse update(
       Authentication a, @PathVariable Long id, @Valid @RequestBody UpdateUserRequest r) {
-    return service.update(a.getName(), id, r);
+    return service.update(CurrentUser.id(a), id, r);
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void delete(Authentication a, @PathVariable Long id) {
-    service.delete(a.getName(), id);
+    service.delete(CurrentUser.id(a), id);
   }
 }

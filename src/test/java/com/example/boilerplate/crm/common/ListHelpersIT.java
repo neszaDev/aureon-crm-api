@@ -25,7 +25,7 @@ class ListHelpersIT extends WorkspaceTestSupport {
   private Membership newWorkspace() throws Exception {
     String email = uniqueEmail();
     long id = createWorkspace(tokenFor(email), "Lists");
-    return members.findMembership(id, email).orElseThrow();
+    return membership(id, email);
   }
 
   private void save(Membership m, String name, boolean archived) throws Exception {

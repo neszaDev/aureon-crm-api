@@ -70,17 +70,20 @@ stages and lead sources). The full model is in [docs/crm/](crm/README.md); the m
 
 ## Security
 
-- **Access tokens** are HS256 JWTs (`auth/JwtService`) with the email as subject and a `role`
-  claim, and are short-lived (15 min by default). An invalid or missing token leaves the
-  request anonymous, and `ApiAuthenticationEntryPoint` answers protected paths with 401 and an
-  `ApiError` body. A valid token whose user was deleted also gets 401.
+- **Access tokens** are HS256 JWTs (`auth/JwtService`) bound to the user id (`uid` claim; the
+  email stays the subject, with a `role` claim), and are short-lived (15 min by default).
+  `JwtAuthenticationFilter` loads the user by id and sets a `CurrentUser(id, email)` principal
+  with the role from the database; services look the caller up by that id. An invalid or missing
+  token, or one whose user is gone, whose email changed or that predates the user's
+  `sessions_valid_after` (an email, role or password change), leaves the request anonymous, and
+  `ApiAuthenticationEntryPoint` answers protected paths with 401 and an `ApiError` body.
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   Each refresh rotates the token (the old one is deleted under a row lock), and logout deletes
   it.
 - **Rate limits** (`ratelimit/RateLimiter`): Bucket4j buckets in a bounded Caffeine cache, per
   client IP for sign-in and registration, and per email for failed sign-ins. In-memory, so per
   instance. The client IP comes from `X-Forwarded-For` of trusted proxies only.
-- **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` from the token, and
+- **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` (the database role), and
   `UserAdminService` re-checks it in the database. `ApiAccessDeniedHandler` answers 403 with an
   `ApiError` body. The account role is separate from workspace roles: a system admin has no
   access to a workspace it isn't a member of.

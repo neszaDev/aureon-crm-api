@@ -16,8 +16,8 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
       select new com.example.boilerplate.workspace.Membership(m.workspaceId, u.id, u.email, m.role)
       from WorkspaceMember m
       join User u on u.id = m.userId
-      where m.workspaceId = :workspaceId and u.email = :email""")
-  Optional<Membership> findMembership(long workspaceId, String email);
+      where m.workspaceId = :workspaceId and m.userId = :userId""")
+  Optional<Membership> findMembership(long workspaceId, long userId);
 
   Optional<WorkspaceMember> findByWorkspaceIdAndUserId(long workspaceId, long userId);
 

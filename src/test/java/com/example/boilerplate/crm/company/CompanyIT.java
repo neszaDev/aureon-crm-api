@@ -314,7 +314,7 @@ class CompanyIT extends WorkspaceTestSupport {
     create(token, w, Map.of("name", "Inside", "website", "https://notacme.com"));
     create(token, w, Map.of("name", "Sub", "website", "https://shop.acme.com"));
     create(token, w, Map.of("name", "In path", "website", "https://example.org/acme.com"));
-    Membership m = members.findMembership(w, email).orElseThrow();
+    Membership m = membership(w, email);
 
     // The service then drops "Longer" by comparing hosts (see duplicates()).
     assertThat(

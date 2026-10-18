@@ -45,13 +45,13 @@ public class WorkspaceService {
   }
 
   @Transactional(readOnly = true)
-  public List<WorkspaceSummaryResponse> mine(String email) {
-    return workspaces.findSummariesByMemberEmail(email);
+  public List<WorkspaceSummaryResponse> mine(long userId) {
+    return workspaces.findSummariesByMemberId(userId);
   }
 
   /** The workspace, its owner membership and its default stages and sources commit together. */
-  public WorkspaceResponse create(String email, CreateWorkspaceRequest r) {
-    User user = users.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
+  public WorkspaceResponse create(long userId, CreateWorkspaceRequest r) {
+    User user = users.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
     Workspace w =
         workspaces.save(
             new Workspace(Texts.required("name", r.name()), r.defaultCurrency(), r.timezone()));

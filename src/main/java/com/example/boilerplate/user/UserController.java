@@ -1,5 +1,6 @@
 package com.example.boilerplate.user;
 
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.user.dto.UpdateProfileRequest;
 import com.example.boilerplate.user.dto.UserResponse;
 import jakarta.validation.Valid;
@@ -17,11 +18,11 @@ public class UserController {
 
   @GetMapping("/me")
   UserResponse me(Authentication authentication) {
-    return service.currentUser(authentication.getName());
+    return service.currentUser(CurrentUser.id(authentication));
   }
 
   @PutMapping("/me")
   UserResponse updateMe(Authentication authentication, @Valid @RequestBody UpdateProfileRequest r) {
-    return service.updateProfile(authentication.getName(), r);
+    return service.updateProfile(CurrentUser.id(authentication), r);
   }
 }

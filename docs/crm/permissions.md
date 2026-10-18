@@ -3,11 +3,22 @@
 Workspace roles are separate from the boilerplate's account role (`users.role`: `USER`/`ADMIN`).
 A system `ADMIN` manages accounts but has **no** access to any workspace it is not a member of.
 
+## Who the caller is
+
+An access token names its user by id (the `uid` claim); `sub` keeps the email for
+compatibility. `JwtAuthenticationFilter` loads that user by primary key on every request and
+leaves the request anonymous (401) when the user is gone, when its email is no longer the token's
+`sub`, or when the token was issued before the user's `sessions_valid_after` (set on an email,
+role or password change; whole seconds, like the token's `iat`). The membership, `/users/me`,
+the password change, files and test results are then looked up by the user id, never by email, so
+an admin who renames accounts can't make one account's token resolve to another account, and a
+deleted user's token can't attach to whoever registers the email again.
+
 ## Enforcement
 
 1. Every CRM endpoint lives under `/api/v1/workspaces/{workspaceId}/...`.
 2. `WorkspaceAccessInterceptor` runs before the controller. It looks up the caller's membership
-   of `{workspaceId}` in the database (one indexed query). **No membership: 404**, exactly like an
+   of `{workspaceId}` by the caller's user id in the database (one indexed query). **No membership: 404**, exactly like an
    unknown workspace, so ids can't be probed. With a membership, it stores the workspace id and
    role for the request (`WorkspaceContext`).
 3. Hibernate's `@TenantId` on every workspace-owned entity adds `workspace_id = <current>` to every

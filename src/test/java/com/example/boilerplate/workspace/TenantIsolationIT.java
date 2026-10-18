@@ -78,8 +78,8 @@ class TenantIsolationIT extends WorkspaceTestSupport {
     long wa = createWorkspace(tokenFor(emailA), "A");
     String emailB = uniqueEmail();
     long wb = createWorkspace(tokenFor(emailB), "B");
-    Membership memberOfA = members.findMembership(wa, emailA).orElseThrow();
-    Membership memberOfB = members.findMembership(wb, emailB).orElseThrow();
+    Membership memberOfA = membership(wa, emailA);
+    Membership memberOfB = membership(wb, emailB);
 
     assertThat(stages.findAll()).isEmpty();
 

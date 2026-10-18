@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
+import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,13 +100,14 @@ class UserAdminIT extends WorkspaceTestSupport {
     long id = idOf(email);
     mvc.perform(patchJson(id, Map.of("role", "ADMIN"), admin)).andExpect(status().isOk());
     String token = login(email, PASSWORD).get("accessToken").asText();
+    // A token's iat has whole seconds: one issued in the second of the change would survive it.
+    long second = Instant.now().getEpochSecond();
+    while (Instant.now().getEpochSecond() == second) Thread.sleep(20);
 
     mvc.perform(patchJson(id, Map.of("role", "USER"), admin)).andExpect(status().isOk());
 
-    // The token still says ADMIN; the service checks the database.
-    mvc.perform(auth(get("/api/v1/users"), token))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.message").value("Admin role required"));
+    // The token still says ADMIN, but it predates the role change: refused outright.
+    mvc.perform(auth(get("/api/v1/users"), token)).andExpect(status().isUnauthorized());
   }
 
   @Test

@@ -28,8 +28,8 @@ class MemberDirectoryIT extends WorkspaceTestSupport {
     User c = users.findByEmail(emailC).orElseThrow();
     c.changeDisplayName("Cee");
     users.save(c);
-    Membership inA = members.findMembership(wa, emailA).orElseThrow();
-    Membership inB = members.findMembership(wb, emailB).orElseThrow();
+    Membership inA = membership(wa, emailA);
+    Membership inB = membership(wb, emailB);
     long idA = inA.userId();
     long idB = inB.userId();
     long idC = c.getId();
@@ -50,8 +50,8 @@ class MemberDirectoryIT extends WorkspaceTestSupport {
     String emailB = uniqueEmail();
     long wa = createWorkspace(tokenFor(emailA), "A");
     long wb = createWorkspace(tokenFor(emailB), "B");
-    Membership inA = members.findMembership(wa, emailA).orElseThrow();
-    long idB = members.findMembership(wb, emailB).orElseThrow().userId();
+    Membership inA = membership(wa, emailA);
+    long idB = membership(wb, emailB).userId();
 
     assertThat(WorkspaceContext.runAs(inA, () -> directory.ref(inA.userId())))
         .contains(new MemberRef(inA.userId(), emailA, null));
@@ -64,7 +64,7 @@ class MemberDirectoryIT extends WorkspaceTestSupport {
   void emptyInputAndNullIdsAreIgnored() throws Exception {
     String emailA = uniqueEmail();
     long wa = createWorkspace(tokenFor(emailA), "A");
-    Membership inA = members.findMembership(wa, emailA).orElseThrow();
+    Membership inA = membership(wa, emailA);
 
     assertThat(WorkspaceContext.runAs(inA, () -> directory.refs(List.of()))).isEmpty();
     assertThat(WorkspaceContext.runAs(inA, () -> directory.refs(Arrays.asList(null, inA.userId()))))

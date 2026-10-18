@@ -16,6 +16,9 @@ public class JwtService {
 
   static final int MIN_SECRET_BYTES = 32; // HS256 needs a 256-bit key
 
+  /** The user's id: what a token is bound to ({@code sub} keeps the email). */
+  public static final String USER_ID = "uid";
+
   public JwtService(AuthProperties properties) {
     byte[] secret = properties.jwt().secret().getBytes(StandardCharsets.UTF_8);
     if (secret.length < MIN_SECRET_BYTES) {
@@ -34,6 +37,7 @@ public class JwtService {
     Instant now = Instant.now();
     return Jwts.builder()
         .subject(user.getEmail())
+        .claim(USER_ID, user.getId())
         .claim("role", user.getRole().name())
         .issuedAt(Date.from(now))
         .expiration(Date.from(now.plus(ttl)))

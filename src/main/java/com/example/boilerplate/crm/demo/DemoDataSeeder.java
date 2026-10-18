@@ -229,7 +229,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     for (int i = 0; i < LOGINS.size(); i++) ids.add(user(LOGINS.get(i), NAMES.get(i), password));
     long w =
         workspaces
-            .create(LOGINS.get(0), new CreateWorkspaceRequest(WORKSPACE, "USD", ZONE.getId()))
+            .create(ids.get(0), new CreateWorkspaceRequest(WORKSPACE, "USD", ZONE.getId()))
             .id();
     List<Membership> team = new ArrayList<>();
     for (int i = 0; i < LOGINS.size(); i++) {

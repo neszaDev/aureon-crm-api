@@ -1,6 +1,7 @@
 package com.example.boilerplate.workspace.invitation;
 
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.workspace.invitation.dto.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -25,7 +26,7 @@ public class InvitationController {
 
   @PostMapping("/accept")
   AcceptInvitationResponse accept(@PathVariable String token, Authentication a) {
-    return service.accept(token, a.getName());
+    return service.accept(token, CurrentUser.id(a));
   }
 
   @PostMapping("/register")

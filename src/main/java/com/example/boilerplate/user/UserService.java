@@ -18,21 +18,21 @@ public class UserService {
     this.mapper = mapper;
   }
 
-  public UserResponse currentUser(String email) {
-    return mapper.toResponse(find(email));
+  public UserResponse currentUser(long userId) {
+    return mapper.toResponse(find(userId));
   }
 
   /** Strips the name; a blank one clears it. */
   @Transactional
-  public UserResponse updateProfile(String email, UpdateProfileRequest r) {
-    User user = find(email);
+  public UserResponse updateProfile(long userId, UpdateProfileRequest r) {
+    User user = find(userId);
     user.changeDisplayName(Texts.optional(r.displayName()));
     return mapper.toResponse(user);
   }
 
-  private User find(String email) {
+  private User find(long userId) {
     return users
-        .findByEmail(email)
+        .findById(userId)
         .orElseThrow(() -> new UsernameNotFoundException("User not found"));
   }
 }

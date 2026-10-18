@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.boilerplate.user.UserRepository;
+import com.example.boilerplate.workspace.Membership;
 import com.example.boilerplate.workspace.WorkspaceMember;
 import com.example.boilerplate.workspace.WorkspaceMemberRepository;
 import com.example.boilerplate.workspace.WorkspaceRole;
@@ -51,6 +52,12 @@ public abstract class WorkspaceTestSupport extends AbstractIntegrationTest {
   protected void addMember(long workspaceId, String email, WorkspaceRole role) {
     members.save(
         new WorkspaceMember(workspaceId, users.findByEmail(email).orElseThrow().getId(), role));
+  }
+
+  /** The membership of {@code email}'s user in the workspace, as the interceptor resolves it. */
+  protected Membership membership(long workspaceId, String email) {
+    long userId = users.findByEmail(email).orElseThrow().getId();
+    return members.findMembership(workspaceId, userId).orElseThrow();
   }
 
   /** Sends {@code request} as the token's user, with {@code body} as JSON unless it is null. */

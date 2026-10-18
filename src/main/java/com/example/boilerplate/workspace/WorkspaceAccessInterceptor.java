@@ -1,10 +1,11 @@
 package com.example.boilerplate.workspace;
 
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.security.CurrentUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.security.Principal;
 import java.util.Map;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
@@ -22,11 +23,12 @@ class WorkspaceAccessInterceptor implements AsyncHandlerInterceptor {
 
   @Override
   public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
-    Principal principal = req.getUserPrincipal();
     long workspaceId = workspaceId(req);
-    if (principal == null || workspaceId <= 0) throw notFound();
+    if (!(req.getUserPrincipal() instanceof Authentication a
+            && a.getPrincipal() instanceof CurrentUser caller)
+        || workspaceId <= 0) throw notFound();
     WorkspaceContext.set(
-        members.findMembership(workspaceId, principal.getName()).orElseThrow(this::notFound));
+        members.findMembership(workspaceId, caller.id()).orElseThrow(this::notFound));
     return true;
   }
 
