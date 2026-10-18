@@ -38,6 +38,9 @@ Then open Swagger UI at `http://localhost:8080/swagger-ui/index.html`. Health is
 in the [CRM API contract](docs/crm/api.md). To run the web app against it, follow
 [aureon-crm-web](https://github.com/neszaDev/aureon-crm-web).
 
+For a workspace full of sample data to click through, set `DEMO_DATA=true` in `env/.env` first
+([Try it](docs/crm/README.md#try-it)).
+
 If port 5432 or 8080 is already taken by another project, set `POSTGRES_PORT=5433` or
 `APP_PORT=8081` in `env/.env` (and point the frontend at the new API port).
 

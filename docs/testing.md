@@ -38,6 +38,8 @@ Extend `support/AbstractIntegrationTest`. It provides:
   `registerAndGetAccessToken()`, `adminAccessToken()`, `bearer(token)`
 - rate limits **off** (`application-test.yml`), since every IT registers from one address
 - an export cap of **3 rows** (`app.export.max-rows`), so a fourth row reaches it
+- `app.demo.*` for `crm/demo/DemoDataSeederIT`, which builds the seeder (a `local`/`dev` bean, never
+  started here) from the context and runs it
 - an admin account (`ADMIN_EMAIL`), created by `AdminBootstrap` from `application-test.yml`;
   never change or delete it in a test
 
@@ -72,6 +74,7 @@ What the existing ITs cover:
 | `workspace/TenantIsolationIT` | `@TenantId`: another workspace's ids are 404, queries without a workspace context return nothing, inserts without one fail |
 | `workspace/WorkspaceEndpointsGuardIT` | Takes every `/api/v1/workspaces/{workspaceId}/...` endpoint from the running application: 404 for a non-member, 401 without a token |
 | `audit/AuditTrailIT` | Audit events written with the change, append-only (the database refuses `UPDATE`/`DELETE`), refuses to run outside a transaction |
+| `audit/AuditEventIT` | Reading the trail: newest first with the id tie-breaker, the actor (no name once the account is gone, no actor without one), filters and paging, `AUDIT_READ` for the trail and any member for one record's history (each record type; the other types 403, before paging errors), other workspaces' events never listed, bad parameters 400 (page overflow, an unknown type without a `code`) |
 | `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, concurrent deletes of the last two open stages, a reorder or a create racing a delete, permissions, versions, validation |
 | `crm/settings/LeadSourceIT` | Default sources, create/rename/archive/delete, duplicate names, permissions, versions |
 | `workspace/MemberDirectoryIT` | Owner, assignee and author names: only members of the current workspace resolve |
@@ -89,12 +92,13 @@ What the existing ITs cover:
 | `crm/export/ExportIT` | CSV export of companies, contacts, leads and deals: header and columns, BOM, file name, the same rows in the same order as the list for each filter (`unassigned` too), formula protection, Thai text, `EXPORT` permission (403), other workspaces' rows never exported, the row cap (400 `EXPORT_TOO_LARGE`, nothing recorded), the audit event |
 | `crm/insight/DashboardIT` | The dashboard: all zeros and empty lists for an empty workspace, every value against stored data (archived records left out, totals and weighted amounts per currency, the deal's probability override, won/lost in the period, the caller's task lists, record changes only), half-up rounding per currency, a deal closed at 23:30 in Bangkok on `to` inside the period, other workspaces never counted (also for a member of both), period 400s on `from` / `to` |
 | `crm/insight/ReportIT` | The five reports: zeros and empty lists for an empty workspace (any member reads them), the pipeline by stage and by owner (the unassigned bucket of a removed member, the order by largest total then email, closed and archived deals left out), won/lost by month in the workspace zone (a close at 01:00 Bangkok on 1 September, the period's first and last instants, empty months, archived left out), the funnel (highest stage reached, Lost and a deleted stage counting for nothing, the cohort by creation, `historyFrom`), activities by author and completed tasks by assignee in the period (a removed member's), follow-ups (workspace-wide, orders, the cap of 20 with the full count, 7 days ahead, today in Pacific/Kiritimati), another workspace's identical data never counted (the funnel's native SQL), period 400s |
+| `crm/demo/DemoDataSeederIT` | The demo workspace: the four logins and roles, the record counts and spreads, `example.com` addresses, the back-dated deal history consistent (creation first, moves in order, `closedAt` the last move), the funnel and won/lost reports agree with it, a second run adds nothing; the seeder is a `local`/`dev` bean only |
 | `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), the contact of a converted lead, a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
 `WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one
 answers a non-member with anything but 404. If it fails, fix the endpoint, not the test. Only its
-minimum endpoint count (`hasSizeGreaterThanOrEqualTo`) is raised by hand, to the number registered
-(62 after the activities), so a scan that silently misses endpoints can't pass.
+minimum endpoint count (`hasSizeGreaterThanOrEqualTo`) is raised by hand, to the number registered,
+with every new workspace endpoint, so a scan that silently misses endpoints can't pass.
 
 ## Reports
 

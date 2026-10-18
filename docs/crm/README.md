@@ -145,3 +145,24 @@ in the same transaction as the change. An edit's event lists the stored fields i
 follows from them (a full name, an overdue flag, a count, the probability a deal takes from its
 stage). Owners and admins can read the whole trail; every member can read the history of a record
 they can see.
+
+## Try it
+
+The local and dev profiles can seed a demo workspace, **Northwind Supply (demo)** (USD,
+Asia/Bangkok), once: set `DEMO_DATA=true` in `env/.env`, then `make watch` (or `make up`). The log
+names the workspace id and the logins; sign in with any of them and the password `DEMO_PASSWORD`
+(default `demo-password`):
+
+| Login | Name | Role |
+|---|---|---|
+| `owner@demo.test` | Avery Owner | Owner |
+| `admin@demo.test` | Sam Admin | Admin |
+| `manager@demo.test` | Morgan Manager | Manager |
+| `rep@demo.test` | Riley Rep | Sales rep |
+
+It holds 12 companies, 30 contacts (some tagged `vip` or `partner`), 15 leads in every status (3
+converted), 24 deals in every stage (a few in EUR) whose history goes back up to 180 days, 30
+tasks (completed, overdue, due this week, later) and 60 activities from the last 60 days, all
+fictional with `example.com` addresses, made the same way each time. A restart finds the workspace
+and adds nothing; `make db-reset` deletes the local database to start over. The prod profile never
+seeds ([data-model.md](data-model.md#development-data)).

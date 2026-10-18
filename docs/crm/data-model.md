@@ -117,6 +117,11 @@ workspace, which is fine at SMB scale; `pg_trgm` indexes are the upgrade path.
 ## Development data
 
 `app.demo.enabled=true` (env `DEMO_DATA=true`, local and dev profiles only) creates, once, a demo
-workspace with a few members and fictional companies, contacts, leads, deals, tasks and
-activities using `example.com` addresses. It is never part of a migration, so production never gets
-it.
+workspace with a member per role and fictional companies, contacts, leads, deals, tasks and
+activities using `example.com` addresses ([README.md](README.md#try-it) lists them). It is never
+part of a migration, so production never gets it. `crm/demo/DemoDataSeeder` writes the records
+through the services, so they carry the usual rules and audit events, then back-dates the deals'
+`created_at`, stage history (`changed_at`) and `closed_at` with plain SQL so the reports have
+months to show: each deal's first history entry stays at its creation and its close at the move
+into Won or Lost. The audit trail is never updated, so its events keep the real time of the
+seeding.
