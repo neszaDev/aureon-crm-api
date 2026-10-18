@@ -6,11 +6,13 @@ import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.ForbiddenException;
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
+import com.example.boilerplate.common.security.AccountEvents;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
 import com.example.boilerplate.user.dto.ChangePasswordRequest;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -21,6 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class AuthService {
+  /**
+   * An unknown email still costs a BCrypt check, so the answer's timing doesn't tell which emails
+   * have accounts. Cost 10, as SecurityConfig's encoder; change both together.
+   */
+  static final String DUMMY_HASH = "$2y$10$ziAMVF0Pz7opLX1fQannfO.ax.qOE90VJcIKWHoYK0ruYNO7LKXb6";
+
   private final UserRepository users;
   private final PasswordEncoder encoder;
   private final RefreshTokenService refreshTokens;
@@ -58,13 +66,10 @@ public class AuthService {
     String email = r.email().toLowerCase(Locale.ROOT);
     rateLimiter.consume(Policy.LOGIN_PER_IP, clientIp);
     rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
-    User u =
-        users
-            .findByEmail(email)
-            .filter(found -> encoder.matches(r.password(), found.getPasswordHash()))
-            .orElse(null);
-    if (u == null) {
-      rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email);
+    User u = users.findByEmail(email).orElse(null);
+    boolean matches = encoder.matches(r.password(), u == null ? DUMMY_HASH : u.getPasswordHash());
+    if (u == null || !matches) {
+      failed(email, u == null ? null : u.getId(), null);
       throw new BadCredentialsException("Invalid email or password");
     }
     return refreshTokens.create(u);
@@ -82,12 +87,19 @@ public class AuthService {
     String email = u.getEmail();
     rateLimiter.check(Policy.LOGIN_FAILURES_PER_EMAIL, email);
     if (!encoder.matches(r.currentPassword(), u.getPasswordHash())) {
-      rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email);
+      failed(email, u.getId(), u.getId());
       throw new FieldValidationException("currentPassword", "is incorrect");
     }
     u.changePasswordHash(encoder.encode(r.newPassword()));
     refreshTokens.revokeAll(u.getId());
+    AccountEvents.record("password.change", u.getId(), u.getId(), List.of("password"));
     return refreshTokens.create(u);
+  }
+
+  /** Counts a wrong password; the one that blocks the email is a sign-in lockout. */
+  private void failed(String email, Long userId, Long actorId) {
+    if (rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email))
+      AccountEvents.record("sign-in.lockout", actorId, userId, List.of());
   }
 
   /** A replay revokes the token's family and answers 401: the revocation must commit. */

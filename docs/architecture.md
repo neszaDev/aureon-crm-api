@@ -76,7 +76,8 @@ stages and lead sources). The full model is in [docs/crm/](crm/README.md); the m
   with the role from the database; services look the caller up by that id. An invalid or missing
   token, or one whose user is gone, whose email changed or that predates the user's
   `sessions_valid_after` (an email, role or password change), leaves the request anonymous, and
-  `ApiAuthenticationEntryPoint` answers protected paths with 401 and an `ApiError` body.
+  `ApiAuthenticationEntryPoint` answers protected paths with 401 and an `ApiError` body. A URL
+  the firewall rejects is a 400 `ApiError` (`SecurityConfig`'s `RequestRejectedHandler`).
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   A sign-in starts a family; each refresh rotates the token under a row lock and keeps the old one
   as used. A used token presented again after `app.auth.refresh-reuse-grace` (30 s) revokes the
@@ -113,8 +114,9 @@ Actuator supplies health (with the `/actuator/health/liveness` and `/readiness` 
 info, both public for orchestrators. Production exposure excludes the general metrics endpoint.
 `/actuator/prometheus` is public so scrapers need no token: **restrict it at the network or
 ingress level** (don't route it from the internet). The prod profile logs JSON to stdout via
-logstash-logback-encoder. Every request carries an `X-Request-Id`, also placed in the logging
-MDC.
+logstash-logback-encoder. Every request carries an `X-Request-Id` (the client's when it is a
+plain id of up to 64 characters, otherwise a generated one), also placed in the logging MDC.
+Account security events are structured INFO lines (`common/security/AccountEvents`).
 
 ## Testing strategy
 

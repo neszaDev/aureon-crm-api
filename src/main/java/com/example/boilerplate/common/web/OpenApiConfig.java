@@ -10,10 +10,13 @@ import java.lang.reflect.RecordComponent;
 import java.util.List;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.properties.SpringDocConfigProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** Only with the API docs on (springdoc's own condition): off, springdoc creates no beans. */
 @Configuration
+@ConditionalOnProperty(name = "springdoc.api-docs.enabled", matchIfMissing = true)
 class OpenApiConfig {
   private static final List<String> PAGE_FIELDS =
       List.of("content", "totalElements", "totalPages", "number", "size", "first", "last", "empty");

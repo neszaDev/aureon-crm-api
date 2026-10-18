@@ -3,9 +3,12 @@ package com.example.boilerplate.user;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.security.AccountEvents;
 import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -56,26 +59,32 @@ public class UserAdminService {
   }
 
   public UserResponse update(long actorId, Long id, UpdateUserRequest r) {
-    User target = notSelf(requireAdmin(actorId), user(id), "You cannot change your own account");
-    boolean changed = false;
+    User actor = requireAdmin(actorId);
+    User target = notSelf(actor, user(id), "You cannot change your own account");
+    List<String> changed = new ArrayList<>();
     if (r.email() != null && !r.email().equalsIgnoreCase(target.getEmail())) {
       if (users.existsByEmail(r.email().toLowerCase(Locale.ROOT)))
         throw new ConflictException(ErrorCode.EMAIL_TAKEN, "Email is already registered");
       target.changeEmail(r.email());
-      changed = true;
+      changed.add("email");
     }
     if (r.role() != null && r.role() != target.getRole()) {
       target.changeRole(r.role());
-      changed = true;
+      changed.add("role");
     }
-    if (changed) events.publishEvent(new UserAccessChangedEvent(target.getId()));
+    if (!changed.isEmpty()) {
+      events.publishEvent(new UserAccessChangedEvent(target.getId()));
+      AccountEvents.record("account.update", actor.getId(), target.getId(), changed);
+    }
     return mapper.toResponse(target);
   }
 
   public void delete(long actorId, Long id) {
-    User target = notSelf(requireAdmin(actorId), user(id), "You cannot delete your own account");
+    User actor = requireAdmin(actorId);
+    User target = notSelf(actor, user(id), "You cannot delete your own account");
     events.publishEvent(new UserDeletionEvent(target.getId()));
     users.delete(target);
+    AccountEvents.record("account.delete", actor.getId(), target.getId(), List.of());
   }
 
   private User requireAdmin(long actorId) {

@@ -64,6 +64,9 @@ Rules beyond the matrix:
 - Invitations: an admin can't create or revoke an **owner** invitation (403). Revoking an accepted
   or an already revoked invitation is 409; an expired one can be revoked. The pending list hides
   expired invitations and shows the newest first.
+- A member who is removed, leaves, or is demoted to a role without `MEMBERS_MANAGE` takes their
+  pending invitations along: each is revoked, with an `INVITE_REVOKE` audit event by whoever made
+  the change.
 - The last owner can't be demoted or removed, and can't leave. An account that is the last owner
   of a workspace can't be deleted by a system admin (409) until another owner exists.
 - Anyone can leave a workspace (remove their own membership), except the last owner.

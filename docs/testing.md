@@ -64,6 +64,8 @@ What the existing ITs cover:
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
 | `auth/RefreshReuseIT` | Refresh-token families: a replay after the grace revokes the family, within it only that request fails, a family past 90 days (counted from the sign-in) can't rotate |
 | `security/SecurityIT` | Public vs protected endpoints, `X-Request-Id` |
+| `security/AccountEventLogIT` | Account security events logged with ids and field names, never values (the lockout: `ratelimit/RateLimitIT`) |
+| `security/RequestRejectedIT` | Firewall-rejected URLs are a 400 `ApiError` on a real Tomcat |
 | `security/TokenBindingIT` | Access tokens bound to the user id: an admin's email swap, a deleted user's re-registered email, a password or role change → 401; a session across refresh |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
 | `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For` |

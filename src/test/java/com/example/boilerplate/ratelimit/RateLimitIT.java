@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.support.PostgresTestcontainersConfig;
+import com.example.boilerplate.user.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,7 +12,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
@@ -35,6 +40,7 @@ class RateLimitIT {
   static final ObjectMapper JSON = new ObjectMapper();
   final HttpClient http = HttpClient.newHttpClient();
   @LocalServerPort int port;
+  @Autowired UserRepository users;
 
   @Test
   void registrationIsLimitedPerForwardedClientIp() throws Exception {
@@ -108,6 +114,25 @@ class RateLimitIT {
     assertThat(blocked.body())
         .contains("\"path\":\"/api/v1/invitations/{token}/register\"")
         .doesNotContain(link);
+  }
+
+  /** The failed sign-in that blocks an email is logged once, by user id (M3). */
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void theFailedSignInThatBlocksAnEmailIsLoggedOnce(CapturedOutput out) throws Exception {
+    String email = email();
+    register(email, "198.51.100.70");
+    String line =
+        "Account event event=sign-in.lockout actorId=null targetId="
+            + users.findByEmail(email).orElseThrow().getId()
+            + " fields=[]";
+
+    login(email, "wrong-password", "198.51.100.71");
+    assertThat(out.getOut()).doesNotContain(line);
+    login(email, "wrong-password", "198.51.100.72");
+    assertThat(login(email, PASSWORD, "198.51.100.73").statusCode()).isEqualTo(429);
+
+    assertThat(out.getOut()).containsOnlyOnce(line).doesNotContain(email);
   }
 
   /** Guessing the current password while signed in counts as a failed sign-in, and vice versa. */

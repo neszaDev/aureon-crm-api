@@ -21,5 +21,11 @@ public record AuthProperties(
   public record Jwt(
       // Length is checked in JwtService: a @Size violation would print the secret in the
       // startup failure report.
-      @NotBlank String secret, @NotNull @DurationMin(seconds = 1) Duration accessTokenTtl) {}
+      @NotBlank String secret, @NotNull @DurationMin(seconds = 1) Duration accessTokenTtl) {
+    // Configuration records end up in logs and failure reports: never the secret.
+    @Override
+    public String toString() {
+      return "Jwt[secret=***, accessTokenTtl=" + accessTokenTtl + "]";
+    }
+  }
 }

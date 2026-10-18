@@ -112,8 +112,8 @@ Ref        = { id, name }                             // company, stage, source,
 | `GET /workspaces/{w}` | → `Workspace`: `id, name, defaultCurrency, timezone, role, permissions[], version, createdAt, updatedAt` | member |
 | `PUT /workspaces/{w}` | `{ name, defaultCurrency, timezone, version }` → `Workspace` | `WORKSPACE_MANAGE` |
 | `GET /workspaces/{w}/members` | → `Member[]` (`userId, email, displayName?, role, joinedAt`) | member |
-| `PUT /workspaces/{w}/members/{userId}` | `{ role }` → `Member` | `MEMBERS_MANAGE` + owner rules |
-| `DELETE /workspaces/{w}/members/{userId}` | → 204 | `MEMBERS_MANAGE`, or the caller themselves |
+| `PUT /workspaces/{w}/members/{userId}` | `{ role }` → `Member`; a demotion below `MEMBERS_MANAGE` revokes the member's pending invitations | `MEMBERS_MANAGE` + owner rules |
+| `DELETE /workspaces/{w}/members/{userId}` | → 204; the member's pending invitations are revoked | `MEMBERS_MANAGE`, or the caller themselves |
 | `GET /workspaces/{w}/invitations` | → `Invitation[]` pending (`id, email, role, invitedBy: MemberRef?, createdAt, expiresAt`), newest first; expired ones are not listed | `MEMBERS_MANAGE` |
 | `POST /workspaces/{w}/invitations` | `{ email, role }` → 201 `Invitation` + `token` (shown once) | `MEMBERS_MANAGE`, owner for role `OWNER` (403); 409 already a member or already has a pending invitation (an expired one is replaced) |
 | `DELETE /workspaces/{w}/invitations/{id}` | → 204 (revoked) | `MEMBERS_MANAGE`, owner for an `OWNER` invitation (403); 409 when it was already accepted or revoked (a pending or an expired one can be revoked) |

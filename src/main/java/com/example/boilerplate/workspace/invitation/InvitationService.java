@@ -23,6 +23,7 @@ import com.example.boilerplate.workspace.Membership;
 import com.example.boilerplate.workspace.Permission;
 import com.example.boilerplate.workspace.Workspace;
 import com.example.boilerplate.workspace.WorkspaceAccess;
+import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceMember;
 import com.example.boilerplate.workspace.WorkspaceMemberRepository;
 import com.example.boilerplate.workspace.WorkspaceRepository;
@@ -139,6 +140,20 @@ public class InvitationService {
     }
     i.revoke(now);
     audit.record(AuditAction.INVITE_REVOKE, AuditEntityType.INVITATION, id, i.getEmail(), Map.of());
+  }
+
+  /**
+   * Revokes the pending invitations {@code userId} sent in the current workspace: they leave, or
+   * lose MEMBERS_MANAGE (MemberService), and their links must not outlive that.
+   */
+  public void revokeSentBy(long userId) {
+    Membership m = WorkspaceContext.require();
+    Instant now = Instant.now();
+    for (Invitation i : invitations.findPendingSentBy(m.workspaceId(), userId, now)) {
+      i.revoke(now);
+      audit.record(
+          AuditAction.INVITE_REVOKE, AuditEntityType.INVITATION, i.getId(), i.getEmail(), Map.of());
+    }
   }
 
   /** Public: anyone with the link may see what it is for and whether it still works. */

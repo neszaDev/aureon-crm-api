@@ -26,8 +26,9 @@ management:
   info.env.enabled: true
 app:
   security.jwt:
-    # Override in every real deployment; min 32 bytes for HS256.
-    secret: ${JWT_SECRET:development-only-change-this-secret-to-at-least-32-bytes}
+    # Required, min 32 bytes for HS256. Only the local, dev and test profiles have a default, a
+    # published placeholder that JwtService refuses under any other profile.
+    secret: ${JWT_SECRET}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
   security.refresh-token-ttl: ${REFRESH_TOKEN_TTL:P30D}
   # false = invite-only: POST /auth/register answers 403.
@@ -60,6 +61,9 @@ app:
     password: ${ADMIN_PASSWORD:}
   # The demo workspace (crm/demo/DemoDataSeeder): the local and dev profiles only.
   demo.enabled: false
+logging.level:
+  # Account security events (common/security/AccountEvents) stay on whatever the root level.
+  com.example.boilerplate.common.security.AccountEvents: INFO
 server:
   # Behind a proxy (e.g. the Next.js server) take the client IP from X-Forwarded-For, but only
   # when the connection comes from a trusted proxy: by default private and loopback addresses,

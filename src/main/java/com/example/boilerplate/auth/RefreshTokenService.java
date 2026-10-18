@@ -2,10 +2,12 @@ package com.example.boilerplate.auth;
 
 import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
+import com.example.boilerplate.common.security.AccountEvents;
 import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserAccessChangedEvent;
 import java.time.*;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -52,8 +54,10 @@ public class RefreshTokenService {
             .orElseThrow(InvalidRefreshTokenException::new);
     Instant now = Instant.now();
     if (token.getUsedAt() != null) {
-      if (now.isAfter(token.getUsedAt().plus(reuseGrace)))
+      if (now.isAfter(token.getUsedAt().plus(reuseGrace))) {
         tokens.deleteByFamilyId(token.getFamilyId());
+        AccountEvents.record("refresh.reuse", null, token.getUser().getId(), List.of());
+      }
       throw new InvalidRefreshTokenException();
     }
     if (token.getExpiresAt().isBefore(now)

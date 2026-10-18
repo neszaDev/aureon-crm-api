@@ -10,7 +10,7 @@ All configuration comes from environment variables. Defaults live in
 | `local` | `make watch` | DevTools restart, SQL logging, DEBUG for `com.example.boilerplate` |
 | `dev` | `make up` | Packaged image, SQL logging, DEBUG |
 | `test` | integration tests | WARN logging; the database comes from Testcontainers |
-| `prod` | deployments, `make smoke` | JSON logs to stdout, no defaults for secrets, only health/info/prometheus exposed |
+| `prod` | deployments, `make smoke`, the runtime image by default | JSON logs to stdout, no defaults for secrets, only health/info/prometheus exposed, no API docs or Swagger UI unless `SPRINGDOC_ENABLED=true` |
 
 Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 
@@ -23,11 +23,12 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `DB_PASSWORD` | `boilerplate` | yes | |
 | `DB_POOL_SIZE` | `10` | no | Hikari maximum pool size |
 | `DB_POOL_MIN_IDLE` | `2` | no | Hikari minimum idle connections |
-| `JWT_SECRET` | dev-only placeholder | yes | At least **32 bytes** (HS256). Checked at startup; the value is never logged. Generate one with `openssl rand -hex 32`. |
+| `JWT_SECRET` | `local`, `dev`, `test`: a published placeholder; otherwise none | yes | At least **32 bytes** (HS256). Checked at startup; the value is never logged. Generate one with `openssl rand -hex 32`. The app refuses to start with a placeholder from this repository (the profiles' default or `env/.env.example`'s) unless `local`, `dev` or `test` is active and `prod` is not. |
 | `JWT_ACCESS_TOKEN_TTL` | `PT15M` | no | ISO-8601 duration, must be positive |
 | `REFRESH_TOKEN_TTL` | `P30D` | no | ISO-8601 duration, must be positive |
 | `REFRESH_REUSE_GRACE` | `PT30S` | no | `app.auth.refresh-reuse-grace`: a used refresh token presented again within this is a parallel refresh (401 for that request); later it revokes the whole session ([API](api.md#refresh-tokens-and-logout)). Zero or more |
 | `SESSION_MAX_AGE` | `P90D` | no | `app.auth.session-max-age`: how long after the sign-in a session's refresh tokens can rotate; then the user signs in again. Must be positive |
+| `SPRINGDOC_ENABLED` | `false` (`prod` only) | no | `true` turns `/v3/api-docs` and Swagger UI back on under `prod`; the other profiles always have them |
 | `REGISTRATION_ENABLED` | `true` | no | `false` makes the API invite-only: `POST /auth/register` answers 403 (`Registration is disabled`). Existing accounts still sign in. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | yes | Comma-separated; must not be empty |
 | `APP_VERSION` | `dev` | recommended | Shown at `/actuator/info` |
@@ -55,6 +56,20 @@ stops the app at startup with the property name. `app.demo.*` (`crm/demo/DemoPro
 `enabled`, `password`) comes from `DEMO_DATA` and `DEMO_PASSWORD` in the `local` and `dev`
 profiles, the only ones with the seeder; `application.yml` has `enabled: false` and no password
 (the `test` profile sets both for `DemoDataSeederIT`).
+
+### Logging
+
+- Account security events are one INFO line each from `common/security/AccountEvents`, with the
+  acting and the affected user's ids and the changed field names, never the values:
+  `account.update` and `account.delete` (an admin's change), `password.change`,
+  `sign-in.lockout` (the failed sign-in that blocks an email; no actor) and `refresh.reuse` (a
+  replayed refresh token that revoked a session). Under `prod` they are JSON fields too. That
+  logger stays at INFO whatever the root level. A table of account events is a follow-up.
+- Keep framework DEBUG logging (`org.springframework.security`, `org.springframework.web`) off
+  in prod: it logs request URIs, and an invitation link's URI carries its token. Request and
+  response records leave passwords and tokens out of their `toString()`.
+- A client's `X-Request-Id` is kept only when it matches `[A-Za-z0-9._-]{1,64}`; anything else
+  gets a generated id.
 
 ### Rate limits
 

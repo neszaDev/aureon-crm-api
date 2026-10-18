@@ -26,4 +26,11 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
         and i.acceptedAt is null and i.revokedAt is null and i.expiresAt > :now
       order by i.createdAt desc, i.id desc""")
   List<Invitation> findPending(long workspaceId, Instant now);
+
+  @Query(
+      """
+      select i from Invitation i
+      where i.workspaceId = :workspaceId and i.invitedBy.id = :userId
+        and i.acceptedAt is null and i.revokedAt is null and i.expiresAt > :now""")
+  List<Invitation> findPendingSentBy(long workspaceId, long userId, Instant now);
 }

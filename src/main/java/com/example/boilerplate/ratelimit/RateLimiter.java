@@ -66,9 +66,14 @@ public class RateLimiter {
     if (!probe.canBeConsumed()) throw exceeded(probe.getNanosToWaitForRefill());
   }
 
-  /** Takes one request if any is left; never throws (e.g. counting a failed login). */
-  public void record(Policy policy, String key) {
-    if (properties.enabled()) bucket(policy, key).tryConsume(1);
+  /**
+   * Takes one request if any is left; never throws (e.g. counting a failed login). True when it
+   * took the last one: the key is blocked from now on.
+   */
+  public boolean record(Policy policy, String key) {
+    if (!properties.enabled()) return false;
+    var probe = bucket(policy, key).tryConsumeAndReturnRemaining(1);
+    return probe.isConsumed() && probe.getRemainingTokens() == 0;
   }
 
   private Bucket bucket(Policy policy, String key) {

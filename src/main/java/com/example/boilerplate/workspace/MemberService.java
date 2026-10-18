@@ -13,6 +13,7 @@ import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.dto.MemberResponse;
 import com.example.boilerplate.workspace.dto.UpdateMemberRequest;
+import com.example.boilerplate.workspace.invitation.InvitationService;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -29,16 +30,19 @@ public class MemberService {
   private final UserRepository users;
   private final WorkspaceAccess access;
   private final AuditTrail audit;
+  private final InvitationService invitations;
 
   public MemberService(
       WorkspaceMemberRepository members,
       UserRepository users,
       WorkspaceAccess access,
-      AuditTrail audit) {
+      AuditTrail audit,
+      InvitationService invitations) {
     this.members = members;
     this.users = users;
     this.access = access;
     this.audit = audit;
+    this.invitations = invitations;
   }
 
   @Transactional(readOnly = true)
@@ -61,6 +65,8 @@ public class MemberService {
           userId,
           user.getEmail(),
           Map.of("role", Map.of("from", from.name(), "to", r.role().name())));
+      if (from.has(Permission.MEMBERS_MANAGE) && !r.role().has(Permission.MEMBERS_MANAGE))
+        invitations.revokeSentBy(userId);
     }
     return new MemberResponse(
         userId, user.getEmail(), user.getDisplayName(), target.getRole(), target.getCreatedAt());
@@ -84,6 +90,7 @@ public class MemberService {
         userId,
         email,
         Map.of());
+    invitations.revokeSentBy(userId);
   }
 
   private WorkspaceMember member(Membership caller, long userId) {

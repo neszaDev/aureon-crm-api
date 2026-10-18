@@ -1,7 +1,8 @@
 # API guide
 
 Interactive docs: run the app (`make up`) and open `http://localhost:8080/swagger-ui/index.html`.
-The OpenAPI spec is at `/v3/api-docs`.
+The OpenAPI spec is at `/v3/api-docs`. Under the `prod` profile both are off unless
+`SPRINGDOC_ENABLED=true`.
 
 All endpoints are under `/api/v1`. This guide covers accounts, sign-in, files and the
 `test-results` example. The CRM endpoints (workspaces, members, invitations, pipeline stages,
@@ -24,7 +25,7 @@ refused before routing) the request path with invitation tokens masked.
 
 | Status | When |
 |---|---|
-| 400 | Validation failure, malformed JSON, bad query/path parameter |
+| 400 | Validation failure, malformed JSON, bad query/path parameter; a URL the security firewall rejects (`//`, `;x=1`, an encoded `..`), with message `Malformed request` |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user, of a user whose email changed since, or issued before the user's last email, role or password change |
 | 403 | Valid token without the required role (admin endpoints) or workspace permission; `POST /auth/register` when `REGISTRATION_ENABLED=false` |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user*; anything under a workspace the caller is not a member of |

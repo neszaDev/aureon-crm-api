@@ -6,6 +6,7 @@ spring:
 logging.level:
   com.example.boilerplate: DEBUG
   org.hibernate.SQL: DEBUG
+app.security.jwt.secret: ${JWT_SECRET:development-only-change-this-secret-to-at-least-32-bytes}
 app.demo:
   # DEMO_DATA=true seeds the demo workspace once (docs/crm/README.md, Try it).
   enabled: ${DEMO_DATA:false}

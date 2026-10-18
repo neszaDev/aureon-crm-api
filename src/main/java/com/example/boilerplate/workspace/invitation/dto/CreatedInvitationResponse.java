@@ -13,4 +13,22 @@ public record CreatedInvitationResponse(
     MemberRef invitedBy,
     @NotNull Instant createdAt,
     @NotNull Instant expiresAt,
-    @NotNull String token) {}
+    @NotNull String token) {
+  // Framework DEBUG logging prints request and response bodies: never the secret.
+  @Override
+  public String toString() {
+    return "CreatedInvitationResponse[id="
+        + id
+        + ", email="
+        + email
+        + ", role="
+        + role
+        + ", invitedBy="
+        + invitedBy
+        + ", createdAt="
+        + createdAt
+        + ", expiresAt="
+        + expiresAt
+        + ", token=***]";
+  }
+}

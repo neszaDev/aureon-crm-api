@@ -11,6 +11,8 @@ FROM local AS build
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
+# The image runs as prod unless told otherwise (compose's app-dev sets dev).
+ENV SPRING_PROFILES_ACTIVE=prod
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 # Uploaded files (FILES_DIR defaults to data/files); compose mounts a volume here.

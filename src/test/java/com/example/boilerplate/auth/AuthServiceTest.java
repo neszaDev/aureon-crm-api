@@ -2,6 +2,8 @@ package com.example.boilerplate.auth;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
 import com.example.boilerplate.auth.dto.LoginRequest;
@@ -82,6 +84,7 @@ class AuthServiceTest {
     assertThrows(
         BadCredentialsException.class,
         () -> service.login(new LoginRequest("a@example.com", "wrong"), IP));
+    verify(encoder).matches("wrong", "h");
     verifyNoInteractions(refreshTokens);
     verify(rateLimiter).record(Policy.LOGIN_FAILURES_PER_EMAIL, "a@example.com");
   }
@@ -93,6 +96,8 @@ class AuthServiceTest {
         BadCredentialsException.class,
         () -> service.login(new LoginRequest("Nobody@example.com", "pw"), IP));
     verify(rateLimiter).record(Policy.LOGIN_FAILURES_PER_EMAIL, "nobody@example.com");
+    // As slow as a wrong password: the password is checked against a dummy BCrypt hash.
+    verify(encoder).matches(eq("pw"), startsWith("$2"));
   }
 
   @Test

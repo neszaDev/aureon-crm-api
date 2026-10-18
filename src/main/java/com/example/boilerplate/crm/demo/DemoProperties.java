@@ -7,4 +7,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * profiles only) and the password of its four logins.
  */
 @ConfigurationProperties("app.demo")
-public record DemoProperties(boolean enabled, String password) {}
+public record DemoProperties(boolean enabled, String password) {
+  // Configuration records end up in logs and failure reports: never the password.
+  @Override
+  public String toString() {
+    return "DemoProperties[enabled=" + enabled + ", password=***]";
+  }
+}

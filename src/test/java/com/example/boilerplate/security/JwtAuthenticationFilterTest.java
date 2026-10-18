@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -35,7 +36,8 @@ class JwtAuthenticationFilterTest {
               new AuthProperties(
                   new AuthProperties.Jwt(SECRET, Duration.ofMinutes(15)),
                   Duration.ofDays(30),
-                  true)),
+                  true),
+              new MockEnvironment()),
           users);
 
   @AfterEach

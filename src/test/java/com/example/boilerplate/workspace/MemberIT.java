@@ -16,6 +16,7 @@ import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditEvent;
 import com.example.boilerplate.audit.AuditEventRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -222,6 +223,47 @@ class MemberIT extends WorkspaceTestSupport {
 
     send(ownerB, get(MEMBERS, b))
         .andExpect(jsonPath("$[?(@.email == '" + repOfBEmail + "')].role", contains("SALES_REP")));
+  }
+
+  /** An inviter who leaves, or loses MEMBERS_MANAGE, takes their pending invitations along. */
+  @Test
+  void removingOrDemotingAMemberRevokesTheInvitationsTheySent() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    String removedEmail = uniqueEmail();
+    String removed = tokenFor(removedEmail);
+    addMember(w, removedEmail, WorkspaceRole.ADMIN);
+    String demotedEmail = uniqueEmail();
+    String demoted = tokenFor(demotedEmail);
+    addMember(w, demotedEmail, WorkspaceRole.ADMIN);
+    JsonNode fromRemoved = invite(removed, w);
+    JsonNode fromDemoted = invite(demoted, w);
+    JsonNode fromOwner = invite(owner, w);
+
+    send(owner, delete(MEMBER, w, idOf(removedEmail))).andExpect(status().isNoContent());
+    changeRole(owner, w, idOf(demotedEmail), "MANAGER").andExpect(status().isOk());
+
+    previewStatus(fromRemoved).andExpect(jsonPath("$.status").value("REVOKED"));
+    previewStatus(fromDemoted).andExpect(jsonPath("$.status").value("REVOKED"));
+    previewStatus(fromOwner).andExpect(jsonPath("$.status").value("PENDING"));
+    assertThat(
+            events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(w).stream()
+                .filter(e -> e.getAction() == AuditAction.INVITE_REVOKE)
+                .map(AuditEvent::getEntityId))
+        .containsExactlyInAnyOrder(fromRemoved.get("id").asLong(), fromDemoted.get("id").asLong());
+  }
+
+  private JsonNode invite(String token, long workspaceId) throws Exception {
+    return body(
+        send(
+                token,
+                post("/api/v1/workspaces/{w}/invitations", workspaceId),
+                Map.of("email", uniqueEmail(), "role", "SALES_REP"))
+            .andExpect(status().isCreated()));
+  }
+
+  private ResultActions previewStatus(JsonNode invitation) throws Exception {
+    return mvc.perform(get("/api/v1/invitations/{token}", invitation.get("token").asText()));
   }
 
   /** Registers a new user, adds them with {@code role} and returns their token. */
