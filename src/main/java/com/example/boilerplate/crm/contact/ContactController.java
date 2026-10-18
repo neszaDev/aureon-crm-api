@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 // workspaceId is declared for the API docs; WorkspaceAccessInterceptor has already resolved it.
@@ -42,6 +43,21 @@ public class ContactController {
   }
 
   // Literal segments outrank {id}.
+  @GetMapping("/export")
+  ResponseEntity<byte[]> export(
+      @PathVariable long workspaceId,
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) Long companyId,
+      @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
+      @RequestParam(required = false) Long sourceId,
+      @RequestParam(required = false) String tag,
+      @RequestParam(defaultValue = "false") boolean archived) {
+    return service
+        .export(new ContactFilter(q, companyId, ownerId, unassigned, sourceId, tag, archived))
+        .response();
+  }
+
   @GetMapping("/tags")
   List<String> tags(@PathVariable long workspaceId) {
     return service.tags();

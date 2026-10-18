@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 // workspaceId is declared for the API docs; WorkspaceAccessInterceptor has already resolved it.
@@ -60,7 +61,38 @@ public class DealController {
         ListParams.direction(direction, sort));
   }
 
-  // A literal segment outranks {id}.
+  // Literal segments outrank {id}.
+  @GetMapping("/export")
+  ResponseEntity<byte[]> export(
+      @PathVariable long workspaceId,
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) Long stageId,
+      @RequestParam(required = false) DealStatus status,
+      @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
+      @RequestParam(required = false) Long companyId,
+      @RequestParam(required = false) Long contactId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate closeFrom,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate closeTo,
+      @RequestParam(defaultValue = "false") boolean archived) {
+    return service
+        .export(
+            new DealFilter(
+                q,
+                stageId,
+                status,
+                ownerId,
+                unassigned,
+                companyId,
+                contactId,
+                closeFrom,
+                closeTo,
+                archived))
+        .response();
+  }
+
   @GetMapping("/board")
   BoardResponse board(
       @PathVariable long workspaceId,

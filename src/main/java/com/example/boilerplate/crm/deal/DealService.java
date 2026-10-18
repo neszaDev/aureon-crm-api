@@ -16,6 +16,9 @@ import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.contact.ContactRepository;
 import com.example.boilerplate.crm.deal.dto.*;
+import com.example.boilerplate.crm.export.CsvFile;
+import com.example.boilerplate.crm.export.Exporter;
+import com.example.boilerplate.crm.export.RecordRefs;
 import com.example.boilerplate.crm.lead.LeadRepository;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import com.example.boilerplate.crm.settings.PipelineStage;
@@ -42,6 +45,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class DealService {
+  private static final List<String> EXPORT_HEADER =
+      List.of(
+          "Reference",
+          "Name",
+          "Amount",
+          "Currency",
+          "Stage",
+          "Status",
+          "Probability",
+          "Expected close",
+          "Company",
+          "Contact",
+          "Owner",
+          "Closed",
+          "Lost reason",
+          "Created",
+          "Updated",
+          "Archived");
+
   private final DealRepository deals;
   private final DealStageChangeRepository history;
   private final PipelineStageRepository stages;
@@ -55,6 +77,7 @@ public class DealService {
   private final MemberDirectory directory;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
+  private final Exporter exporter;
 
   public DealService(
       DealRepository deals,
@@ -69,7 +92,8 @@ public class DealService {
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
-      AuditChanges auditChanges) {
+      AuditChanges auditChanges,
+      Exporter exporter) {
     this.deals = deals;
     this.history = history;
     this.stages = stages;
@@ -83,6 +107,7 @@ public class DealService {
     this.directory = directory;
     this.audit = audit;
     this.auditChanges = auditChanges;
+    this.exporter = exporter;
   }
 
   @Transactional(readOnly = true)
@@ -96,6 +121,42 @@ public class DealService {
             : deals.findAll(matching.and(ordering), ListParams.unsorted(page, size));
     Related related = related(found.getContent());
     return found.map(d -> summary(d, related));
+  }
+
+  /** The list's deals (its filter, its default order) as CSV (api.md, Export). */
+  public CsvFile export(DealFilter filter) {
+    return exporter.export(
+        "deals",
+        filter,
+        EXPORT_HEADER,
+        deals,
+        DealSpecifications.matching(filter),
+        ListParams.sort(DealSort.UPDATED_AT, Direction.DESC),
+        found -> {
+          Related r = related(found);
+          return found.stream()
+              .map(
+                  d -> {
+                    PipelineStage stage = r.stage(d);
+                    return Exporter.row(
+                        RecordRefs.format('D', d.getId()),
+                        d.getName(),
+                        d.getAmount(),
+                        d.getCurrency(),
+                        stage.getName(),
+                        DealStatus.of(stage.getKind()),
+                        probability(d, stage),
+                        d.getExpectedCloseDate(),
+                        r.company(d),
+                        r.contact(d),
+                        r.owner(d),
+                        d.getClosedAt(),
+                        d.getLostReason(),
+                        d.getCreatedAt(),
+                        d.getUpdatedAt(),
+                        d.isArchived());
+                  });
+        });
   }
 
   @Transactional(readOnly = true)

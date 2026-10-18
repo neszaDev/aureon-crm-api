@@ -13,6 +13,9 @@ import com.example.boilerplate.crm.common.RecordLinks;
 import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.contact.dto.*;
+import com.example.boilerplate.crm.export.CsvFile;
+import com.example.boilerplate.crm.export.Exporter;
+import com.example.boilerplate.crm.export.RecordRefs;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
@@ -41,6 +44,21 @@ public class ContactService {
   private static final int MIN_PHONE_DIGITS = 6;
   private static final int MAX_TAGS = 20;
   private static final int MAX_TAG_LENGTH = 40;
+  private static final List<String> EXPORT_HEADER =
+      List.of(
+          "Reference",
+          "First name",
+          "Last name",
+          "Email",
+          "Phone",
+          "Job title",
+          "Company",
+          "Owner",
+          "Source",
+          "Tags",
+          "Created",
+          "Updated",
+          "Archived");
 
   private final ContactRepository contacts;
   private final CompanyRepository companies;
@@ -50,6 +68,7 @@ public class ContactService {
   private final MemberDirectory directory;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
+  private final Exporter exporter;
 
   public ContactService(
       ContactRepository contacts,
@@ -59,7 +78,8 @@ public class ContactService {
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
-      AuditChanges auditChanges) {
+      AuditChanges auditChanges,
+      Exporter exporter) {
     this.contacts = contacts;
     this.companies = companies;
     this.sources = sources;
@@ -68,6 +88,7 @@ public class ContactService {
     this.directory = directory;
     this.audit = audit;
     this.auditChanges = auditChanges;
+    this.exporter = exporter;
   }
 
   @Transactional(readOnly = true)
@@ -79,6 +100,40 @@ public class ContactService {
             ListParams.pageable(page, size, direction, sort));
     Related related = related(found.getContent());
     return found.map(c -> summary(c, related));
+  }
+
+  /** The list's contacts (its filter, its default order) as CSV (api.md, Export). */
+  public CsvFile export(ContactFilter filter) {
+    return exporter.export(
+        "contacts",
+        filter,
+        EXPORT_HEADER,
+        contacts,
+        ContactSpecifications.matching(filter),
+        ListParams.sort(ContactSort.NAME, Direction.ASC),
+        found -> {
+          Related r = related(found);
+          Map<Long, String> sourceNames =
+              sources.findAllById(ids(found, Contact::getSourceId)).stream()
+                  .collect(Collectors.toMap(s -> s.getId(), s -> s.getName()));
+          return found.stream()
+              .map(
+                  c ->
+                      Exporter.row(
+                          RecordRefs.format('P', c.getId()),
+                          c.getFirstName(),
+                          c.getLastName(),
+                          c.getEmail(),
+                          c.getPhone(),
+                          c.getJobTitle(),
+                          r.company(c),
+                          r.owner(c),
+                          sourceNames.get(c.getSourceId()),
+                          c.getTags(),
+                          c.getCreatedAt(),
+                          c.getUpdatedAt(),
+                          c.isArchived()));
+        });
   }
 
   @Transactional(readOnly = true)

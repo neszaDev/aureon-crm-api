@@ -20,24 +20,28 @@ public final class ListParams {
    * Ordering#nullsLast} for columns that must list nulls last).
    */
   public static Pageable pageable(int page, int size, Direction direction, String property) {
-    return sorted(page, size, direction, List.of(new Sort.Order(direction, property)));
+    check(page, size);
+    return PageRequest.of(page, size, byIdToo(Sort.by(direction, property), direction));
   }
 
   /** As above, by each of the field's {@link SortField#keys keys} in turn, then by id. */
   public static Pageable pageable(int page, int size, Direction direction, SortField field) {
+    check(page, size);
+    return PageRequest.of(page, size, sort(field, direction));
+  }
+
+  /** The order of {@link #pageable(int, int, Direction, SortField)} without a page (an export). */
+  public static Sort sort(SortField field, Direction direction) {
     List<Sort.Order> orders = new ArrayList<>();
     for (SortField.Key key : field.keys()) {
       Sort.Order order = new Sort.Order(direction, key.property());
       orders.add(key.ignoreCase() ? order.ignoreCase() : order);
     }
-    return sorted(page, size, direction, orders);
+    return byIdToo(Sort.by(orders), direction);
   }
 
-  private static Pageable sorted(int page, int size, Direction direction, List<Sort.Order> orders) {
-    check(page, size);
-    Sort sort = Sort.by(orders);
-    if (sort.getOrderFor("id") == null) sort = sort.and(Sort.by(direction, "id"));
-    return PageRequest.of(page, size, sort);
+  private static Sort byIdToo(Sort sort, Direction direction) {
+    return sort.getOrderFor("id") == null ? sort.and(Sort.by(direction, "id")) : sort;
   }
 
   /** The requested direction ({@code direction}), or the sort's own when the request has none. */

@@ -8,6 +8,8 @@ spring.servlet.multipart:
 app:
   # ITs register many users from one address; ratelimit/RateLimitIT turns this on.
   rate-limit.enabled: false
+  # Small, so a test reaches the export cap with a fourth row (ExportIT, ErrorCodeIT).
+  export.max-rows: 3
   files:
     storage-dir: ${java.io.tmpdir}/boilerplate-it-files/${random.uuid}
     max-size: 64KB

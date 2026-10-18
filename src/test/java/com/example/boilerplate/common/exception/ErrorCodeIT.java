@@ -73,6 +73,13 @@ class ErrorCodeIT extends WorkspaceTestSupport {
             "PIPELINE_CHANGED")
         .andExpect(jsonPath("$.fieldErrors.stageIds").exists());
 
+    // Over the export cap (3 rows in the test profile).
+    for (int i = 1; i <= 4; i++) {
+      send(owner, post(W + "/companies", w), Map.of("name", "Row " + i))
+          .andExpect(status().isCreated());
+    }
+    expect(send(owner, get(W + "/companies/export", w)), 400, "EXPORT_TOO_LARGE");
+
     expect(send(rep, post(STAGES, w), Map.of("name", "Demo", "probability", 10)), 403, "FORBIDDEN");
     expect(send(rep, get("/api/v1/users")), 403, "FORBIDDEN");
 

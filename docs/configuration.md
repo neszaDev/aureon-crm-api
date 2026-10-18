@@ -40,9 +40,11 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
 
-`app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*` and `app.rate-limit.*` bind to
-validated records (`auth/AuthProperties`, `security/CorsProperties`, `user/AdminProperties`,
-`file/FileProperties`, `ratelimit/RateLimitProperties`). An invalid value
+`app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
+`app.export.*` bind to validated records (`auth/AuthProperties`, `security/CorsProperties`,
+`user/AdminProperties`, `file/FileProperties`, `ratelimit/RateLimitProperties`,
+`crm/export/ExportProperties`: `max-rows`, default 10000, the most rows one CSV export may have;
+the `test` profile sets 3). An invalid value
 stops the app at startup with the property name.
 
 ### Rate limits

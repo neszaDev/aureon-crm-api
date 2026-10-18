@@ -44,9 +44,10 @@ src/main/java/com/example/boilerplate/
                assignee or the creator, a computed overdue flag and the reminders (which reuse the
                task and lead lists); activity/ adds the one record that is deleted (its audit event
                keeps the last state), an author instead of an owner with author-only edit rights,
-               and the company filled in from the contact or deal; common/ = what every record
-               type shares (CrmRecord, ListParams, SortField, TextSearch, RecordLinks, LinkRefs,
-               ...)
+               and the company filled in from the contact or deal; export/ = the CSV export of
+               the four record lists (Exporter: permission, row cap, audit; CsvWriter, RecordRefs);
+               common/ = what every record type shares (CrmRecord, ListParams, SortField,
+               TextSearch, RecordLinks, LinkRefs, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
   ratelimit/   in-memory sign-in/registration limits (Bucket4j), used by AuthService and
                InvitationService

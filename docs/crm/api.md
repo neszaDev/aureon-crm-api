@@ -13,6 +13,9 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
 - **Money** is a string with up to 13 integer and 2 fraction digits (`"1250.00"`), plus `currency`
   (ISO 4217, upper case), in requests and responses alike. Totals are lists of
   `{ currency, amount }`.
+- **Record references**, as the CSV export and the UI show a record: a letter for its type (`C`
+  company, `P` contact, `L` lead, `D` deal, `T` task), a dash and the id padded with zeros to 4
+  digits: `C-0042`, `D-12345`. The API itself takes and returns plain ids.
 - **Updates** are `PUT` with every editable field (an omitted or null optional field is cleared,
   `ownerId` included) and the `version` the client last read. A different version means someone
   else changed the record: **409**, reload and retry. State changes (archive, convert, move,
@@ -54,6 +57,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `VALIDATION_FAILED` | 400 | Invalid input or query parameter: `fieldErrors` names the fields when it can (bean validation, a link not in this workspace, a blank required text, `page`/`size` out of range, ...) |
   | `TEXT_INVALID` | 400 | The database refused a value: text with a NUL character, a value too long, a number out of range for its column, or a date or time it can't hold (such as the year 300000) |
   | `PIPELINE_CHANGED` | 400 | `PUT /pipeline-stages/order`: `stageIds` isn't exactly the current open stages (someone added or deleted one): reload the pipeline |
+  | `EXPORT_TOO_LARGE` | 400 | An export would have more than 10,000 rows (`Too many rows to export (N); narrow the filters`, no `fieldErrors`): narrow the filters |
   | `FORBIDDEN` | 403 | The role lacks the permission, or the record isn't the caller's to edit; admin-only endpoints |
   | `REGISTRATION_DISABLED` | 403 | `POST /auth/register` with `REGISTRATION_ENABLED=false` (invite-only) |
   | `OWNER_ONLY` | 403 | Only owners manage owners: an admin changing an owner's role or making someone owner, removing an owner, inviting as `OWNER` or revoking an `OWNER` invitation |
@@ -151,7 +155,7 @@ Invitation rules:
 | `GET /{id}` | → `Company` |
 | `PUT /{id}` | `CompanyInput` + `version` → `Company` |
 | `POST /{id}/archive`, `POST /{id}/restore` | → `Company` |
-| `GET /export` | list filters → `text/csv` (`EXPORT`) |
+| `GET /export` | the list's filters → CSV, see [Export](#export) (`EXPORT`) |
 
 ```ts
 CompanyInput   = { name (1-200), industry?, website?, phone?, address?, employeeCount? (0-10000000),
@@ -352,11 +356,33 @@ where a period applies.
 
 ## Export
 
-`GET .../{companies|contacts|leads|deals}/export` with the list's filters → `text/csv; charset=utf-8`
-with a header row, `Content-Disposition: attachment`. Needs `EXPORT`. At most 10,000 rows (400
-beyond that: narrow the filters). Values are quoted per RFC 4180, and a value starting with `=`,
-`+`, `-`, `@`, tab or carriage return is prefixed with `'` so spreadsheets don't run it as a
-formula.
+`GET .../{companies|contacts|leads|deals}/export` takes the list's filters (the same parameters,
+`unassigned` included; no paging or sort) → 200 `text/csv; charset=utf-8`, `Content-Disposition:
+attachment; filename="<list>-<yyyy-MM-dd>.csv"` (today in the workspace's time zone). The rows
+are the list's for those filters, in its default order: companies and contacts by name, leads
+newest first, deals most recently updated first. Needs `EXPORT` (403). At most 10,000 rows, counted
+first: more is a 400 `EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the filters`).
+
+The file is UTF-8 with a byte order mark (Excel then reads Thai and any other text), with CRLF line
+ends and a header row. A value with a quote, comma or line break is quoted, its quotes doubled (RFC
+4180); a value starting with `=`, `+`, `-`, `@`, tab or carriage return is prefixed with `'` first,
+so spreadsheets don't run it as a formula (a phone `+66 ...` reads `'+66 ...`). An empty or absent
+value is empty. Reference: the record reference (Conventions). Owner: the display name, else the
+email; empty once the owner left. Instants ISO-8601 UTC, dates `YYYY-MM-DD`, money as stored
+(`1250.00`), booleans `yes` / `no`.
+
+| List | Columns |
+|---|---|
+| companies | Reference, Name, Industry, Website, Phone, Address, Employees, Owner, Contacts, Open deals, Created, Updated, Archived (the counts as in the list: active contacts, active deals in an open stage) |
+| contacts | Reference, First name, Last name, Email, Phone, Job title, Company, Owner, Source, Tags (joined with `; `), Created, Updated, Archived |
+| leads | Reference, First name, Last name, Company (the lead's company name), Email, Phone, Status, Priority, Follow-up date, Estimated value, Currency, Source, Owner, Created, Updated, Archived |
+| deals | Reference, Name, Amount, Currency, Stage, Status, Probability (the deal's, else its stage's), Expected close, Company, Contact, Owner, Closed, Lost reason, Created, Updated, Archived |
+
+Every export is audited: `EXPORT` on `WORKSPACE` (entity id: the workspace's), label `<n> <list>
+exported` (`12 contacts exported`), changes `{ list: { from: null, to: "contacts" }, filters: {
+from: null, to: { ...the filters given } } }` (unset filters and `false` flags left out). It shows
+in the workspace's history, which needs `AUDIT_READ`; an export over the cap or refused records
+nothing.
 
 ## Audit
 

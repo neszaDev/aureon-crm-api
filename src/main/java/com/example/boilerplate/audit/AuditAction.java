@@ -17,5 +17,6 @@ public enum AuditAction {
   JOIN,
   ROLE_CHANGE,
   MEMBER_REMOVE,
-  LEAVE
+  LEAVE,
+  EXPORT
 }

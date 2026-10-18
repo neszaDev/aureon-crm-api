@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 // workspaceId is declared for the API docs; WorkspaceAccessInterceptor has already resolved it.
@@ -47,6 +48,26 @@ public class LeadController {
         size,
         sort,
         ListParams.direction(direction, sort));
+  }
+
+  // A literal segment outranks {id}.
+  @GetMapping("/export")
+  ResponseEntity<byte[]> export(
+      @PathVariable long workspaceId,
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) List<LeadStatus> status,
+      @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
+      @RequestParam(required = false) Long sourceId,
+      @RequestParam(required = false) Priority priority,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate followUpBefore,
+      @RequestParam(defaultValue = "false") boolean archived) {
+    return service
+        .export(
+            new LeadFilter(
+                q, status, ownerId, unassigned, sourceId, priority, followUpBefore, archived))
+        .response();
   }
 
   @PostMapping

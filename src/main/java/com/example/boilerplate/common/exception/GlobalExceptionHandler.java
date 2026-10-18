@@ -160,6 +160,11 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.UNAUTHORIZED, null, e.getMessage(), r, Map.of());
   }
 
+  @ExceptionHandler(BadRequestException.class)
+  ResponseEntity<ApiError> badRequest(BadRequestException e, HttpServletRequest r) {
+    return error(HttpStatus.BAD_REQUEST, e.code(), e.getMessage(), r, Map.of());
+  }
+
   /** A field rejected by a service (e.g. a wrong current password), shaped like bean validation. */
   @ExceptionHandler(FieldValidationException.class)
   ResponseEntity<ApiError> fieldInvalid(FieldValidationException e, HttpServletRequest r) {

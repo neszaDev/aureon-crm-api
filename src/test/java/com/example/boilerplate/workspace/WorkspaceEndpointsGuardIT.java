@@ -106,7 +106,7 @@ class WorkspaceEndpointsGuardIT extends WorkspaceTestSupport {
             });
     // The endpoints there are today, so the scan can't pass by missing some: raise it with every
     // new workspace endpoint.
-    assertThat(found).hasSizeGreaterThanOrEqualTo(63);
+    assertThat(found).hasSizeGreaterThanOrEqualTo(67);
     return found;
   }
 }

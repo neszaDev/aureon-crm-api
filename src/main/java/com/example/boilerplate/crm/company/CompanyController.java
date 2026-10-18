@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 // workspaceId is declared for the API docs; WorkspaceAccessInterceptor has already resolved it.
@@ -39,7 +40,18 @@ public class CompanyController {
         ListParams.direction(direction, sort));
   }
 
-  // A literal segment outranks {id}.
+  // Literal segments outrank {id}.
+  @GetMapping("/export")
+  ResponseEntity<byte[]> export(
+      @PathVariable long workspaceId,
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
+      @RequestParam(required = false) String industry,
+      @RequestParam(defaultValue = "false") boolean archived) {
+    return service.export(new CompanyFilter(q, ownerId, unassigned, industry, archived)).response();
+  }
+
   @GetMapping("/duplicates")
   List<CompanyRef> duplicates(
       @PathVariable long workspaceId,

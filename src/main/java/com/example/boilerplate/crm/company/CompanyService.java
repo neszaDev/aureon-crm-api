@@ -11,6 +11,9 @@ import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.company.dto.*;
 import com.example.boilerplate.crm.contact.ContactRepository;
 import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.export.CsvFile;
+import com.example.boilerplate.crm.export.Exporter;
+import com.example.boilerplate.crm.export.RecordRefs;
 import com.example.boilerplate.workspace.MemberDirectory;
 import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.dto.MemberRef;
@@ -33,6 +36,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class CompanyService {
   private static final int MAX_DUPLICATES = 5;
   private static final int MIN_HOST_LENGTH = 3;
+  private static final List<String> EXPORT_HEADER =
+      List.of(
+          "Reference",
+          "Name",
+          "Industry",
+          "Website",
+          "Phone",
+          "Address",
+          "Employees",
+          "Owner",
+          "Contacts",
+          "Open deals",
+          "Created",
+          "Updated",
+          "Archived");
 
   private final CompanyRepository companies;
   private final ContactRepository contacts;
@@ -41,6 +59,7 @@ public class CompanyService {
   private final MemberDirectory directory;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
+  private final Exporter exporter;
 
   public CompanyService(
       CompanyRepository companies,
@@ -49,7 +68,8 @@ public class CompanyService {
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
-      AuditChanges auditChanges) {
+      AuditChanges auditChanges,
+      Exporter exporter) {
     this.companies = companies;
     this.contacts = contacts;
     this.deals = deals;
@@ -57,6 +77,7 @@ public class CompanyService {
     this.directory = directory;
     this.audit = audit;
     this.auditChanges = auditChanges;
+    this.exporter = exporter;
   }
 
   @Transactional(readOnly = true)
@@ -68,6 +89,37 @@ public class CompanyService {
             ListParams.pageable(page, size, direction, sort));
     Related related = related(found.getContent());
     return found.map(c -> summary(c, related));
+  }
+
+  /** The list's companies (its filter, its default order) as CSV (api.md, Export). */
+  public CsvFile export(CompanyFilter filter) {
+    return exporter.export(
+        "companies",
+        filter,
+        EXPORT_HEADER,
+        companies,
+        CompanySpecifications.matching(filter),
+        ListParams.sort(CompanySort.NAME, Direction.ASC),
+        found -> {
+          Related r = related(found);
+          return found.stream()
+              .map(
+                  c ->
+                      Exporter.row(
+                          RecordRefs.format('C', c.getId()),
+                          c.getName(),
+                          c.getIndustry(),
+                          c.getWebsite(),
+                          c.getPhone(),
+                          c.getAddress(),
+                          c.getEmployeeCount(),
+                          r.owner(c),
+                          r.contacts(c),
+                          r.openDeals(c),
+                          c.getCreatedAt(),
+                          c.getUpdatedAt(),
+                          c.isArchived()));
+        });
   }
 
   @Transactional(readOnly = true)

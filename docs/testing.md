@@ -20,7 +20,8 @@ request, an exception or async handling) and `audit/AuditChangesTest` (audit dif
 sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
 `TextSearchTest` wildcard escaping), `crm/lead/LeadStatusTest` (the status transition table),
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
-transitions, overdue, microsecond times), `common/entity/TimestampPrecisionTest` and
+transitions, overdue, microsecond times), `crm/export/CsvWriterTest` (quoting, formula protection,
+CRLF) and `RecordRefsTest` (`D-0042`), `common/entity/TimestampPrecisionTest` and
 `common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
 codes of unique indexes, stale updates and deadlocks).
 
@@ -35,6 +36,7 @@ Extend `support/AbstractIntegrationTest`. It provides:
 - helpers: `uniqueEmail()`, `register(email)`, `login(email, password)`,
   `registerAndGetAccessToken()`, `adminAccessToken()`, `bearer(token)`
 - rate limits **off** (`application-test.yml`), since every IT registers from one address
+- an export cap of **3 rows** (`app.export.max-rows`), so a fourth row reaches it
 - an admin account (`ADMIN_EMAIL`), created by `AdminBootstrap` from `application-test.yml`;
   never change or delete it in a test
 
@@ -83,6 +85,7 @@ What the existing ITs cover:
 | `crm/deal/DealBoardIT` | The pipeline board: a column per stage, totals per currency, the card cap with the full count, archived deals left out |
 | `crm/task/TaskIT` | Create/assign/update, assignee-or-creator edit rights, complete/reopen/cancel with their audit events (no derived fields), the overdue flag, sorting (due date nulls last, priority), filters (`dueFrom` inclusive / `dueTo` exclusive), links (the company from the contact or deal, the contact of a converted lead), a removed member's tasks become unassigned, no delete |
 | `crm/task/ReminderIT` | The caller's overdue and due-soon tasks and follow-up leads: ordering, the cap of 20, the workspace time zone |
+| `crm/export/ExportIT` | CSV export of companies, contacts, leads and deals: header and columns, BOM, file name, the same rows in the same order as the list for each filter (`unassigned` too), formula protection, Thai text, `EXPORT` permission (403), other workspaces' rows never exported, the row cap (400 `EXPORT_TOO_LARGE`, nothing recorded), the audit event |
 | `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), the contact of a converted lead, a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
 `WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one

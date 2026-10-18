@@ -19,6 +19,9 @@ import com.example.boilerplate.crm.common.Ref;
 import com.example.boilerplate.crm.company.CompanyRepository;
 import com.example.boilerplate.crm.contact.ContactRepository;
 import com.example.boilerplate.crm.deal.DealRepository;
+import com.example.boilerplate.crm.export.CsvFile;
+import com.example.boilerplate.crm.export.Exporter;
+import com.example.boilerplate.crm.export.RecordRefs;
 import com.example.boilerplate.crm.lead.dto.*;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import com.example.boilerplate.workspace.MemberDirectory;
@@ -42,6 +45,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class LeadService {
+  private static final List<String> EXPORT_HEADER =
+      List.of(
+          "Reference",
+          "First name",
+          "Last name",
+          "Company",
+          "Email",
+          "Phone",
+          "Status",
+          "Priority",
+          "Follow-up date",
+          "Estimated value",
+          "Currency",
+          "Source",
+          "Owner",
+          "Created",
+          "Updated",
+          "Archived");
+
   private final LeadRepository leads;
   private final LeadSourceRepository sources;
   private final CompanyRepository companies;
@@ -53,6 +75,7 @@ public class LeadService {
   private final MemberDirectory directory;
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
+  private final Exporter exporter;
 
   public LeadService(
       LeadRepository leads,
@@ -65,7 +88,8 @@ public class LeadService {
       WorkspaceAccess access,
       MemberDirectory directory,
       AuditTrail audit,
-      AuditChanges auditChanges) {
+      AuditChanges auditChanges,
+      Exporter exporter) {
     this.leads = leads;
     this.sources = sources;
     this.companies = companies;
@@ -77,6 +101,7 @@ public class LeadService {
     this.directory = directory;
     this.audit = audit;
     this.auditChanges = auditChanges;
+    this.exporter = exporter;
   }
 
   @Transactional(readOnly = true)
@@ -90,6 +115,40 @@ public class LeadService {
             : leads.findAll(matching.and(ordering), ListParams.unsorted(page, size));
     Related related = related(found.getContent());
     return found.map(l -> response(l, related));
+  }
+
+  /** The list's leads (its filter, its default order) as CSV (api.md, Export). */
+  public CsvFile export(LeadFilter filter) {
+    return exporter.export(
+        "leads",
+        filter,
+        EXPORT_HEADER,
+        leads,
+        LeadSpecifications.matching(filter),
+        ListParams.sort(LeadSort.CREATED_AT, Direction.DESC),
+        found -> {
+          Related r = related(found);
+          return found.stream()
+              .map(
+                  l ->
+                      Exporter.row(
+                          RecordRefs.format('L', l.getId()),
+                          l.getFirstName(),
+                          l.getLastName(),
+                          l.getCompanyName(),
+                          l.getEmail(),
+                          l.getPhone(),
+                          l.getStatus(),
+                          l.getPriority(),
+                          l.getFollowUpDate(),
+                          l.getEstimatedValue(),
+                          l.getCurrency(),
+                          r.source(l),
+                          r.owner(l),
+                          l.getCreatedAt(),
+                          l.getUpdatedAt(),
+                          l.isArchived()));
+        });
   }
 
   @Transactional(readOnly = true)
