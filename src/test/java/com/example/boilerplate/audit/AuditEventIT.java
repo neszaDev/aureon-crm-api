@@ -212,11 +212,25 @@ class AuditEventIT extends WorkspaceTestSupport {
           .andExpect(status().isForbidden())
           .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
-    // A member-type history is not a record history (who joined, who got which role).
-    send(repToken, get(EVENTS + "?entityType=MEMBER&entityId=" + userId(owner), w))
-        .andExpect(status().isForbidden());
-    send(repToken, get(EVENTS + "?entityType=WORKSPACE&entityId=" + w, w))
-        .andExpect(status().isForbidden());
+    // Each record type's history is a record history; the other types' (who joined, who got which
+    // role, the pipeline) are not.
+    List<AuditEntityType> recordTypes =
+        List.of(
+            AuditEntityType.COMPANY,
+            AuditEntityType.CONTACT,
+            AuditEntityType.LEAD,
+            AuditEntityType.DEAL,
+            AuditEntityType.TASK,
+            AuditEntityType.ACTIVITY);
+    for (AuditEntityType type : AuditEntityType.values()) {
+      send(repToken, get(EVENTS + "?entityType=" + type + "&entityId=" + w, w))
+          .andExpect(recordTypes.contains(type) ? status().isOk() : status().isForbidden());
+    }
+    // The permission comes first: without one record a bad page is still a 403, with one a 400.
+    send(repToken, get(EVENTS + "?size=0", w)).andExpect(status().isForbidden());
+    send(repToken, get(EVENTS + "?entityType=COMPANY&entityId=1&size=0", w))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.fieldErrors.size").exists());
     // The owner reads those.
     send(ownerToken, get(EVENTS + "?entityType=WORKSPACE&entityId=" + w, w))
         .andExpect(status().isOk())
@@ -284,6 +298,13 @@ class AuditEventIT extends WorkspaceTestSupport {
             "?page=-1")) {
       send(token, get(EVENTS + query, w)).andExpect(status().isBadRequest());
     }
+    // A malformed entityType is a parameter of the wrong type: no code.
+    send(token, get(EVENTS + "?entityType=NOPE", w)).andExpect(jsonPath("$.code").doesNotExist());
+    // page × size past the query's int offset.
+    send(token, get(EVENTS + "?page=2147483647&size=2", w))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.fieldErrors.page").exists());
   }
 
   private long total(String token, long w, String query) throws Exception {
