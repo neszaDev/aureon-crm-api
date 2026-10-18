@@ -910,11 +910,17 @@ class DealIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.message").value("Stage has deals; move them first"));
     // Once no deal is in it, it can go; the history keeps its name, without the id.
     move(token, w, second, stage.get("Qualification"), null, 1).andExpect(status().isOk());
+    Map<Long, String> entered = new HashMap<>();
+    for (long deal : List.of(first, second)) entered.put(deal, newestChange(token, w, deal));
     send(token, delete(STAGES + "/{id}", w, demo)).andExpect(status().isNoContent());
     send(token, get(STAGES, w))
         .andExpect(jsonPath("$.length()").value(6))
         .andExpect(jsonPath("$[0].dealCount").value(2));
     for (long deal : List.of(first, second)) {
+      // The newest entry lost its from-stage id: the deal still entered its stage when it did.
+      send(token, get(DEAL, w, deal))
+          .andExpect(jsonPath("$.stageEnteredAt").value(entered.get(deal)));
+      assertThat(newestChange(token, w, deal)).isEqualTo(entered.get(deal));
       send(token, get(DEAL + "/history", w, deal))
           .andExpect(jsonPath("$.length()").value(2))
           .andExpect(jsonPath("$[0].fromStage.name").value("Demo"))
