@@ -56,6 +56,29 @@ class CsvWriterTest {
     assertThat(cell("a=b-c")).isEqualTo("a=b-c");
   }
 
+  /** Spreadsheets skip leading blanks (also no-break and ideographic spaces) before a formula. */
+  @Test
+  void aFormulaAfterLeadingWhitespaceGetsAnApostropheFirst() throws IOException {
+    assertThat(cell(" =SUM(A1)")).isEqualTo("' =SUM(A1)");
+    assertThat(cell("  +66 81 234 5678")).isEqualTo("'  +66 81 234 5678");
+    assertThat(cell("\u00A0-5")).isEqualTo("'\u00A0-5");
+    assertThat(cell("\u3000@x")).isEqualTo("'\u3000@x");
+    // The apostrophe goes first; the line break then quotes.
+    assertThat(cell(" \n=1+1")).isEqualTo("\"' \n=1+1\"");
+    // Only blanks, or blanks before other text, are no formula.
+    assertThat(cell("   ")).isEqualTo("   ");
+    assertThat(cell(" a=b")).isEqualTo(" a=b");
+    assertThat(cell("\u00A0Acme")).isEqualTo("\u00A0Acme");
+  }
+
+  /** Semicolon-locale Excel splits on {@code ;} but honours quotes. */
+  @Test
+  void aSemicolonQuotes() throws IOException {
+    assertThat(cell("bangkok; vip")).isEqualTo("\"bangkok; vip\"");
+    assertThat(cell("x;=HYPERLINK(\"http://x\",\"y\")"))
+        .isEqualTo("\"x;=HYPERLINK(\"\"http://x\"\",\"\"y\"\")\"");
+  }
+
   @Test
   void nullAndEmptyAreEmpty() throws IOException {
     StringWriter out = new StringWriter();

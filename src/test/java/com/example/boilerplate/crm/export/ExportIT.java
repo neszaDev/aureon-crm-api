@@ -28,6 +28,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -113,6 +114,8 @@ class ExportIT extends WorkspaceTestSupport {
             .andReturn();
     LocalDate after = LocalDate.now(ZONE);
 
+    assertThat(result.getResponse().getHeader(HttpHeaders.CONTENT_TYPE))
+        .isEqualTo("text/csv;charset=UTF-8");
     // Excel needs the BOM to read UTF-8.
     assertThat(result.getResponse().getContentAsByteArray())
         .startsWith((byte) 0xEF, (byte) 0xBB, (byte) 0xBF);
@@ -150,7 +153,7 @@ class ExportIT extends WorkspaceTestSupport {
                 "\"'=HYPERLINK(\"\"http://evil.example\"\",\"\"x\"\")\"",
                 "Mia Manager",
                 "Website",
-                "bangkok; vip",
+                "\"bangkok; vip\"",
                 t.get("createdAt").asText(),
                 t.get("updatedAt").asText(),
                 "no"));
@@ -337,7 +340,9 @@ class ExportIT extends WorkspaceTestSupport {
     String repEmail = uniqueEmail();
     String rep = tokenFor(repEmail);
     addMember(w, repEmail, WorkspaceRole.SALES_REP);
-    create(rep, w, "companies", Map.of("name", "Mine"));
+    // More rows of every list than the test cap (3): the permission is checked before the count,
+    // so a rep never learns it from EXPORT_TOO_LARGE.
+    for (int i = 0; i < 4; i++) records(rep, w);
 
     for (String list : LISTS) {
       export(rep, w, list)
@@ -391,6 +396,22 @@ class ExportIT extends WorkspaceTestSupport {
         .containsExactlyElementsOf(ids.subList(0, 3));
   }
 
+  /** A client that accepts anything (a browser's fetch) still gets the JSON {@code ApiError}. */
+  @Test
+  void tooManyRowsIsJsonForAClientAcceptingAnything() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    for (int i = 0; i < 4; i++) records(owner, w);
+
+    for (String list : LISTS) {
+      send(owner, get(W + "/" + list + "/export", w).accept(MediaType.ALL))
+          .andExpect(status().isBadRequest())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+          .andExpect(jsonPath("$.code").value("EXPORT_TOO_LARGE"))
+          .andExpect(jsonPath("$.fieldErrors").isEmpty());
+    }
+  }
+
   @Test
   void exportIsAudited() throws Exception {
     String owner = tokenFor(uniqueEmail());
@@ -406,9 +427,38 @@ class ExportIT extends WorkspaceTestSupport {
     export(owner, w, "deals").andExpect(status().isOk());
     export(owner, w, "companies", "archived", "true", "unassigned", "false")
         .andExpect(status().isOk());
+    create(
+        owner,
+        w,
+        "leads",
+        Map.of("firstName", "Lia", "priority", "HIGH", "followUpDate", "2026-11-01"));
+    export(
+            owner,
+            w,
+            "leads",
+            "status",
+            "NEW",
+            "status",
+            "CONTACTED",
+            "priority",
+            "HIGH",
+            "followUpBefore",
+            "2026-11-15")
+        .andExpect(status().isOk());
 
     List<AuditEvent> exports = exportEvents(w);
-    assertThat(exports).hasSize(3);
+    assertThat(exports).hasSize(4);
+    // The filters are the filter record's fields, not the query parameters (status -> statuses).
+    assertThat(exports.get(0).getEntityLabel()).isEqualTo("1 leads exported");
+    assertThat(tree(exports.get(0).getChanges()))
+        .isEqualTo(
+            PLAIN.readTree(
+                """
+                {"list": {"from": null, "to": "leads"},
+                 "filters": {"from": null,
+                  "to": {"statuses": ["NEW", "CONTACTED"], "priority": "HIGH",
+                         "followUpBefore": "2026-11-15"}}}"""));
+    exports = exports.subList(1, exports.size());
     // Newest first.
     AuditEvent contacts = exports.get(2);
     assertThat(contacts.getEntityType()).isEqualTo(AuditEntityType.WORKSPACE);
@@ -437,7 +487,7 @@ class ExportIT extends WorkspaceTestSupport {
             get(W + "/audit-events", w).param("entityType", "WORKSPACE").param("entityId", "" + w))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].action").value("EXPORT"))
-        .andExpect(jsonPath("$.content[0].entityLabel").value("0 companies exported"));
+        .andExpect(jsonPath("$.content[0].entityLabel").value("1 leads exported"));
   }
 
   /** Two members and a removed rep with records of every kind (see each line). */

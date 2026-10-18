@@ -8,11 +8,13 @@ import java.util.stream.Stream;
 
 /**
  * RFC 4180 CSV with CRLF line ends. A value starting with {@code = + - @}, a tab or a carriage
- * return gets a leading {@code '} so spreadsheets show it instead of running it as a formula; a
- * value with a quote, comma or line break is then quoted, its quotes doubled. Null is empty.
+ * return, or with one of them after blanks (spreadsheets skip those, no-break and ideographic
+ * spaces included), gets a leading {@code '} so they show it instead of running it as a formula; a
+ * value with a quote, comma, semicolon (the separator of semicolon-locale Excel, which honours
+ * quotes) or line break is then quoted, its quotes doubled. Null is empty.
  */
 public final class CsvWriter {
-  private static final String FORMULA_STARTS = "=+-@\t\r";
+  private static final String FORMULA_STARTS = "=+-@";
 
   private CsvWriter() {}
 
@@ -32,9 +34,24 @@ public final class CsvWriter {
 
   private static String field(String value) {
     if (value == null || value.isEmpty()) return "";
-    String v = FORMULA_STARTS.indexOf(value.charAt(0)) >= 0 ? "'" + value : value;
+    String v = runsAsFormula(value) ? "'" + value : value;
     boolean quote =
-        v.indexOf('"') >= 0 || v.indexOf(',') >= 0 || v.indexOf('\r') >= 0 || v.indexOf('\n') >= 0;
+        v.indexOf('"') >= 0
+            || v.indexOf(',') >= 0
+            || v.indexOf(';') >= 0
+            || v.indexOf('\r') >= 0
+            || v.indexOf('\n') >= 0;
     return quote ? '"' + v.replace("\"", "\"\"") + '"' : v;
+  }
+
+  private static boolean runsAsFormula(String value) {
+    if (value.charAt(0) == '\t' || value.charAt(0) == '\r') return true;
+    int i = 0;
+    // isSpaceChar adds U+00A0 and the other no-break spaces to isWhitespace.
+    while (i < value.length()
+        && (Character.isWhitespace(value.charAt(i)) || Character.isSpaceChar(value.charAt(i)))) {
+      i++;
+    }
+    return i < value.length() && FORMULA_STARTS.indexOf(value.charAt(i)) >= 0;
   }
 }

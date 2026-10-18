@@ -19,6 +19,7 @@ class ReportQueries {
    * (Lost and deleted stages, whose rows have no stage id, count for nothing; null: none). The
    * history drives: every deal has one, and joining by ids is enough, since ids are unique across
    * workspaces and the composite foreign keys keep a history row's deal and stage in its workspace.
+   * The deal's workspace is bound too, as defence in depth.
    */
   private static final String FUNNEL =
       """
@@ -28,7 +29,8 @@ class ReportQueries {
         FROM deal_stage_changes c
         JOIN deals d ON d.id = c.deal_id
         LEFT JOIN pipeline_stages s ON s.id = c.to_stage_id AND s.kind <> 'LOST'
-        WHERE c.workspace_id = :workspaceId AND d.archived_at IS NULL
+        WHERE c.workspace_id = :workspaceId AND d.workspace_id = :workspaceId
+          AND d.archived_at IS NULL
           AND d.created_at >= :start AND d.created_at < :end
         GROUP BY c.deal_id
       ) AS reached
