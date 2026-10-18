@@ -27,6 +27,11 @@ public abstract class WorkspaceTestSupport extends AbstractIntegrationTest {
 
   /** Creates a workspace (EUR, Europe/Paris) owned by the token's user and returns its id. */
   protected long createWorkspace(String token, String name) throws Exception {
+    return createWorkspace(token, name, "Europe/Paris");
+  }
+
+  /** As above, in the time zone {@code zone}. */
+  protected long createWorkspace(String token, String name, String zone) throws Exception {
     String body =
         mvc.perform(
                 post("/api/v1/workspaces")
@@ -34,10 +39,7 @@ public abstract class WorkspaceTestSupport extends AbstractIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         json.writeValueAsString(
-                            Map.of(
-                                "name", name,
-                                "defaultCurrency", "EUR",
-                                "timezone", "Europe/Paris"))))
+                            Map.of("name", name, "defaultCurrency", "EUR", "timezone", zone))))
             .andExpect(status().isCreated())
             .andReturn()
             .getResponse()

@@ -13,7 +13,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Arrays;
 import java.util.List;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
@@ -30,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReminderService {
   private static final int LIMIT = 20;
   private static final Duration SOON = Duration.ofHours(24);
-  private static final List<LeadStatus> OPEN_LEADS =
-      Arrays.stream(LeadStatus.values()).filter(LeadStatus::isOpen).toList();
 
   private final TaskService tasks;
   private final LeadService leads;
@@ -65,7 +62,7 @@ public class ReminderService {
         dueSoon,
         leads
             .list(
-                new LeadFilter(null, OPEN_LEADS, caller, false, null, null, today, false),
+                new LeadFilter(null, LeadStatus.open(), caller, false, null, null, today, false),
                 0,
                 LIMIT,
                 LeadSort.FOLLOW_UP_DATE,

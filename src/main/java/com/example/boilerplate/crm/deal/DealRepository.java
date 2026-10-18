@@ -49,6 +49,19 @@ public interface DealRepository
   List<Object[]> openTotals();
 
   /**
+   * Rows of (owner id, null when unassigned; currency, count, sum of amounts) of the active deals
+   * in open stages, by currency.
+   */
+  @Query(
+      """
+      select d.ownerId, d.currency, count(d), sum(d.amount)
+      from Deal d join d.stage s
+      where d.archivedAt is null and s.kind = com.example.boilerplate.crm.settings.StageKind.OPEN
+      group by d.ownerId, d.currency
+      order by d.currency""")
+  List<Object[]> openTotalsByOwner();
+
+  /**
    * Rows of (stage kind, currency, count, sum of amounts) of the active deals in the WON or LOST
    * stage closed from {@code start} (inclusive) to {@code end} (exclusive), by currency.
    */

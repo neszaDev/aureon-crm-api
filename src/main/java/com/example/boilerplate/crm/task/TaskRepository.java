@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.task;
 
 import java.time.Instant;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,6 +12,17 @@ import org.springframework.transaction.annotation.Transactional;
 public interface TaskRepository
     extends JpaRepository<CrmTask, Long>, JpaSpecificationExecutor<CrmTask> {
   long countByStatusAndDueAtBefore(TaskStatus status, Instant now);
+
+  /**
+   * Rows of (assignee id, null when unassigned; count) of the tasks completed from {@code start}
+   * (inclusive) to {@code end} (exclusive): only a completed task has a completion time.
+   */
+  @Query(
+      """
+      select t.assigneeId, count(t) from CrmTask t
+      where t.completedAt >= :start and t.completedAt < :end
+      group by t.assigneeId""")
+  List<Object[]> countCompletedByAssignee(Instant start, Instant end);
 
   /** As {@code ActivityRepository.linkConvertedLead}, for the lead's tasks. */
   @Transactional

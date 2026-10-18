@@ -12,6 +12,7 @@ import com.example.boilerplate.crm.lead.LeadRepository;
 import com.example.boilerplate.crm.lead.LeadStatus;
 import com.example.boilerplate.crm.settings.PipelineStageService;
 import com.example.boilerplate.crm.settings.StageKind;
+import com.example.boilerplate.crm.settings.dto.StageResponse;
 import com.example.boilerplate.crm.task.TaskRepository;
 import com.example.boilerplate.crm.task.TaskService;
 import com.example.boilerplate.crm.task.TaskSort;
@@ -27,7 +28,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,8 +46,6 @@ public class DashboardService {
   static final int RECENT_ACTIVITIES = 8;
   static final int MY_TASKS = 8;
   static final int RECENT_CHANGES = 10;
-  private static final List<LeadStatus> OPEN_LEADS =
-      Arrays.stream(LeadStatus.values()).filter(LeadStatus::isOpen).toList();
 
   private final CompanyRepository companies;
   private final ContactRepository contacts;
@@ -92,24 +90,15 @@ public class DashboardService {
     Instant now = Instant.now();
 
     // Open deals: per stage and currency, then per currency across the stages.
-    Map<Long, Long> stageCounts = new HashMap<>();
-    Map<Long, List<MoneyTotal>> stageTotals = new HashMap<>();
+    List<Object[]> open = deals.openTotals();
     Map<String, BigDecimal> amounts = new TreeMap<>();
     Map<String, BigDecimal> weighted = new HashMap<>();
     long openDeals = 0;
-    // By currency, so each stage's totals come out sorted.
-    for (Object[] row : deals.openTotals()) {
-      long stageId = (Long) row[0];
+    for (Object[] row : open) {
       String currency = (String) row[1];
-      long count = (Long) row[2];
-      BigDecimal amount = (BigDecimal) row[3];
-      stageCounts.merge(stageId, count, Long::sum);
-      stageTotals
-          .computeIfAbsent(stageId, id -> new ArrayList<>())
-          .add(new MoneyTotal(currency, amount));
-      amounts.merge(currency, amount, BigDecimal::add);
+      amounts.merge(currency, (BigDecimal) row[3], BigDecimal::add);
       weighted.merge(currency, (BigDecimal) row[4], BigDecimal::add);
-      openDeals += count;
+      openDeals += (Long) row[2];
     }
     List<PipelineTotal> openPipeline =
         amounts.entrySet().stream()
@@ -123,16 +112,6 @@ public class DashboardService {
                             .get(e.getKey())
                             .movePointLeft(2)
                             .setScale(2, RoundingMode.HALF_UP)))
-            .toList();
-    List<StageBucket> byStage =
-        stages.list().stream()
-            .filter(s -> s.kind() == StageKind.OPEN)
-            .map(
-                s ->
-                    new StageBucket(
-                        s,
-                        stageCounts.getOrDefault(s.id(), 0L),
-                        stageTotals.getOrDefault(s.id(), List.of())))
             .toList();
 
     // Deals closed in the period, by the kind of their current stage.
@@ -154,13 +133,13 @@ public class DashboardService {
         new Counts(
             companies.countByArchivedAtIsNull(),
             contacts.countByArchivedAtIsNull(),
-            leads.countByArchivedAtIsNullAndStatusIn(OPEN_LEADS),
+            leads.countByArchivedAtIsNullAndStatusIn(LeadStatus.open()),
             openDeals,
             taskRows.countByStatusAndDueAtBefore(TaskStatus.OPEN, now)),
         openPipeline,
         new WonSummary(won, wonTotals),
         new LostSummary(lost),
-        byStage,
+        byStage(stages.list(), open),
         activities
             .list(
                 new ActivityFilter(null, null, null, null, null, null, null, null),
@@ -170,6 +149,29 @@ public class DashboardService {
         myOpenTasks(null, now, now),
         myOpenTasks(true, null, now),
         audit.recentRecordChanges(RECENT_CHANGES));
+  }
+
+  /**
+   * Every open stage of {@code stages} in order, with its deals in {@code openTotals} (the rows of
+   * {@link DealRepository#openTotals}, by currency, so each stage's totals come out sorted).
+   */
+  static List<StageBucket> byStage(List<StageResponse> stages, List<Object[]> openTotals) {
+    Map<Long, Long> counts = new HashMap<>();
+    Map<Long, List<MoneyTotal>> totals = new HashMap<>();
+    for (Object[] row : openTotals) {
+      long stageId = (Long) row[0];
+      counts.merge(stageId, (Long) row[2], Long::sum);
+      totals
+          .computeIfAbsent(stageId, id -> new ArrayList<>())
+          .add(new MoneyTotal((String) row[1], (BigDecimal) row[3]));
+    }
+    return stages.stream()
+        .filter(s -> s.kind() == StageKind.OPEN)
+        .map(
+            s ->
+                new StageBucket(
+                    s, counts.getOrDefault(s.id(), 0L), totals.getOrDefault(s.id(), List.of())))
+        .toList();
   }
 
   /**

@@ -1,5 +1,6 @@
 package com.example.boilerplate.crm.deal;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,4 +19,8 @@ public interface DealStageChangeRepository extends JpaRepository<DealStageChange
       select c.dealId, max(c.changedAt) from DealStageChange c
       where c.dealId in :dealIds group by c.dealId""")
   List<Object[]> stageEnteredAt(Collection<Long> dealIds);
+
+  /** The time of the workspace's earliest stage change, null without any. */
+  @Query("select min(c.changedAt) from DealStageChange c")
+  Instant firstChangedAt();
 }
