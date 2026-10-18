@@ -62,6 +62,7 @@ What the existing ITs cover:
 |---|---|
 | `BoilerplateApplicationIT` | Migrations applied, schema validates |
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
+| `auth/RefreshReuseIT` | Refresh-token families: a replay after the grace revokes the family, within it only that request fails, a family past 90 days (counted from the sign-in) can't rotate |
 | `security/SecurityIT` | Public vs protected endpoints, `X-Request-Id` |
 | `security/TokenBindingIT` | Access tokens bound to the user id: an admin's email swap, a deleted user's re-registered email, a password or role change → 401; a session across refresh |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |

@@ -32,6 +32,10 @@ app:
   security.refresh-token-ttl: ${REFRESH_TOKEN_TTL:P30D}
   # false = invite-only: POST /auth/register answers 403.
   security.registration-enabled: ${REGISTRATION_ENABLED:true}
+  # Refresh-token families (docs/api.md, Refresh tokens and logout).
+  auth:
+    refresh-reuse-grace: ${REFRESH_REUSE_GRACE:PT30S}
+    session-max-age: ${SESSION_MAX_AGE:P90D}
   cors.allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
   files:
     # Relative paths resolve against the working directory (/app in the image).

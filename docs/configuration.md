@@ -26,6 +26,8 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `JWT_SECRET` | dev-only placeholder | yes | At least **32 bytes** (HS256). Checked at startup; the value is never logged. Generate one with `openssl rand -hex 32`. |
 | `JWT_ACCESS_TOKEN_TTL` | `PT15M` | no | ISO-8601 duration, must be positive |
 | `REFRESH_TOKEN_TTL` | `P30D` | no | ISO-8601 duration, must be positive |
+| `REFRESH_REUSE_GRACE` | `PT30S` | no | `app.auth.refresh-reuse-grace`: a used refresh token presented again within this is a parallel refresh (401 for that request); later it revokes the whole session ([API](api.md#refresh-tokens-and-logout)). Zero or more |
+| `SESSION_MAX_AGE` | `P90D` | no | `app.auth.session-max-age`: how long after the sign-in a session's refresh tokens can rotate; then the user signs in again. Must be positive |
 | `REGISTRATION_ENABLED` | `true` | no | `false` makes the API invite-only: `POST /auth/register` answers 403 (`Registration is disabled`). Existing accounts still sign in. |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8080` | yes | Comma-separated; must not be empty |
 | `APP_VERSION` | `dev` | recommended | Shown at `/actuator/info` |
@@ -42,8 +44,9 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `DEMO_DATA` | `false` | no (`local` and `dev` only) | `true` seeds the demo workspace once at startup ([Try it](crm/README.md#try-it)); never with the `prod` profile, even next to `dev` |
 | `DEMO_PASSWORD` | `demo-password` | no (`local` and `dev` only) | Password of the four demo logins, 6–72 characters; only used when they are created and never logged. A demo login that already exists with another password keeps it (a warning names the email) |
 
-`app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
-`app.export.*` bind to validated records (`auth/AuthProperties`, `security/CorsProperties`,
+`app.security.*`, `app.auth.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
+`app.export.*` bind to validated records (`auth/AuthProperties`, `auth/SessionProperties`,
+`security/CorsProperties`,
 `user/AdminProperties`, `file/FileProperties`, `ratelimit/RateLimitProperties`,
 `crm/export/ExportProperties`: `max-rows`, default 10000, 1 to 30000, the most rows one CSV export
 may have; the upper bound keeps the export's `IN` lookups of the rows' links under PgJDBC's 32,767

@@ -5,6 +5,7 @@ import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.exception.ForbiddenException;
+import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.*;
@@ -89,6 +90,8 @@ public class AuthService {
     return refreshTokens.create(u);
   }
 
+  /** A replay revokes the token's family and answers 401: the revocation must commit. */
+  @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
   public AuthTokensResponse refresh(String refreshToken) {
     return refreshTokens.rotate(refreshToken);
   }

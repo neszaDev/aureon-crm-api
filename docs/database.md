@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V18__add_company_nickname.sql`. Note the **two**
+   highest existing version + 1. Example: `V20__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -48,6 +48,8 @@ Migrations run automatically at application startup, in every profile.
 | `V15__deals.sql` | `deals` (stage, company, contact, source, lead and owner foreign keys; `UNIQUE (workspace_id, lead_id)`: one deal per converted lead) and `deal_stage_changes` (stage names kept as snapshots, the stage ids `ON DELETE SET NULL (column)`); adds the foreign key of `leads.converted_deal_id` |
 | `V16__tasks.sql` | `tasks` (status and priority checks; `completed_at` set exactly when `COMPLETED`; assignee and creator are member foreign keys `ON DELETE SET NULL (column)`; company, contact, lead and deal links; index on `(workspace_id, assignee_id, status, due_at)` for the reminders) |
 | `V17__activities.sql` | `activities` (type check; `CHECK (num_nonnulls(company_id, contact_id, lead_id, deal_id) >= 1)`: at least one link; author is a member foreign key `ON DELETE SET NULL (author_id)`; index on `(workspace_id, occurred_at DESC)` for the newest-first list) |
+| `V18__users_sessions_valid_after.sql` | `users.sessions_valid_after` (nullable): access tokens issued before it are refused; set on an email, role or password change |
+| `V19__refresh_token_families.sql` | `refresh_tokens.family_id`, `family_created_at` (existing tokens become one-token families started at their `created_at`) and `used_at`; index on `family_id` |
 
 Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
 tenant boundary, the composite foreign keys and the columns of the CRM tables are described in

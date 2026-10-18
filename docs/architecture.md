@@ -78,8 +78,10 @@ stages and lead sources). The full model is in [docs/crm/](crm/README.md); the m
   `sessions_valid_after` (an email, role or password change), leaves the request anonymous, and
   `ApiAuthenticationEntryPoint` answers protected paths with 401 and an `ApiError` body.
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
-  Each refresh rotates the token (the old one is deleted under a row lock), and logout deletes
-  it.
+  A sign-in starts a family; each refresh rotates the token under a row lock and keeps the old one
+  as used. A used token presented again after `app.auth.refresh-reuse-grace` (30 s) revokes the
+  family; a family can't rotate after `app.auth.session-max-age` (90 days); logout deletes the
+  family.
 - **Rate limits** (`ratelimit/RateLimiter`): Bucket4j buckets in a bounded Caffeine cache, per
   client IP for sign-in and registration, and per email for failed sign-ins. In-memory, so per
   instance. The client IP comes from `X-Forwarded-For` of trusted proxies only.

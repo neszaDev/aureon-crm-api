@@ -81,7 +81,23 @@ A caller who is not a member gets 404, the same answer as for a workspace that d
 
 ## Refresh tokens and logout
 
-Access tokens are short-lived (15 minutes by default). Refresh tokens expire after 30 days by default, are opaque random values, and only their SHA-256 hashes are stored in PostgreSQL. A refresh call rotates the refresh token; discard the old value immediately. Logout deletes the supplied refresh-token record. Set `JWT_ACCESS_TOKEN_TTL` and `REFRESH_TOKEN_TTL` to ISO-8601 durations (for example `PT10M` and `P14D`).
+Access tokens are short-lived (15 minutes by default). Refresh tokens expire after 30 days by default, are opaque random values, and only their SHA-256 hashes are stored in PostgreSQL. A refresh call rotates the refresh token; discard the old value immediately. Set `JWT_ACCESS_TOKEN_TTL` and `REFRESH_TOKEN_TTL` to ISO-8601 durations (for example `PT10M` and `P14D`).
+
+A sign-in (register, login, registration through an invitation, a password change) starts a
+**session**: a family of refresh tokens. Each refresh adds a token to the family and keeps the old
+one as used. The responses don't change; the rules do:
+
+- A used refresh token presented again within 30 seconds of its use (`REFRESH_REUSE_GRACE`) is a
+  401 for that request only: two tabs that refresh together don't sign the user out, and the
+  newer token keeps working.
+- Presented later, it is treated as stolen: the whole family is revoked, so whoever holds the
+  newer token is signed out too (401), and the user signs in again.
+- A family can't rotate more than 90 days after its sign-in (`SESSION_MAX_AGE`): 401, sign in
+  again. Rotating doesn't restart that clock.
+- Logout ends the session: every token of the family. A password change still revokes every
+  session of the user, and an admin's email or role change too.
+- Expired tokens, used or not, are deleted on every sign-in and rotation (no scheduled job), and a
+  family's tokens all go when it is revoked or logged out, so the table doesn't grow without bound.
 
 Copy these requests into a terminal or Thunder Client's cURL importer. Replace the values in angle brackets with values from the preceding response.
 

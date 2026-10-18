@@ -3,6 +3,7 @@ package com.example.boilerplate.auth;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
@@ -12,6 +13,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
   Optional<RefreshToken> findByTokenHashForUpdate(@Param("hash") String hash);
 
   long deleteByExpiresAtBefore(Instant time);
+
+  @Modifying
+  @Query("delete from RefreshToken t where t.familyId = :familyId")
+  int deleteByFamilyId(@Param("familyId") UUID familyId);
 
   @Modifying
   @Query("delete from RefreshToken t where t.user.id = :userId")
