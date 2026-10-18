@@ -17,7 +17,7 @@ final class CompanySpecifications {
 
   static Specification<Company> matching(CompanyFilter f) {
     String pattern = TextSearch.pattern(f.q()).orElse(null);
-    String industry = Texts.optional(f.industry());
+    String industry = Texts.param("industry", f.industry());
     return (root, query, cb) -> {
       List<Predicate> where = new ArrayList<>();
       where.add(

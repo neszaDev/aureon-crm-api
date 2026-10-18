@@ -39,7 +39,9 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   `CREATED_AT`, `UPDATED_AT`, `AMOUNT` and `PRIORITY`, `ASC` for `NAME`, `COMPANY`,
   `FOLLOW_UP_DATE`, `DUE_AT` and `EXPECTED_CLOSE_DATE`. The id is always a tie-breaker. Archived
   records are excluded unless `archived=true` (then only archived ones). Text search `q` is
-  trimmed; blank means no search. A list with an owner filter (`ownerId`; tasks: `assigneeId`),
+  trimmed; blank means no search. A NUL character (`%00`) in any text query parameter (`q`,
+  `industry`, `tag`, the duplicate checks' fields, `from` / `to`, ...) is a 400 `VALIDATION_FAILED`
+  with a `fieldErrors` entry for it. A list with an owner filter (`ownerId`; tasks: `assigneeId`),
   and the deal board, also take `unassigned=true`: only the records without one; together with an
   owner (tasks: or `mine=true`) it is a 400 on `unassigned`.
 - **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...). 400 invalid

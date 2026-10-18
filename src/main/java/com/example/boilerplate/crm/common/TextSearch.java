@@ -21,12 +21,9 @@ public final class TextSearch {
    * with a null character (which Postgres can't compare), is a 400 on {@code q}.
    */
   public static Optional<String> pattern(String q) {
-    String text = Texts.optional(q);
+    String text = Texts.param("q", q);
     if (text == null) return Optional.empty();
     if (text.length() > MAX_LENGTH) throw new FieldValidationException("q", "is too long");
-    if (text.indexOf('\0') >= 0) {
-      throw new FieldValidationException("q", "must not contain null characters");
-    }
     return Optional.of("%" + escape(text) + "%");
   }
 

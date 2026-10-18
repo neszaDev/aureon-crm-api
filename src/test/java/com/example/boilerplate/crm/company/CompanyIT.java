@@ -139,9 +139,11 @@ class CompanyIT extends WorkspaceTestSupport {
     send(token, post(COMPANIES, w), Map.of("name", "a\u0000b"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("Text must not contain null characters"));
+    // A query parameter is rejected before the database sees it: a field error, as for q.
     duplicates(token, w, "name", "a\u0000b")
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.message").value("Text must not contain null characters"));
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.fieldErrors.name").value("must not contain null characters"));
     list(token, w).andExpect(jsonPath("$.totalElements").value(0));
   }
 

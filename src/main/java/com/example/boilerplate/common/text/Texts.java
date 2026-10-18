@@ -28,6 +28,18 @@ public final class Texts {
     return start == end ? null : value.substring(start, end);
   }
 
+  /**
+   * The stripped value of the text query parameter {@code field}, null when blank. A NUL character
+   * is a 400 on {@code field}: PostgreSQL can't hold or compare it, and Hibernate writes a string
+   * literal into the SQL, where it breaks the connection (a 500).
+   */
+  public static String param(String field, String value) {
+    if (value != null && value.indexOf('\0') >= 0) {
+      throw new FieldValidationException(field, "must not contain null characters");
+    }
+    return optional(value);
+  }
+
   // U+0085 (next line) is neither, yet a Unicode space to regexes with (?U), as in email patterns.
   private static boolean isSpace(char c) {
     return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '\u0085';

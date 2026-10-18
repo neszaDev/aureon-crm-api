@@ -3,6 +3,7 @@ package com.example.boilerplate.user;
 import com.example.boilerplate.common.exception.ConflictException;
 import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
 import java.util.Locale;
@@ -37,13 +38,14 @@ public class UserAdminService {
   @Transactional(readOnly = true)
   public Page<UserResponse> list(String actorEmail, String query, int page, int size) {
     requireAdmin(actorEmail);
+    String search = Texts.param("q", query);
     var pageable =
         PageRequest.of(
             page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id").descending()));
     Page<User> result =
-        query == null || query.isBlank()
+        search == null
             ? users.findAll(pageable)
-            : users.findByEmailContainingIgnoreCase(query.trim(), pageable);
+            : users.findByEmailContainingIgnoreCase(search, pageable);
     return result.map(mapper::toResponse);
   }
 

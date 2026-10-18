@@ -18,7 +18,7 @@ final class ContactSpecifications {
 
   static Specification<Contact> matching(ContactFilter f) {
     String pattern = TextSearch.pattern(f.q()).orElse(null);
-    String tag = Texts.optional(f.tag());
+    String tag = Texts.param("tag", f.tag());
     return (root, query, cb) -> {
       List<Predicate> where = new ArrayList<>();
       where.add(

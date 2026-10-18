@@ -153,8 +153,9 @@ public class ContactService {
    */
   @Transactional(readOnly = true)
   public List<ContactRef> duplicates(String email, String phone) {
-    String sameEmail = Texts.optional(email);
-    String digits = phone == null ? "" : phone.replaceAll("[^0-9]", "");
+    String sameEmail = Texts.param("email", email);
+    String phoneText = Texts.param("phone", phone);
+    String digits = phoneText == null ? "" : phoneText.replaceAll("[^0-9]", "");
     Stream<Contact> byEmail =
         sameEmail == null
             ? Stream.empty()

@@ -133,8 +133,8 @@ public class CompanyService {
    */
   @Transactional(readOnly = true)
   public List<CompanyRef> duplicates(String name, String website) {
-    String sameName = Texts.optional(name);
-    String host = host(website);
+    String sameName = Texts.param("name", name);
+    String host = host(Texts.param("website", website));
     Stream<Company> byName =
         sameName == null
             ? Stream.empty()
