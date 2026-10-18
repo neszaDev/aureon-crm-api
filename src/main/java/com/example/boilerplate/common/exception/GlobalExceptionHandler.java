@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -85,8 +86,16 @@ public class GlobalExceptionHandler {
         HttpStatus.CONFLICT, constraintRule(e), "Conflicts with existing data", r, Map.of());
   }
 
-  @ExceptionHandler(OptimisticLockingFailureException.class)
-  ResponseEntity<ApiError> staleUpdate(OptimisticLockingFailureException e, HttpServletRequest r) {
+  /**
+   * A stale version, or a lock the database took back (PostgreSQL aborts one side of a deadlock,
+   * 40P01, and Spring reports it as a pessimistic locking failure, as a lock timeout): the client
+   * reloads and retries.
+   */
+  @ExceptionHandler({
+    OptimisticLockingFailureException.class,
+    PessimisticLockingFailureException.class
+  })
+  ResponseEntity<ApiError> concurrentUpdate(Exception e, HttpServletRequest r) {
     return error(
         HttpStatus.CONFLICT,
         ErrorCode.VERSION_CONFLICT,

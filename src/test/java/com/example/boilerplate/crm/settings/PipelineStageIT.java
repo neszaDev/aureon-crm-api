@@ -199,9 +199,9 @@ class PipelineStageIT extends WorkspaceTestSupport {
   }
 
   /**
-   * Two deletes at once of the last two open stages: deletes and reorders take the pipeline's lock,
-   * so the second sees one open stage left and refuses. Several rounds, so a lucky ordering can't
-   * hide a race.
+   * Two deletes at once of the last two open stages: deletes, reorders and creates take the
+   * pipeline's lock, so the second sees one open stage left and refuses. Several rounds, so a lucky
+   * ordering can't hide a race.
    */
   @Test
   void concurrentDeletesKeepAnOpenStage() throws Exception {
@@ -211,39 +211,69 @@ class PipelineStageIT extends WorkspaceTestSupport {
     for (long id : open.subList(2, open.size())) {
       send(token, delete(STAGE, w, id)).andExpect(status().isNoContent());
     }
-    ExecutorService pool = Executors.newFixedThreadPool(2);
-    try {
-      for (int round = 0; round < 5; round++) {
-        List<Long> pair = openIds(token, w);
-        assertThat(pair).hasSize(2);
-        CountDownLatch start = new CountDownLatch(1);
-        List<Future<ResultActions>> futures = new ArrayList<>();
-        for (long id : pair) {
-          Callable<ResultActions> deleteIt =
-              () -> {
-                start.await();
-                return send(token, delete(STAGE, w, id));
-              };
-          futures.add(pool.submit(deleteIt));
-        }
-        start.countDown();
-        List<String> answers = new ArrayList<>();
-        for (Future<ResultActions> f : futures) {
-          MvcResult r = f.get(30, TimeUnit.SECONDS).andReturn();
-          int status = r.getResponse().getStatus();
-          answers.add(
-              status == 204
-                  ? "204"
-                  : status + " " + json.readTree(r.getResponse().getContentAsString()).get("code"));
-        }
+    for (int round = 0; round < 5; round++) {
+      List<Long> pair = openIds(token, w);
+      assertThat(pair).hasSize(2);
+      List<Callable<ResultActions>> deletes = new ArrayList<>();
+      for (long id : pair) deletes.add(() -> send(token, delete(STAGE, w, id)));
 
-        assertThat(answers).containsExactlyInAnyOrder("204", "409 \"STAGE_PROTECTED\"");
-        assertThat(openIds(token, w)).hasSize(1);
-        send(token, post(STAGES, w), Map.of("name", "Round " + round, "probability", 10))
-            .andExpect(status().isCreated());
-      }
-    } finally {
-      pool.shutdownNow();
+      assertThat(race(deletes)).containsExactlyInAnyOrder("204", "409 \"STAGE_PROTECTED\"");
+      assertThat(openIds(token, w)).hasSize(1);
+      send(token, post(STAGES, w), Map.of("name", "Round " + round, "probability", 10))
+          .andExpect(status().isCreated());
+    }
+  }
+
+  /**
+   * A reorder and a delete at once: both take the pipeline's lock, so one runs on what the other
+   * left. The delete always works; the reorder ran first (200, and its order stands) or listed the
+   * deleted stage (400, PIPELINE_CHANGED). Never a version conflict or a deadlock.
+   */
+  @Test
+  void aReorderAndADeleteRunOneAfterTheOther() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    for (int round = 0; round < 5; round++) {
+      List<Long> open = openIds(token, w);
+      long doomed = open.get(0);
+      List<Long> reversed = new ArrayList<>(open.reversed());
+
+      List<String> answers =
+          race(
+              List.of(
+                  () -> send(token, put(ORDER, w), Map.of("stageIds", reversed)),
+                  () -> send(token, delete(STAGE, w, doomed))));
+
+      assertThat(answers.get(1)).isEqualTo("204");
+      assertThat(answers.get(0)).isIn("200", "400 \"PIPELINE_CHANGED\"");
+      List<Long> left = new ArrayList<>(answers.get(0).equals("200") ? reversed : open);
+      left.remove(doomed);
+      assertThat(openIds(token, w)).containsExactlyElementsOf(left);
+      send(token, get(STAGES, w)).andExpect(jsonPath("$[*].position", contains(1, 2, 3, 4, 5)));
+      send(token, post(STAGES, w), Map.of("name", "Round " + round, "probability", 10))
+          .andExpect(status().isCreated());
+    }
+  }
+
+  /** A create and a delete at once: the create waits for the lock, neither fails on the version. */
+  @Test
+  void aCreateAndADeleteRunOneAfterTheOther() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    for (int round = 0; round < 5; round++) {
+      List<Long> open = openIds(token, w);
+      long doomed = open.get(0);
+      Map<String, Object> racer = Map.of("name", "Racer " + round, "probability", 10);
+
+      List<String> answers =
+          race(
+              List.of(
+                  () -> send(token, post(STAGES, w), racer),
+                  () -> send(token, delete(STAGE, w, doomed))));
+
+      assertThat(answers).containsExactly("201", "204");
+      assertThat(openIds(token, w)).hasSize(open.size()).doesNotContain(doomed);
+      send(token, get(STAGES, w)).andExpect(jsonPath("$[*].position", contains(1, 2, 3, 4, 5, 6)));
     }
   }
 
@@ -331,6 +361,39 @@ class PipelineStageIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.fieldErrors.version").exists());
 
     assertThat(idOf(token, w, "Qualified")).isEqualTo(id);
+  }
+
+  /**
+   * Runs the calls at the same moment on their own threads. Each answer is the status, with the
+   * error code when it isn't a success: {@code 204}, {@code 409 "STAGE_PROTECTED"}.
+   */
+  private List<String> race(List<Callable<ResultActions>> calls) throws Exception {
+    ExecutorService pool = Executors.newFixedThreadPool(calls.size());
+    try {
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<ResultActions>> futures = new ArrayList<>();
+      for (Callable<ResultActions> call : calls) {
+        futures.add(
+            pool.submit(
+                () -> {
+                  start.await();
+                  return call.call();
+                }));
+      }
+      start.countDown();
+      List<String> answers = new ArrayList<>();
+      for (Future<ResultActions> f : futures) {
+        MvcResult r = f.get(30, TimeUnit.SECONDS).andReturn();
+        int status = r.getResponse().getStatus();
+        answers.add(
+            status < 300
+                ? String.valueOf(status)
+                : status + " " + json.readTree(r.getResponse().getContentAsString()).get("code"));
+      }
+      return answers;
+    } finally {
+      pool.shutdownNow();
+    }
   }
 
   private List<Long> openIds(String token, long w) throws Exception {

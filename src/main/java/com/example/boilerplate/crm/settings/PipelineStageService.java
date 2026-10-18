@@ -54,9 +54,13 @@ public class PipelineStageService {
         .toList();
   }
 
-  /** A new stage is open and goes after the open ones; Won and Lost move down. */
+  /**
+   * A new stage is open and goes after the open ones; Won and Lost move down. Under the pipeline's
+   * lock, as a delete or reorder racing it renumbers Won and Lost too.
+   */
   public StageResponse create(CreateStageRequest r) {
     access.require(Permission.SETTINGS_MANAGE);
+    stages.lockAll();
     PipelineStage stage = new PipelineStage(uniqueName(r.name(), 0), r.probability());
     List<PipelineStage> all = stages.findAllByOrderByPositionAscIdAsc();
     List<PipelineStage> open = new ArrayList<>(open(all));

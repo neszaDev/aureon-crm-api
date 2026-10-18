@@ -1,6 +1,9 @@
 package com.example.boilerplate.common.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.sql.SQLException;
 import java.util.Map;
@@ -9,11 +12,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
 /** How a database error that Spring reports as an integrity violation reaches the client. */
@@ -116,13 +126,33 @@ class GlobalExceptionHandlerTest {
         });
   }
 
+  /**
+   * A stale version, and a lock the database took back (PostgreSQL aborts one side of a deadlock,
+   * 40P01, which Spring reports as a pessimistic locking failure): the same answer, so the client
+   * reloads and retries. Through MockMvc, so the handler is picked by the exception's type.
+   */
   @Test
-  void aConcurrentUpdateIsAVersionConflict() {
-    ResponseEntity<ApiError> r =
-        handler.staleUpdate(
-            new OptimisticLockingFailureException("stale"),
-            new MockHttpServletRequest("PUT", "/x"));
-    assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-    assertThat(r.getBody().code()).isEqualTo(ErrorCode.VERSION_CONFLICT);
+  void aConcurrentUpdateIsAVersionConflict() throws Exception {
+    MockMvc mvc =
+        MockMvcBuilders.standaloneSetup(new Failing()).setControllerAdvice(handler).build();
+    for (String kind : new String[] {"stale", "lock", "timeout"}) {
+      mvc.perform(get("/fail/{kind}", kind))
+          .andExpect(status().isConflict())
+          .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"))
+          .andExpect(
+              jsonPath("$.message").value("Changed by another request; reload and try again"));
+    }
+  }
+
+  @RestController
+  static class Failing {
+    @GetMapping("/fail/{kind}")
+    void fail(@PathVariable String kind) {
+      throw switch (kind) {
+        case "stale" -> new OptimisticLockingFailureException("stale");
+        case "lock" -> new PessimisticLockingFailureException("lock");
+        default -> new CannotAcquireLockException("lock timeout");
+      };
+    }
   }
 }
