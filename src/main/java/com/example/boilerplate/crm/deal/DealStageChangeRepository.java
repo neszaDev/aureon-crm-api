@@ -6,7 +6,9 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-/** Scoped to the current workspace by {@code @TenantId}. */
+/**
+ * Scoped to the current workspace by {@code @TenantId}, except for the native {@link #signatures}.
+ */
 public interface DealStageChangeRepository extends JpaRepository<DealStageChange, Long> {
   List<DealStageChange> findByDealIdOrderByChangedAtDescIdDesc(long dealId);
 

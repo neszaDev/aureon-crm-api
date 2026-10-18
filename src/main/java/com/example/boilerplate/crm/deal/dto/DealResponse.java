@@ -12,7 +12,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** A deal: the {@link DealSummary} fields and the rest (api.md {@code Deal}). */
+/**
+ * A deal: the {@link DealSummary} fields except {@code signatures}, and the rest (api.md {@code
+ * Deal}).
+ */
 public record DealResponse(
     long id,
     @NotNull String name,
