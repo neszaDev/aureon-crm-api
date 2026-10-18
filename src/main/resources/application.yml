@@ -54,6 +54,8 @@ app:
   admin:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+  # The demo workspace (crm/demo/DemoDataSeeder): the local and dev profiles only.
+  demo.enabled: false
 server:
   # Behind a proxy (e.g. the Next.js server) take the client IP from X-Forwarded-For, but only
   # when the connection comes from a trusted proxy: by default private and loopback addresses,

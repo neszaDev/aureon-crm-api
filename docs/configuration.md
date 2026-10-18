@@ -39,13 +39,18 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` | private + loopback ranges | if the proxy has a public IP | Regex of proxies whose `X-Forwarded-For` is trusted (see below) |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
+| `DEMO_DATA` | `false` | no (`local` and `dev` only) | `true` seeds the demo workspace once at startup ([Try it](crm/README.md#try-it)); the `prod` profile has no seeder |
+| `DEMO_PASSWORD` | `demo-password` | no (`local` and `dev` only) | Password of the four demo logins, 6–72 characters; only used when they are created and never logged |
 
 `app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
 `app.export.*` bind to validated records (`auth/AuthProperties`, `security/CorsProperties`,
 `user/AdminProperties`, `file/FileProperties`, `ratelimit/RateLimitProperties`,
 `crm/export/ExportProperties`: `max-rows`, default 10000, the most rows one CSV export may have;
 the `test` profile sets 3). An invalid value
-stops the app at startup with the property name.
+stops the app at startup with the property name. `app.demo.*` (`crm/demo/DemoProperties`:
+`enabled`, `password`) comes from `DEMO_DATA` and `DEMO_PASSWORD` in the `local` and `dev`
+profiles, the only ones with the seeder; `application.yml` has `enabled: false` and no password
+(the `test` profile sets both for `DemoDataSeederIT`).
 
 ### Rate limits
 
@@ -86,6 +91,7 @@ which is git-ignored. The `make` targets pass it to Compose with `--env-file env
 | `APP_PORT` | `8080` | Host port of the app in `make watch` and `make up` (the container still listens on 8080), e.g. `APP_PORT=8081` when another project uses 8080. Swagger UI and the API are then on that port, and the frontend's API URL must point at it. |
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
 | `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `RATE_LIMIT_*` | as above | Passed through to the app container |
+| `DEMO_DATA`, `DEMO_PASSWORD` | as above | Passed to the `local` and `dev` app containers only |
 
 When you add a variable, update `application*.yml`, this page and `env/.env.example` together.
 Never commit real values.
