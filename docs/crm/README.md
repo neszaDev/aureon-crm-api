@@ -148,10 +148,11 @@ they can see.
 
 ## Try it
 
-The local and dev profiles can seed a demo workspace, **Northwind Supply (demo)** (USD,
+The local and dev profiles (never together with prod) can seed a demo workspace, **Northwind Supply (demo)** (USD,
 Asia/Bangkok), once: set `DEMO_DATA=true` in `env/.env`, then `make watch` (or `make up`). The log
 names the workspace id and the logins; sign in with any of them and the password `DEMO_PASSWORD`
-(default `demo-password`):
+(default `demo-password`). A login whose account existed before with another password keeps that
+password: the log warns about it and leaves it out.
 
 | Login | Name | Role |
 |---|---|---|
@@ -162,7 +163,9 @@ names the workspace id and the logins; sign in with any of them and the password
 
 It holds 12 companies, 30 contacts (some tagged `vip` or `partner`), 15 leads in every status (3
 converted), 24 deals in every stage (a few in EUR) whose history goes back up to 180 days, 30
-tasks (completed, overdue, due this week, later) and 60 activities from the last 60 days, all
-fictional with `example.com` addresses, made the same way each time. A restart finds the workspace
-and adds nothing; `make db-reset` deletes the local database to start over. The prod profile never
-seeds ([data-model.md](data-model.md#development-data)).
+tasks (completed, overdue, due this week, later) and 60 activities from the last 60 days (none
+before its deal), all fictional with `example.com` addresses, made the same way each time; the
+dashboard's default 30 days show won and lost deals. A restart finds the workspace and adds
+nothing; `make db-reset` deletes the local database to start over. If the first start failed
+part-way, run `make db-reset` before starting again: a restart would find the half-built workspace
+and skip it. The prod profile never seeds ([data-model.md](data-model.md#development-data)).

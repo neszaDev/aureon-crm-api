@@ -39,8 +39,8 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` | private + loopback ranges | if the proxy has a public IP | Regex of proxies whose `X-Forwarded-For` is trusted (see below) |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
-| `DEMO_DATA` | `false` | no (`local` and `dev` only) | `true` seeds the demo workspace once at startup ([Try it](crm/README.md#try-it)); the `prod` profile has no seeder |
-| `DEMO_PASSWORD` | `demo-password` | no (`local` and `dev` only) | Password of the four demo logins, 6–72 characters; only used when they are created and never logged |
+| `DEMO_DATA` | `false` | no (`local` and `dev` only) | `true` seeds the demo workspace once at startup ([Try it](crm/README.md#try-it)); never with the `prod` profile, even next to `dev` |
+| `DEMO_PASSWORD` | `demo-password` | no (`local` and `dev` only) | Password of the four demo logins, 6–72 characters; only used when they are created and never logged. A demo login that already exists with another password keeps it (a warning names the email) |
 
 `app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
 `app.export.*` bind to validated records (`auth/AuthProperties`, `security/CorsProperties`,

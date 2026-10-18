@@ -22,7 +22,9 @@ sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTe
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
 transitions, overdue, microsecond times), `crm/export/CsvWriterTest` (quoting, formula protection,
 CRLF) and `RecordRefsTest` (`D-0042`), `crm/insight/PeriodTest` (defaults and bounds in the
-workspace zone, the 366-day cap, date parsing), `common/entity/TimestampPrecisionTest` and
+workspace zone, the 366-day cap, date parsing), `crm/demo/DemoDataSeederTest` (the opt-in gate,
+the password check that never shows the value, a login with another password left out),
+`common/entity/TimestampPrecisionTest` and
 `common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
 codes of unique indexes, stale updates and deadlocks).
 
@@ -92,7 +94,7 @@ What the existing ITs cover:
 | `crm/export/ExportIT` | CSV export of companies, contacts, leads and deals: header and columns, BOM, file name, the same rows in the same order as the list for each filter (`unassigned` too), formula protection, Thai text, `EXPORT` permission (403), other workspaces' rows never exported, the row cap (400 `EXPORT_TOO_LARGE`, nothing recorded), the audit event |
 | `crm/insight/DashboardIT` | The dashboard: all zeros and empty lists for an empty workspace, every value against stored data (archived records left out, totals and weighted amounts per currency, the deal's probability override, won/lost in the period, the caller's task lists, record changes only), half-up rounding per currency, a deal closed at 23:30 in Bangkok on `to` inside the period, other workspaces never counted (also for a member of both), period 400s on `from` / `to` |
 | `crm/insight/ReportIT` | The five reports: zeros and empty lists for an empty workspace (any member reads them), the pipeline by stage and by owner (the unassigned bucket of a removed member, the order by largest total then email, closed and archived deals left out), won/lost by month in the workspace zone (a close at 01:00 Bangkok on 1 September, the period's first and last instants, empty months, archived left out), the funnel (highest stage reached, Lost and a deleted stage counting for nothing, the cohort by creation, `historyFrom`), activities by author and completed tasks by assignee in the period (a removed member's), follow-ups (workspace-wide, orders, the cap of 20 with the full count, 7 days ahead, today in Pacific/Kiritimati), another workspace's identical data never counted (the funnel's native SQL), period 400s |
-| `crm/demo/DemoDataSeederIT` | The demo workspace: the four logins and roles, the record counts and spreads, `example.com` addresses, the back-dated deal history consistent (creation first, moves in order, `closedAt` the last move), the funnel and won/lost reports agree with it, a second run adds nothing; the seeder is a `local`/`dev` bean only |
+| `crm/demo/DemoDataSeederIT` | The demo workspace: the four logins and roles, the record counts and spreads, `example.com` addresses, the back-dated deal history consistent (creation first, moves in order, `closedAt` the last move), no activity before its deal, the funnel and won/lost reports agree with it, the default dashboard shows a won and a lost deal, a second run adds nothing; the seeder's profiles (`local` or `dev`, never with `prod`) and no bean in the `test` context |
 | `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), the contact of a converted lead, a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
 `WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one
