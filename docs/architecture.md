@@ -82,8 +82,8 @@ stages and lead sources). The full model is in [docs/crm/](crm/README.md); the m
   A sign-in starts a family; each refresh rotates the token under a row lock and keeps the old one
   as used. A used token presented again after `app.auth.refresh-reuse-grace` (30 s) revokes the
   family; a family can't rotate after `app.auth.session-max-age` (90 days) or once the user's
-  token version moved past the row's; logout deletes the family. Rotations are limited per user;
-  expired rows go in one bulk delete on every sign-in and rotation.
+  token version moved past the row's; logout deletes the family. Successful rotations are limited
+  per user; expired rows go in one bulk delete on every sign-in and rotation.
 - **Rate limits** (`ratelimit/RateLimiter`): Bucket4j buckets in a bounded Caffeine cache, per
   client IP for sign-in and registration, per email for failed sign-ins and per user for
   refreshes. In-memory, so per

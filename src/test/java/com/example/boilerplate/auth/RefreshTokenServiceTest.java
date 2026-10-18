@@ -105,6 +105,7 @@ class RefreshTokenServiceTest {
         .isInstanceOf(InvalidRefreshTokenException.class);
     verify(tokens).deleteByFamilyId(family);
     verify(tokens, never()).save(any());
+    verify(rateLimiter, never()).consume(any(), any());
   }
 
   @Test
@@ -117,6 +118,7 @@ class RefreshTokenServiceTest {
         .isInstanceOf(InvalidRefreshTokenException.class);
     verify(tokens).deleteByFamilyId(family);
     verify(tokens, never()).save(any());
+    verify(rateLimiter, never()).consume(any(), any());
   }
 
   @Test

@@ -102,9 +102,11 @@ one as used. The responses don't change; the rules do:
 - Every token carries the user's token version, which an email, role or password change moves
   on: a refresh token of an earlier version can't rotate (its family is deleted, 401), even one
   that a rotation running during the change created.
-- Refreshes are limited to 30 per 15 minutes per user (429 with `Retry-After`). The web frontend
-  refreshes when its access cookie expires, about every 14.5 minutes of activity, plus one losing
-  call per request racing it at that moment: a few per 15 minutes, far under the limit.
+- Rotations are limited to 30 per 15 minutes per user (429 with `Retry-After`). Only successful
+  rotations count toward it: a replay, an expired or revoked token and the losers of parallel
+  refreshes don't, so a thief can't drain the budget to keep the victim's replay from revoking the
+  family. The web frontend refreshes when its access cookie expires, about every 14.5 minutes of
+  activity: a few per 15 minutes, far under the limit.
 - Each rotation keeps its used row until it expires (30 days), so a session's rows grow with its
   rotations: with the limit, at most 30 per 15 minutes per user (about 86,000 over 30 days in
   the worst case; a user active 8 hours a day leaves about 1,000). Expired rows, used or not, are
@@ -114,8 +116,9 @@ one as used. The responses don't change; the rules do:
 
 **Upgrading (release note):** access tokens from before this version have no `uid` or `ver`
 claim and get 401. Refresh tokens survive the migrations (each becomes a one-token session at
-version 0), so a client that refreshes on 401 recovers by itself; the web frontend treats a 401
-as signed out, so everyone signed in at deploy time signs in again once.
+version 0), so a client that refreshes on 401 recovers by itself. Web users active within about
+15 minutes before the deploy are signed out once; other sessions continue through their refresh
+token.
 
 Copy these requests into a terminal or Thunder Client's cURL importer. Replace the values in angle brackets with values from the preceding response.
 

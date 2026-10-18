@@ -10,7 +10,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +26,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -42,6 +50,7 @@ class RateLimitIT {
   final HttpClient http = HttpClient.newHttpClient();
   @LocalServerPort int port;
   @Autowired UserRepository users;
+  @Autowired JdbcTemplate jdbc;
 
   @Test
   void registrationIsLimitedPerForwardedClientIp() throws Exception {
@@ -143,6 +152,68 @@ class RateLimitIT {
     assertThat(refresh(other, "198.51.100.84").statusCode()).isEqualTo(200);
   }
 
+  /**
+   * Only a rotation that succeeds spends the budget. A thief who has emptied the bucket must not
+   * turn the victim's replay into a 429 before it can revoke the family.
+   */
+  @Test
+  void aDrainedBucketDoesNotStopAReplayFromRevokingTheFamily() throws Exception {
+    String stolen = tokenOf(register(email(), "198.51.100.90"));
+    String family =
+        jdbc.queryForObject(
+            "select family_id::text from refresh_tokens where token_hash = ?",
+            String.class,
+            Tokens.sha256Hex(stolen));
+    String thiefs = stolen;
+    for (int i = 0; i < 3; i++) thiefs = tokenOf(refresh(thiefs, "198.51.100.91"));
+    // The bucket (3) is empty now.
+    assertThat(refresh(thiefs, "198.51.100.91").statusCode()).isEqualTo(429);
+    // Past the 30-second grace.
+    jdbc.update(
+        "update refresh_tokens set used_at = now() - interval '31 seconds' where token_hash = ?",
+        Tokens.sha256Hex(stolen));
+
+    assertThat(refresh(stolen, "198.51.100.92").statusCode()).isEqualTo(401);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from refresh_tokens where family_id = ?::uuid",
+                Integer.class,
+                family))
+        .isZero();
+  }
+
+  /** The losers of parallel refreshes (401 within the grace) don't spend the user's budget. */
+  @Test
+  void losingParallelRefreshesDoNotSpendTheBudget() throws Exception {
+    String token = tokenOf(register(email(), "198.51.100.93"));
+    ExecutorService pool = Executors.newFixedThreadPool(4);
+    CountDownLatch go = new CountDownLatch(1);
+    try {
+      List<Future<HttpResponse<String>>> calls = new ArrayList<>();
+      for (int i = 0; i < 4; i++) {
+        calls.add(
+            pool.submit(
+                () -> {
+                  go.await();
+                  return refresh(token, "198.51.100.94");
+                }));
+      }
+      go.countDown();
+      List<HttpResponse<String>> responses = new ArrayList<>();
+      for (var call : calls) responses.add(call.get(30, TimeUnit.SECONDS));
+
+      assertThat(responses)
+          .extracting(HttpResponse::statusCode)
+          .containsExactlyInAnyOrder(200, 401, 401, 401);
+      HttpResponse<String> winner =
+          responses.stream().filter(r -> r.statusCode() == 200).findFirst().orElseThrow();
+      // One of the three rotations is spent, not four.
+      assertThat(refresh(tokenOf(winner), "198.51.100.95").statusCode()).isEqualTo(200);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
   /** The failed sign-in that blocks an email is logged once, by user id (M3). */
   @Test
   @ExtendWith(OutputCaptureExtension.class)
@@ -174,6 +245,10 @@ class RateLimitIT {
 
     assertThat(changePassword(accessToken, PASSWORD).statusCode()).isEqualTo(429);
     assertThat(login(email, PASSWORD, "198.51.100.62").statusCode()).isEqualTo(429);
+  }
+
+  private static String tokenOf(HttpResponse<String> tokens) throws Exception {
+    return JSON.readTree(tokens.body()).get("refreshToken").asText();
   }
 
   private HttpResponse<String> register(String email, String clientIp) throws Exception {

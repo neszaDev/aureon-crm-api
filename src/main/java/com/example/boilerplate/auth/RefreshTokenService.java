@@ -52,14 +52,14 @@ public class RefreshTokenService {
    * request fails; later the whole family goes, so a thief's newer token dies with it. A token of
    * an older token version (an email, role or password change since) takes its family along too.
    * The caller must commit the revocation although this throws (AuthService.refresh:
-   * noRollbackFor). Rotations are limited per user, before anything changes: each keeps a row.
+   * noRollbackFor). Only rotations that succeed are limited per user (a 429 changes nothing): each
+   * keeps a row.
    */
   public AuthTokensResponse rotate(String raw) {
     RefreshToken token =
         tokens
             .findByTokenHashForUpdate(Tokens.sha256Hex(raw))
             .orElseThrow(InvalidRefreshTokenException::new);
-    rateLimiter.consume(Policy.REFRESH_PER_USER, String.valueOf(token.getUser().getId()));
     Instant now = Instant.now();
     if (token.getUsedAt() != null) {
       if (now.isAfter(token.getUsedAt().plus(reuseGrace))) {
@@ -74,6 +74,9 @@ public class RefreshTokenService {
       tokens.deleteByFamilyId(token.getFamilyId());
       throw new InvalidRefreshTokenException();
     }
+    // Only a rotation that will succeed counts: a replay or a losing parallel call must not spend
+    // the budget, or a thief could drain it and turn the victim's replay into a 429.
+    rateLimiter.consume(Policy.REFRESH_PER_USER, String.valueOf(token.getUser().getId()));
     token.markUsed(now);
     return issue(token.getUser(), token.getFamilyId(), token.getFamilyCreatedAt(), now);
   }

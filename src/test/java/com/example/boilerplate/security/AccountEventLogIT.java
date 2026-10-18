@@ -151,12 +151,16 @@ class AccountEventLogIT extends WorkspaceTestSupport {
     assertThat(out.getOut()).doesNotContain("targetId=" + loser + " ");
   }
 
-  /** Until a backend waits on a lock (the change's commit, on the other transaction). */
+  /**
+   * Until a backend waits on a lock in an {@code update users} (the change's commit, on the other
+   * transaction); a waiter elsewhere in the database doesn't count.
+   */
   private void awaitALockWait() throws InterruptedException {
     for (int i = 0; i < 200; i++) {
       Integer waiting =
           jdbc.queryForObject(
-              "select count(*) from pg_stat_activity where wait_event_type = 'Lock'",
+              "select count(*) from pg_stat_activity"
+                  + " where wait_event_type = 'Lock' and query like 'update users%'",
               Integer.class);
       if (waiting != null && waiting > 0) return;
       Thread.sleep(25);

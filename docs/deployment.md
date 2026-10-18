@@ -62,8 +62,9 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
   account's grant). The first request then waits 30–60 s for the backend to start; set its
   `minReplicas` to 1 in `main.bicep` for always-on.
 - **Upgrading past security wave 1** (release note): access tokens issued before it (no `uid`
-  or `ver` claim) get 401, and the web frontend treats that as signed out, so everyone signed in
-  at deploy time signs in again once. Refresh tokens survive the migrations (V19, V20).
+  or `ver` claim) get 401. Web users active within about 15 minutes before the deploy are signed
+  out once; other sessions continue through their refresh token (they survive the migrations,
+  V19 and V20).
 - **Security checklist** (not enforced by the app):
   - `JWT_SECRET` from a secret manager, random (`openssl rand -hex 32`); the app refuses the
     published placeholders outside `local`/`dev`/`test`. The runtime image defaults to `prod`.

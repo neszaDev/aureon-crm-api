@@ -69,7 +69,7 @@ What the existing ITs cover:
 | `security/RequestRejectedIT` | Firewall-rejected URLs are a 400 `ApiError` on a real Tomcat |
 | `security/TokenBindingIT` | Access tokens bound to the user id and token version: an admin's email swap, a deleted user's re-registered email, a password or role change (also a token issued in the change's second) → 401; a session across refresh |
 | `testresult/TestResultIT` | CRUD, pagination, summary, owner isolation |
-| `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For`, refreshes per user, the lockout's log line |
+| `ratelimit/RateLimitIT` | Limits on a real Tomcat (own context, limits on): 429 + `Retry-After`, `X-Forwarded-For`, refreshes per user (only successful rotations count: a drained bucket doesn't stop a replay from revoking the family, parallel losers don't spend it), the lockout's log line |
 | `file/FileIT` | Upload, download headers, owner isolation, type/size rejection, blob cleanup |
 | `user/ProfileIT` | Display name set/clear/limit, password change (sessions rotated, wrong password is a 400 field error) |
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |

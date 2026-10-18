@@ -35,11 +35,11 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `FILES_DIR` | `data/files` | recommended | Upload storage; relative to the working directory (`/app` in the image, which has a volume there in compose). Must be writable. One instance only: use shared storage before scaling out. |
 | `FILES_MAX_SIZE` | `10MB` | no | Largest upload (`KB`/`MB`); also sets Spring's multipart limits |
 | `FILES_ALLOWED_TYPES` | `image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv` | no | Comma-separated media types. Don't add `text/html` or `image/svg+xml` unless downloads stay attachments. |
-| `RATE_LIMIT_ENABLED` | `true` | no | Turn sign-in/registration limits off (the `test` profile does) |
+| `RATE_LIMIT_ENABLED` | `true` | no | Turn sign-in/registration limits off (the `test` profile does). `false` also turns off the refresh limit, which leaves refresh-token growth unbounded |
 | `RATE_LIMIT_LOGIN_PER_IP` | `20` | no | Sign-in attempts per client IP per minute |
 | `RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL` | `10` | no | Failed sign-ins per email per 15 minutes |
 | `RATE_LIMIT_REGISTER_PER_IP` | `10` | no | Registrations per client IP per hour |
-| `RATE_LIMIT_REFRESH_PER_USER` | `30` | no | Refresh-token rotations per user per 15 minutes; each keeps a row for the refresh TTL. The web frontend needs a few per 15 minutes |
+| `RATE_LIMIT_REFRESH_PER_USER` | `30` | no | Successful refresh-token rotations per user per 15 minutes; each keeps a row for the refresh TTL. The web frontend needs a few per 15 minutes |
 | `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` | private + loopback ranges | if the proxy has a public IP | Regex of proxies whose `X-Forwarded-For` is trusted (see below) |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
