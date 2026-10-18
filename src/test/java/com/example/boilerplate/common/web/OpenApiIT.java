@@ -65,4 +65,28 @@ class OpenApiIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath(schemas + "CreateDealRequest.required", containsInAnyOrder("name", "amount")));
   }
+
+  /**
+   * Spring's {@code Page} always has these fields, but its schema lists them as optional: the
+   * wrappers say what they always carry. Other schemas that start with "Page" are none of its
+   * business.
+   */
+  @Test
+  void pageWrappersHaveTheirFieldsRequired() throws Exception {
+    String schemas = "$.components.schemas.";
+    mvc.perform(get("/v3/api-docs"))
+        .andExpect(
+            jsonPath(
+                schemas + "PageDealSummary.required",
+                containsInAnyOrder(
+                    "content",
+                    "totalElements",
+                    "totalPages",
+                    "number",
+                    "size",
+                    "first",
+                    "last",
+                    "empty")))
+        .andExpect(jsonPath(schemas + "PageableObject.required").doesNotExist());
+  }
 }

@@ -7,6 +7,7 @@ import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.core.util.Json;
 import io.swagger.v3.oas.models.media.Schema;
 import java.lang.reflect.RecordComponent;
+import java.util.List;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.properties.SpringDocConfigProperties;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +15,9 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 class OpenApiConfig {
+  private static final List<String> PAGE_FIELDS =
+      List.of("content", "totalElements", "totalPages", "number", "size", "first", "last", "empty");
+
   /**
    * springdoc only lists what the controllers return; the error body every endpoint may answer with
    * (and its {@code code} enum) is added so clients can generate its type. Read by the converters
@@ -25,6 +29,26 @@ class OpenApiConfig {
         ModelConverters.getInstance(springDoc.isOpenapi31())
             .readAll(new AnnotatedType(ApiError.class))
             .forEach(api.getComponents()::addSchemas);
+  }
+
+  /**
+   * Spring's {@code Page} always has these fields, but springdoc lists them as optional. The
+   * wrappers (every schema named {@code Page...} that has a {@code content}; {@code PageableObject}
+   * has none) say what they always carry.
+   */
+  @Bean
+  OpenApiCustomizer pageFieldsAreRequired() {
+    return api ->
+        api.getComponents()
+            .getSchemas()
+            .forEach(
+                (name, schema) -> {
+                  if (name.startsWith("Page")
+                      && schema.getProperties() != null
+                      && schema.getProperties().containsKey("content")) {
+                    PAGE_FIELDS.forEach(schema::addRequiredItem);
+                  }
+                });
   }
 
   /**
