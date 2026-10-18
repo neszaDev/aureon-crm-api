@@ -61,6 +61,9 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
 - **Cold starts**: both apps scale to zero after about five idle minutes (to stay in a free
   account's grant). The first request then waits 30–60 s for the backend to start; set its
   `minReplicas` to 1 in `main.bicep` for always-on.
+- **Upgrading past security wave 1** (release note): access tokens issued before it (no `uid`
+  or `ver` claim) get 401, and the web frontend treats that as signed out, so everyone signed in
+  at deploy time signs in again once. Refresh tokens survive the migrations (V19, V20).
 - **Security checklist** (not enforced by the app):
   - `JWT_SECRET` from a secret manager, random (`openssl rand -hex 32`); the app refuses the
     published placeholders outside `local`/`dev`/`test`. The runtime image defaults to `prod`.
@@ -70,7 +73,9 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
     uses `sslmode=require` over a firewall rule).
   - `SPRINGDOC_ENABLED` unset, unless the API docs should be public.
   - Known gaps: no per-user upload quota or workspace caps (one user can fill `FILES_DIR` or
-    create many workspaces), and account events go to the logs only (no `account_events` table).
+    create many workspaces), account events go to the logs only (no `account_events` table), and
+    each refresh keeps a row for 30 days (rate-limited per user; one row per session is a
+    follow-up).
 - **Limits**: the backend must stay at one replica at most (rate limits are per instance).
   A redeploy of the frontend can make a form opened before it fail once ("Failed to find Server
   Action"); reloading the page fixes it.

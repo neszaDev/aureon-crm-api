@@ -4,6 +4,8 @@ import com.example.boilerplate.auth.dto.AuthTokensResponse;
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
 import com.example.boilerplate.common.security.AccountEvents;
 import com.example.boilerplate.common.security.Tokens;
+import com.example.boilerplate.ratelimit.RateLimiter;
+import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserAccessChangedEvent;
 import java.time.*;
@@ -23,14 +25,17 @@ public class RefreshTokenService {
   private final Duration ttl;
   private final Duration reuseGrace;
   private final Duration sessionMaxAge;
+  private final RateLimiter rateLimiter;
 
   public RefreshTokenService(
       RefreshTokenRepository tokens,
       JwtService jwt,
       AuthProperties properties,
-      SessionProperties sessions) {
+      SessionProperties sessions,
+      RateLimiter rateLimiter) {
     this.tokens = tokens;
     this.jwt = jwt;
+    this.rateLimiter = rateLimiter;
     this.ttl = properties.refreshTokenTtl();
     this.reuseGrace = sessions.refreshReuseGrace();
     this.sessionMaxAge = sessions.sessionMaxAge();
@@ -44,14 +49,17 @@ public class RefreshTokenService {
 
   /**
    * A used token presented again is a replay, or a parallel refresh: within the grace only this
-   * request fails; later the whole family goes, so a thief's newer token dies with it. The caller
-   * must commit the revocation although this throws (AuthService.refresh: noRollbackFor).
+   * request fails; later the whole family goes, so a thief's newer token dies with it. A token of
+   * an older token version (an email, role or password change since) takes its family along too.
+   * The caller must commit the revocation although this throws (AuthService.refresh:
+   * noRollbackFor). Rotations are limited per user, before anything changes: each keeps a row.
    */
   public AuthTokensResponse rotate(String raw) {
     RefreshToken token =
         tokens
             .findByTokenHashForUpdate(Tokens.sha256Hex(raw))
             .orElseThrow(InvalidRefreshTokenException::new);
+    rateLimiter.consume(Policy.REFRESH_PER_USER, String.valueOf(token.getUser().getId()));
     Instant now = Instant.now();
     if (token.getUsedAt() != null) {
       if (now.isAfter(token.getUsedAt().plus(reuseGrace))) {
@@ -61,6 +69,7 @@ public class RefreshTokenService {
       throw new InvalidRefreshTokenException();
     }
     if (token.getExpiresAt().isBefore(now)
+        || token.getTokenVersion() != token.getUser().getTokenVersion()
         || token.getFamilyCreatedAt().plus(sessionMaxAge).isBefore(now)) {
       tokens.deleteByFamilyId(token.getFamilyId());
       throw new InvalidRefreshTokenException();

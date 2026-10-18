@@ -17,8 +17,8 @@ import org.springframework.http.MediaType;
 
 /**
  * Access tokens are bound to the user id ({@code uid}), not to the email in {@code sub}: a token
- * whose email no longer belongs to its user, whose user is gone, or that predates the user's last
- * email, role or password change is refused (401).
+ * whose email no longer belongs to its user, whose user is gone, or of an earlier token version
+ * ({@code ver}: an email, role or password change since) is refused (401).
  */
 class TokenBindingIT extends WorkspaceTestSupport {
 
@@ -77,7 +77,6 @@ class TokenBindingIT extends WorkspaceTestSupport {
   @Test
   void anAccessTokenIssuedBeforeAPasswordChangeIsRefused() throws Exception {
     String oldToken = registerAndGetAccessToken();
-    waitForTheNextSecond();
 
     JsonNode renewed =
         body(
@@ -95,7 +94,6 @@ class TokenBindingIT extends WorkspaceTestSupport {
   void anAccessTokenIssuedBeforeARoleChangeIsRefused() throws Exception {
     String email = uniqueEmail();
     String oldToken = tokenFor(email);
-    waitForTheNextSecond();
 
     send(adminAccessToken(), patch("/api/v1/users/" + idOf(email)), Map.of("role", "ADMIN"))
         .andExpect(status().isOk());
@@ -105,6 +103,27 @@ class TokenBindingIT extends WorkspaceTestSupport {
     send(promoted, get("/api/v1/users/me"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.role").value("ADMIN"));
+  }
+
+  /**
+   * Probe P3: an access token issued in the very second of a password change. A JWT's {@code iat}
+   * has whole seconds, so only the token version tells it apart.
+   */
+  @Test
+  void aTokenIssuedInTheSecondOfAPasswordChangeIsRefusedToo() throws Exception {
+    JsonNode registered = register(uniqueEmail());
+    // From the start of a second, so the refresh and the change share it.
+    long second = Instant.now().getEpochSecond();
+    while (Instant.now().getEpochSecond() == second) Thread.sleep(5);
+    String thiefs = refresh(registered.get("refreshToken").asText()).get("accessToken").asText();
+
+    send(
+            registered.get("accessToken").asText(),
+            post("/api/v1/users/me/password"),
+            Map.of("currentPassword", PASSWORD, "newPassword", "another-password"))
+        .andExpect(status().isOk());
+
+    send(thiefs, get("/api/v1/users/me")).andExpect(status().isUnauthorized());
   }
 
   @Test
@@ -131,16 +150,19 @@ class TokenBindingIT extends WorkspaceTestSupport {
     send(access, get("/api/v1/users/me")).andExpect(status().isOk());
   }
 
-  private long idOf(String email) {
-    return users.findByEmail(email).orElseThrow().getId();
+  private JsonNode refresh(String refreshToken) throws Exception {
+    return json.readTree(
+        mvc.perform(
+                post("/api/v1/auth/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(Map.of("refreshToken", refreshToken))))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString());
   }
 
-  /**
-   * A JWT's {@code iat} has whole seconds, so a token issued in the same second as a change is not
-   * older than it; the tests that expect a refusal issue the token a second earlier.
-   */
-  private static void waitForTheNextSecond() throws InterruptedException {
-    long second = Instant.now().getEpochSecond();
-    while (Instant.now().getEpochSecond() == second) Thread.sleep(20);
+  private long idOf(String email) {
+    return users.findByEmail(email).orElseThrow().getId();
   }
 }

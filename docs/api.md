@@ -26,13 +26,13 @@ refused before routing) the request path with invitation tokens masked.
 | Status | When |
 |---|---|
 | 400 | Validation failure, malformed JSON, bad query/path parameter; a URL the security firewall rejects (`//`, `;x=1`, an encoded `..`), with message `Malformed request` |
-| 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user, of a user whose email changed since, or issued before the user's last email, role or password change |
+| 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user, of a user whose email changed since, or of an earlier token version (an email, role or password change since) |
 | 403 | Valid token without the required role (admin endpoints) or workspace permission; `POST /auth/register` when `REGISTRATION_ENABLED=false` |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user*; anything under a workspace the caller is not a member of |
 | 409 | Email already registered; an admin changing or deleting their own account; a concurrent update; a rule of the CRM (last owner, duplicate name, an invitation that is no longer pending, ...) |
 | 413 | Upload larger than `FILES_MAX_SIZE` |
 | 415 | Upload type not in `FILES_ALLOWED_TYPES`, or its content doesn't match the type; wrong request `Content-Type` |
-| 429 | Too many sign-in or registration attempts; wait `Retry-After` seconds |
+| 429 | Too many sign-in, registration or refresh attempts; wait `Retry-After` seconds |
 
 ## Quick start
 
@@ -53,12 +53,14 @@ The response contains a Bearer token. Pass it as `Authorization: Bearer <token>`
 | `POST /auth/login` | 20 per minute | client IP |
 | `POST /auth/login` | 10 **failed** attempts per 15 minutes | email |
 | `POST /auth/register` | 10 per hour | client IP |
+| `POST /auth/refresh` | 30 per 15 minutes | user (the refresh token's) |
 
 Over a limit the API answers 429 with `Retry-After` (seconds). Buckets refill gradually, not
 all at once. Once an email is blocked, even the right password gets 429 until it refills: that
 is what makes password guessing slow from many IPs, at the cost of letting someone delay a
 victim's sign-in. Behind a proxy the client IP comes from `X-Forwarded-For` (see
-[configuration](configuration.md#rate-limits)).
+[configuration](configuration.md#rate-limits)). Refreshes are counted per user, not per IP: the
+frontend's server makes that call, so every client would share its IP.
 
 ## Workspaces
 
@@ -97,8 +99,23 @@ one as used. The responses don't change; the rules do:
   again. Rotating doesn't restart that clock.
 - Logout ends the session: every token of the family. A password change still revokes every
   session of the user, and an admin's email or role change too.
-- Expired tokens, used or not, are deleted on every sign-in and rotation (no scheduled job), and a
-  family's tokens all go when it is revoked or logged out, so the table doesn't grow without bound.
+- Every token carries the user's token version, which an email, role or password change moves
+  on: a refresh token of an earlier version can't rotate (its family is deleted, 401), even one
+  that a rotation running during the change created.
+- Refreshes are limited to 30 per 15 minutes per user (429 with `Retry-After`). The web frontend
+  refreshes when its access cookie expires, about every 14.5 minutes of activity, plus one losing
+  call per request racing it at that moment: a few per 15 minutes, far under the limit.
+- Each rotation keeps its used row until it expires (30 days), so a session's rows grow with its
+  rotations: with the limit, at most 30 per 15 minutes per user (about 86,000 over 30 days in
+  the worst case; a user active 8 hours a day leaves about 1,000). Expired rows, used or not, are
+  deleted on every sign-in and rotation (no scheduled job), and a family's rows all go when it is
+  revoked or logged out. Follow-up: one row per family (the current token and the hashes it
+  replaced) instead of one per rotation.
+
+**Upgrading (release note):** access tokens from before this version have no `uid` or `ver`
+claim and get 401. Refresh tokens survive the migrations (each becomes a one-token session at
+version 0), so a client that refreshes on 401 recovers by itself; the web frontend treats a 401
+as signed out, so everyone signed in at deploy time signs in again once.
 
 Copy these requests into a terminal or Thunder Client's cURL importer. Replace the values in angle brackets with values from the preceding response.
 
@@ -185,8 +202,8 @@ curl --request POST 'http://localhost:8080/api/v1/users/me/password' \
 - `newPassword` follows the registration rules: 6-72 characters and at most 72 bytes in UTF-8
   (24 Thai characters). Longer is a 400 on `newPassword` (`password` when registering).
 - On success every refresh token of the user is revoked and a new pair is returned, so other
-  devices must sign in again. Access tokens issued before the change get 401 at once (one issued
-  in the same second still works: a token's `iat` has whole seconds).
+  devices must sign in again. Access tokens issued before the change get 401 at once: they carry
+  the previous token version. The new pair carries the new one.
 
 ## User management (admins)
 

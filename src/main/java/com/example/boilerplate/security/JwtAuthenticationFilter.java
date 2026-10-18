@@ -18,8 +18,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * A valid signature is not enough: the token's user ({@code uid}) must still exist, still have the
- * email in {@code sub}, and not have ended its sessions after the token was issued. Otherwise the
- * request stays anonymous (401 on a protected route). The role comes from the database.
+ * email in {@code sub}, and still be at the token's version ({@code ver}: an email, role or
+ * password change moves it on). Otherwise the request stays anonymous (401 on a protected route).
+ * The role comes from the database.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -55,10 +56,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private static boolean current(User user, Claims claims) {
-    var issuedAt = claims.getIssuedAt();
-    var validAfter = user.getSessionsValidAfter();
+    Integer version = claims.get(JwtService.TOKEN_VERSION, Integer.class);
     return user.getEmail().equals(claims.getSubject())
-        && issuedAt != null
-        && (validAfter == null || !issuedAt.toInstant().isBefore(validAfter));
+        && version != null
+        && version == user.getTokenVersion();
   }
 }

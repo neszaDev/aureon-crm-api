@@ -65,8 +65,7 @@ public class MemberService {
           userId,
           user.getEmail(),
           Map.of("role", Map.of("from", from.name(), "to", r.role().name())));
-      if (from.has(Permission.MEMBERS_MANAGE) && !r.role().has(Permission.MEMBERS_MANAGE))
-        invitations.revokeSentBy(userId);
+      invitations.revokeSentBy(userId, r.role());
     }
     return new MemberResponse(
         userId, user.getEmail(), user.getDisplayName(), target.getRole(), target.getCreatedAt());
@@ -90,7 +89,7 @@ public class MemberService {
         userId,
         email,
         Map.of());
-    invitations.revokeSentBy(userId);
+    invitations.revokeSentBy(userId, null);
   }
 
   private WorkspaceMember member(Membership caller, long userId) {

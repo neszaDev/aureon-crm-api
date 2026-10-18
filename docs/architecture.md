@@ -74,17 +74,19 @@ stages and lead sources). The full model is in [docs/crm/](crm/README.md); the m
   email stays the subject, with a `role` claim), and are short-lived (15 min by default).
   `JwtAuthenticationFilter` loads the user by id and sets a `CurrentUser(id, email)` principal
   with the role from the database; services look the caller up by that id. An invalid or missing
-  token, or one whose user is gone, whose email changed or that predates the user's
-  `sessions_valid_after` (an email, role or password change), leaves the request anonymous, and
+  token, or one whose user is gone, whose email changed or whose `ver` claim is not the user's
+  `token_version` (an email, role or password change increments it), leaves the request anonymous, and
   `ApiAuthenticationEntryPoint` answers protected paths with 401 and an `ApiError` body. A URL
   the firewall rejects is a 400 `ApiError` (`SecurityConfig`'s `RequestRejectedHandler`).
 - **Refresh tokens** are opaque 256-bit random values. Only their SHA-256 hash is stored.
   A sign-in starts a family; each refresh rotates the token under a row lock and keeps the old one
   as used. A used token presented again after `app.auth.refresh-reuse-grace` (30 s) revokes the
-  family; a family can't rotate after `app.auth.session-max-age` (90 days); logout deletes the
-  family.
+  family; a family can't rotate after `app.auth.session-max-age` (90 days) or once the user's
+  token version moved past the row's; logout deletes the family. Rotations are limited per user;
+  expired rows go in one bulk delete on every sign-in and rotation.
 - **Rate limits** (`ratelimit/RateLimiter`): Bucket4j buckets in a bounded Caffeine cache, per
-  client IP for sign-in and registration, and per email for failed sign-ins. In-memory, so per
+  client IP for sign-in and registration, per email for failed sign-ins and per user for
+  refreshes. In-memory, so per
   instance. The client IP comes from `X-Forwarded-For` of trusted proxies only.
 - **Roles**: `/api/v1/users/**` (except `/me`) needs `ROLE_ADMIN` (the database role), and
   `UserAdminService` re-checks it in the database. `ApiAccessDeniedHandler` answers 403 with an
@@ -116,7 +118,8 @@ info, both public for orchestrators. Production exposure excludes the general me
 ingress level** (don't route it from the internet). The prod profile logs JSON to stdout via
 logstash-logback-encoder. Every request carries an `X-Request-Id` (the client's when it is a
 plain id of up to 64 characters, otherwise a generated one), also placed in the logging MDC.
-Account security events are structured INFO lines (`common/security/AccountEvents`).
+Account security events are structured INFO lines (`common/security/AccountEvents`), written
+once their transaction has committed (a sign-in lockout at once).
 
 ## Testing strategy
 

@@ -83,7 +83,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `LEAD_NOT_QUALIFIED` | 409 | Converting a lead that isn't `QUALIFIED` |
   | `TASK_STATUS_CONFLICT` | 409 | `complete` or `cancel` a task that isn't `OPEN`, `reopen` one that is |
   | `CONFLICT` | 409 | Any other conflict with stored data (a database constraint) |
-  | `RATE_LIMITED` | 429 | Too many sign-in or registration attempts: wait `Retry-After` seconds |
+  | `RATE_LIMITED` | 429 | Too many sign-in, registration or refresh attempts: wait `Retry-After` seconds |
 
 Common shapes:
 
@@ -112,7 +112,7 @@ Ref        = { id, name }                             // company, stage, source,
 | `GET /workspaces/{w}` | → `Workspace`: `id, name, defaultCurrency, timezone, role, permissions[], version, createdAt, updatedAt` | member |
 | `PUT /workspaces/{w}` | `{ name, defaultCurrency, timezone, version }` → `Workspace` | `WORKSPACE_MANAGE` |
 | `GET /workspaces/{w}/members` | → `Member[]` (`userId, email, displayName?, role, joinedAt`) | member |
-| `PUT /workspaces/{w}/members/{userId}` | `{ role }` → `Member`; a demotion below `MEMBERS_MANAGE` revokes the member's pending invitations | `MEMBERS_MANAGE` + owner rules |
+| `PUT /workspaces/{w}/members/{userId}` | `{ role }` → `Member`; the member's pending invitations the new role couldn't create are revoked (all below `MEMBERS_MANAGE`, the `OWNER` ones for a non-owner) | `MEMBERS_MANAGE` + owner rules |
 | `DELETE /workspaces/{w}/members/{userId}` | → 204; the member's pending invitations are revoked | `MEMBERS_MANAGE`, or the caller themselves |
 | `GET /workspaces/{w}/invitations` | → `Invitation[]` pending (`id, email, role, invitedBy: MemberRef?, createdAt, expiresAt`), newest first; expired ones are not listed | `MEMBERS_MANAGE` |
 | `POST /workspaces/{w}/invitations` | `{ email, role }` → 201 `Invitation` + `token` (shown once) | `MEMBERS_MANAGE`, owner for role `OWNER` (403); 409 already a member or already has a pending invitation (an expired one is replaced) |

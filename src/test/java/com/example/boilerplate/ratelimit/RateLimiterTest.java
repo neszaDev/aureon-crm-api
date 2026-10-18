@@ -97,6 +97,8 @@ class RateLimiterTest {
   private RateLimiter limiter(boolean enabled) {
     var twoPerMinute = new RateLimitProperties.Limit(2, Duration.ofMinutes(1));
     return new RateLimiter(
-        new RateLimitProperties(enabled, twoPerMinute, twoPerMinute, twoPerMinute, 1000), clock);
+        new RateLimitProperties(
+            enabled, twoPerMinute, twoPerMinute, twoPerMinute, twoPerMinute, 1000),
+        clock);
   }
 }

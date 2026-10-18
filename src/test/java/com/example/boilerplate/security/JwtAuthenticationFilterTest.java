@@ -48,9 +48,8 @@ class JwtAuthenticationFilterTest {
   @Test
   void aCurrentTokenAuthenticatesItsUserWithTheRoleOfTheDatabase() throws Exception {
     User user = user(7L, "me@example.com");
-    Instant issued = Instant.now();
     // The token still says ADMIN; the database says USER.
-    Authentication auth = filter(token(7L, "me@example.com", "ADMIN", issued));
+    Authentication auth = filter(token(7L, "me@example.com", "ADMIN", 0));
 
     assertThat(auth.getPrincipal()).isEqualTo(new CurrentUser(7L, "me@example.com"));
     assertThat(auth.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_USER");
@@ -60,30 +59,29 @@ class JwtAuthenticationFilterTest {
   @Test
   void aTokenWithoutAUserIdStaysAnonymous() throws Exception {
     user(7L, "me@example.com");
-    assertThat(filter(token(null, "me@example.com", "USER", Instant.now()))).isNull();
+    assertThat(filter(token(null, "me@example.com", "USER", 0))).isNull();
   }
 
   @Test
   void aTokenOfAUserWhoIsGoneStaysAnonymous() throws Exception {
     when(users.findById(7L)).thenReturn(Optional.empty());
-    assertThat(filter(token(7L, "me@example.com", "USER", Instant.now()))).isNull();
+    assertThat(filter(token(7L, "me@example.com", "USER", 0))).isNull();
   }
 
   @Test
   void aTokenWhoseEmailIsNoLongerItsUsersStaysAnonymous() throws Exception {
     user(7L, "renamed@example.com");
-    assertThat(filter(token(7L, "me@example.com", "USER", Instant.now()))).isNull();
+    assertThat(filter(token(7L, "me@example.com", "USER", 0))).isNull();
   }
 
   @Test
-  void aTokenIssuedBeforeTheUsersSessionsEndedStaysAnonymous() throws Exception {
+  void aTokenOfAnEarlierTokenVersionStaysAnonymous() throws Exception {
     User user = user(7L, "me@example.com");
     user.changePasswordHash("new-hash");
-    Instant ended = user.getSessionsValidAfter();
 
-    assertThat(filter(token(7L, "me@example.com", "USER", ended.minusSeconds(1)))).isNull();
-    // The same second counts as after: the change's own new token is issued in it.
-    assertThat(filter(token(7L, "me@example.com", "USER", ended))).isNotNull();
+    assertThat(filter(token(7L, "me@example.com", "USER", 0))).isNull();
+    assertThat(filter(token(7L, "me@example.com", "USER", null))).isNull();
+    assertThat(filter(token(7L, "me@example.com", "USER", 1))).isNotNull();
   }
 
   @Test
@@ -106,12 +104,13 @@ class JwtAuthenticationFilterTest {
     return user;
   }
 
-  private static String token(Long uid, String email, String role, Instant issued) {
+  private static String token(Long uid, String email, String role, Integer version) {
     return Jwts.builder()
         .subject(email)
         .claim(JwtService.USER_ID, uid)
+        .claim(JwtService.TOKEN_VERSION, version)
         .claim("role", role)
-        .issuedAt(Date.from(issued))
+        .issuedAt(new Date())
         .expiration(Date.from(Instant.now().plusSeconds(60)))
         .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
         .compact();

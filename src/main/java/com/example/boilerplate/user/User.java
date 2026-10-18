@@ -2,8 +2,6 @@ package com.example.boilerplate.user;
 
 import com.example.boilerplate.common.entity.AuditableEntity;
 import jakarta.persistence.*;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 @Entity
@@ -22,8 +20,12 @@ public class User extends AuditableEntity {
   @Column(nullable = false)
   private Role role = Role.USER;
 
-  /** Access tokens issued before this are refused; whole seconds, as a token's {@code iat}. */
-  private Instant sessionsValidAfter;
+  /**
+   * Tokens carry the version they were issued with; one of another version is refused. Bumped by an
+   * email, role or password change; {@code @Version} keeps two changes from losing one.
+   */
+  @Column(nullable = false)
+  private int tokenVersion;
 
   protected User() {}
 
@@ -51,10 +53,8 @@ public class User extends AuditableEntity {
     endSessions();
   }
 
-  // shortcut: a token issued in the same second as the change survives it (iat has whole
-  // seconds); switch to a per-user token version if that second ever matters.
   private void endSessions() {
-    sessionsValidAfter = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+    tokenVersion++;
   }
 
   public String getEmail() {
@@ -73,7 +73,7 @@ public class User extends AuditableEntity {
     return role;
   }
 
-  public Instant getSessionsValidAfter() {
-    return sessionsValidAfter;
+  public int getTokenVersion() {
+    return tokenVersion;
   }
 }

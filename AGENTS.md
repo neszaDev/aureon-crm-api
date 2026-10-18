@@ -156,7 +156,8 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   or secret overrides `toString()` to leave it out (`SecretRedactionTest`): framework DEBUG
   logging prints bodies.
 - **Account security events** (an admin's account change, a password change, a lockout) go
-  through `AccountEvents.record`: ids and field names, never values.
+  through `AccountEvents.record` (logged after commit; `recordNow` only for an attempt whose
+  transaction rolls back, the lockout): ids and field names, never values.
 - **Request DTOs** use boxed types with `@NotNull` for required numbers and booleans: a primitive
   would turn an omitted field into `0` or `false` instead of a 400. Money fields take
   `@Schema(type = "string")` like the responses' money.

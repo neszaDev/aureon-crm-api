@@ -31,7 +31,8 @@ import org.springframework.test.context.ActiveProfiles;
       "app.rate-limit.enabled=true",
       "app.rate-limit.login-per-ip.capacity=4",
       "app.rate-limit.login-failures-per-email.capacity=2",
-      "app.rate-limit.register-per-ip.capacity=2"
+      "app.rate-limit.register-per-ip.capacity=2",
+      "app.rate-limit.refresh-per-user.capacity=3"
     })
 @ActiveProfiles("test")
 @Import(PostgresTestcontainersConfig.class)
@@ -116,6 +117,32 @@ class RateLimitIT {
         .doesNotContain(link);
   }
 
+  /**
+   * Rotations are limited per user, whatever the client IP (the frontend's server makes the call):
+   * every rotation keeps a used row for the refresh TTL.
+   */
+  @Test
+  void refreshesAreLimitedPerUser() throws Exception {
+    String token =
+        JSON.readTree(register(email(), "198.51.100.80").body()).get("refreshToken").asText();
+    for (int i = 1; i <= 3; i++) {
+      var rotated = refresh(token, "198.51.100.8" + i);
+      assertThat(rotated.statusCode()).isEqualTo(200);
+      token = JSON.readTree(rotated.body()).get("refreshToken").asText();
+    }
+
+    var blocked = refresh(token, "198.51.100.84");
+    assertThat(blocked.statusCode()).isEqualTo(429);
+    assertThat(blocked.headers().firstValue("Retry-After"))
+        .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
+    assertThat(blocked.body()).contains("\"code\":\"RATE_LIMITED\"");
+
+    // Another user has their own budget.
+    String other =
+        JSON.readTree(register(email(), "198.51.100.85").body()).get("refreshToken").asText();
+    assertThat(refresh(other, "198.51.100.84").statusCode()).isEqualTo(200);
+  }
+
   /** The failed sign-in that blocks an email is logged once, by user id (M3). */
   @Test
   @ExtendWith(OutputCaptureExtension.class)
@@ -162,6 +189,14 @@ class RateLimitIT {
     return send(
         "/api/v1/invitations/" + link + "/register",
         "{\"password\":\"" + PASSWORD + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> refresh(String refreshToken, String clientIp) throws Exception {
+    return send(
+        "/api/v1/auth/refresh",
+        "{\"refreshToken\":\"" + refreshToken + "\"}",
         "X-Forwarded-For",
         clientIp);
   }

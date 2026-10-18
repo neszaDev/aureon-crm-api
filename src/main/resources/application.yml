@@ -54,6 +54,10 @@ app:
     register-per-ip:
       capacity: ${RATE_LIMIT_REGISTER_PER_IP:10}
       period: PT1H
+    # Keyed by user id: the frontend's server makes the call, so the IP is the proxy's.
+    refresh-per-user:
+      capacity: ${RATE_LIMIT_REFRESH_PER_USER:30}
+      period: PT15M
     max-tracked-keys: 100000
   # Optional first admin, created at startup if that account doesn't exist yet.
   admin:

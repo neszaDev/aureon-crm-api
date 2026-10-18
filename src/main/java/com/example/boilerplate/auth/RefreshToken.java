@@ -36,6 +36,10 @@ public class RefreshToken {
   @Column(name = "used_at")
   private Instant usedAt;
 
+  /** The user's token version at issue: after an email, role or password change it won't rotate. */
+  @Column(name = "token_version", nullable = false, updatable = false)
+  private int tokenVersion;
+
   protected RefreshToken() {}
 
   public RefreshToken(
@@ -46,6 +50,7 @@ public class RefreshToken {
     this.createdAt = Instant.now();
     this.familyId = familyId;
     this.familyCreatedAt = familyCreatedAt;
+    this.tokenVersion = user.getTokenVersion();
   }
 
   public void markUsed(Instant now) {
@@ -70,5 +75,9 @@ public class RefreshToken {
 
   public Instant getUsedAt() {
     return usedAt;
+  }
+
+  public int getTokenVersion() {
+    return tokenVersion;
   }
 }

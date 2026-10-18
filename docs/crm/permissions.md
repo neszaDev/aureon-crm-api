@@ -8,8 +8,9 @@ A system `ADMIN` manages accounts but has **no** access to any workspace it is n
 An access token names its user by id (the `uid` claim); `sub` keeps the email for
 compatibility. `JwtAuthenticationFilter` loads that user by primary key on every request and
 leaves the request anonymous (401) when the user is gone, when its email is no longer the token's
-`sub`, or when the token was issued before the user's `sessions_valid_after` (set on an email,
-role or password change; whole seconds, like the token's `iat`). The membership, `/users/me`,
+`sub`, or when the token's version (`ver`) is not the user's `token_version`, which an email, role
+or password change increments; refresh tokens carry the version too and stop rotating. The
+membership, `/users/me`,
 the password change, files and test results are then looked up by the user id, never by email, so
 an admin who renames accounts can't make one account's token resolve to another account, and a
 deleted user's token can't attach to whoever registers the email again.
@@ -64,9 +65,11 @@ Rules beyond the matrix:
 - Invitations: an admin can't create or revoke an **owner** invitation (403). Revoking an accepted
   or an already revoked invitation is 409; an expired one can be revoked. The pending list hides
   expired invitations and shows the newest first.
-- A member who is removed, leaves, or is demoted to a role without `MEMBERS_MANAGE` takes their
-  pending invitations along: each is revoked, with an `INVITE_REVOKE` audit event by whoever made
-  the change.
+- A member's pending invitations don't outlive the right to send them: a member who is removed or
+  leaves loses all of them, a role change revokes those the new role couldn't create (all of
+  them without `MEMBERS_MANAGE`, the `OWNER` ones for an owner demoted to admin), each with an
+  `INVITE_REVOKE` audit event by whoever made the change. A system admin deleting the account
+  revokes them in every workspace, recorded as that admin.
 - The last owner can't be demoted or removed, and can't leave. An account that is the last owner
   of a workspace can't be deleted by a system admin (409) until another owner exists.
 - Anyone can leave a workspace (remove their own membership), except the last owner.

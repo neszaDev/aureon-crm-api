@@ -18,6 +18,7 @@ import com.example.boilerplate.common.text.Texts;
 import com.example.boilerplate.ratelimit.RateLimiter;
 import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.User;
+import com.example.boilerplate.user.UserDeletionEvent;
 import com.example.boilerplate.user.UserRepository;
 import com.example.boilerplate.workspace.Membership;
 import com.example.boilerplate.workspace.Permission;
@@ -27,12 +28,16 @@ import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceMember;
 import com.example.boilerplate.workspace.WorkspaceMemberRepository;
 import com.example.boilerplate.workspace.WorkspaceRepository;
+import com.example.boilerplate.workspace.WorkspaceRole;
 import com.example.boilerplate.workspace.dto.MemberRef;
 import com.example.boilerplate.workspace.invitation.dto.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.springframework.context.event.EventListener;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -57,6 +62,7 @@ public class InvitationService {
   private final PasswordEncoder encoder;
   private final RefreshTokenService refreshTokens;
   private final RateLimiter rateLimiter;
+  @PersistenceContext private EntityManager entityManager;
 
   public InvitationService(
       InvitationRepository invitations,
@@ -143,17 +149,44 @@ public class InvitationService {
   }
 
   /**
-   * Revokes the pending invitations {@code userId} sent in the current workspace: they leave, or
-   * lose MEMBERS_MANAGE (MemberService), and their links must not outlive that.
+   * Revokes the pending invitations {@code userId} sent in the current workspace that their new
+   * {@code role} couldn't create (null: no longer a member): every one without MEMBERS_MANAGE, the
+   * OWNER ones for anyone but an owner. A link must not outlive its inviter's rights.
    */
-  public void revokeSentBy(long userId) {
+  public void revokeSentBy(long userId, WorkspaceRole role) {
     Membership m = WorkspaceContext.require();
     Instant now = Instant.now();
     for (Invitation i : invitations.findPendingSentBy(m.workspaceId(), userId, now)) {
+      if (role != null
+          && role.has(Permission.MEMBERS_MANAGE)
+          && (i.getRole() != OWNER || role == OWNER)) continue;
       i.revoke(now);
       audit.record(
           AuditAction.INVITE_REVOKE, AuditEntityType.INVITATION, i.getId(), i.getEmail(), Map.of());
     }
+  }
+
+  /** An admin deletes the account: its pending invitations in every workspace go, by that admin. */
+  @EventListener
+  void revokeSentBy(UserDeletionEvent event) {
+    Instant now = Instant.now();
+    List<Invitation> pending = invitations.findPendingSentBy(event.userId(), now);
+    for (Invitation i : pending) {
+      i.revoke(now);
+      audit.record(
+          i.getWorkspaceId(),
+          event.actorId(),
+          event.actorEmail(),
+          AuditAction.INVITE_REVOKE,
+          AuditEntityType.INVITATION,
+          i.getId(),
+          i.getEmail(),
+          Map.of());
+    }
+    // Written while the account exists, then detached: at the deletion's flush they would still
+    // point at the deleted user (TransientObjectException). The database nulls invited_by.
+    invitations.flush();
+    pending.forEach(entityManager::detach);
   }
 
   /** Public: anyone with the link may see what it is for and whether it still works. */

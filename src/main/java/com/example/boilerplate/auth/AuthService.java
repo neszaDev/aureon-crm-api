@@ -99,7 +99,7 @@ public class AuthService {
   /** Counts a wrong password; the one that blocks the email is a sign-in lockout. */
   private void failed(String email, Long userId, Long actorId) {
     if (rateLimiter.record(Policy.LOGIN_FAILURES_PER_EMAIL, email))
-      AccountEvents.record("sign-in.lockout", actorId, userId, List.of());
+      AccountEvents.recordNow("sign-in.lockout", actorId, userId, List.of());
   }
 
   /** A replay revokes the token's family and answers 401: the revocation must commit. */

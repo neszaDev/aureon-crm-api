@@ -21,6 +21,9 @@ public class JwtService {
   /** The user's id: what a token is bound to ({@code sub} keeps the email). */
   public static final String USER_ID = "uid";
 
+  /** The user's token version at issue; another version is refused. */
+  public static final String TOKEN_VERSION = "ver";
+
   /**
    * Published in this repository (application-*.yml, env/.env.example): anyone can sign with them.
    */
@@ -54,6 +57,7 @@ public class JwtService {
     return Jwts.builder()
         .subject(user.getEmail())
         .claim(USER_ID, user.getId())
+        .claim(TOKEN_VERSION, user.getTokenVersion())
         .claim("role", user.getRole().name())
         .issuedAt(Date.from(now))
         .expiration(Date.from(now.plus(ttl)))

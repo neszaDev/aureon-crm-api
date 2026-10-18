@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
+import com.example.boilerplate.ratelimit.RateLimiter;
+import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -23,11 +25,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenServiceTest {
   @Mock RefreshTokenRepository tokens;
   @Mock JwtService jwt;
+  @Mock RateLimiter rateLimiter;
   RefreshTokenService service;
   final User user = new User("me@example.com", "hash");
 
@@ -41,7 +45,9 @@ class RefreshTokenServiceTest {
                 new AuthProperties.Jwt("x".repeat(32), Duration.ofMinutes(15)),
                 Duration.ofDays(30),
                 true),
-            new SessionProperties(Duration.ofSeconds(30), Duration.ofDays(90)));
+            new SessionProperties(Duration.ofSeconds(30), Duration.ofDays(90)),
+            rateLimiter);
+    ReflectionTestUtils.setField(user, "id", 7L);
   }
 
   @Test
@@ -78,6 +84,7 @@ class RefreshTokenServiceTest {
 
     var response = service.rotate("raw");
 
+    verify(rateLimiter).consume(Policy.REFRESH_PER_USER, "7");
     verify(tokens, never()).delete(any());
     assertThat(existing.getUsedAt()).isNotNull();
     var saved = ArgumentCaptor.forClass(RefreshToken.class);
@@ -85,6 +92,19 @@ class RefreshTokenServiceTest {
     assertThat(saved.getValue().getFamilyId()).isEqualTo(family);
     assertThat(saved.getValue().getFamilyCreatedAt()).isEqualTo(started);
     assertThat(response.refreshToken()).isNotEqualTo("raw");
+  }
+
+  @Test
+  void rotateRejectsATokenOfAnEarlierTokenVersionAndDeletesItsFamily() {
+    UUID family = UUID.randomUUID();
+    var stale = new RefreshToken(user, "h", Instant.now().plusSeconds(60), family, Instant.now());
+    user.changePasswordHash("new-hash");
+    when(tokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.of(stale));
+
+    assertThatThrownBy(() -> service.rotate("raw"))
+        .isInstanceOf(InvalidRefreshTokenException.class);
+    verify(tokens).deleteByFamilyId(family);
+    verify(tokens, never()).save(any());
   }
 
   @Test

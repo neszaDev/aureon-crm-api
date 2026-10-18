@@ -82,7 +82,7 @@ public class UserAdminService {
   public void delete(long actorId, Long id) {
     User actor = requireAdmin(actorId);
     User target = notSelf(actor, user(id), "You cannot delete your own account");
-    events.publishEvent(new UserDeletionEvent(target.getId()));
+    events.publishEvent(new UserDeletionEvent(target.getId(), actor.getId(), actor.getEmail()));
     users.delete(target);
     AccountEvents.record("account.delete", actor.getId(), target.getId(), List.of());
   }

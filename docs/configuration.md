@@ -39,6 +39,7 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 | `RATE_LIMIT_LOGIN_PER_IP` | `20` | no | Sign-in attempts per client IP per minute |
 | `RATE_LIMIT_LOGIN_FAILURES_PER_EMAIL` | `10` | no | Failed sign-ins per email per 15 minutes |
 | `RATE_LIMIT_REGISTER_PER_IP` | `10` | no | Registrations per client IP per hour |
+| `RATE_LIMIT_REFRESH_PER_USER` | `30` | no | Refresh-token rotations per user per 15 minutes; each keeps a row for the refresh TTL. The web frontend needs a few per 15 minutes |
 | `SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES` | private + loopback ranges | if the proxy has a public IP | Regex of proxies whose `X-Forwarded-For` is trusted (see below) |
 | `ADMIN_EMAIL` | none | no | First admin account, created at startup if missing (see below) |
 | `ADMIN_PASSWORD` | none | with `ADMIN_EMAIL` | 12–72 characters. Only used when the account is created; changing it later does nothing. |
@@ -63,8 +64,10 @@ profiles, the only ones with the seeder; `application.yml` has `enabled: false` 
   acting and the affected user's ids and the changed field names, never the values:
   `account.update` and `account.delete` (an admin's change), `password.change`,
   `sign-in.lockout` (the failed sign-in that blocks an email; no actor) and `refresh.reuse` (a
-  replayed refresh token that revoked a session). Under `prod` they are JSON fields too. That
-  logger stays at INFO whatever the root level. A table of account events is a follow-up.
+  replayed refresh token that revoked a session). Changes are written once their transaction has
+  committed, so a change that fails at commit leaves no line; the lockout at once (its
+  transaction rolls back with the 401). Under `prod` they are JSON fields too. That logger stays
+  at INFO whatever the root level. A table of account events is a follow-up.
 - Keep framework DEBUG logging (`org.springframework.security`, `org.springframework.web`) off
   in prod: it logs request URIs, and an invitation link's URI carries its token. Request and
   response records leave passwords and tokens out of their `toString()`.
@@ -109,7 +112,7 @@ which is git-ignored. The `make` targets pass it to Compose with `--env-file env
 | `POSTGRES_PORT` | `5432` | Host port only; change it if 5432 is taken |
 | `APP_PORT` | `8080` | Host port of the app in `make watch` and `make up` (the container still listens on 8080), e.g. `APP_PORT=8081` when another project uses 8080. Swagger UI and the API are then on that port, and the frontend's API URL must point at it. |
 | `JWT_SECRET` | none | Required by compose for the `local` and `dev` profiles |
-| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `RATE_LIMIT_*` | as above | Passed through to the app container |
+| `REFRESH_TOKEN_TTL`, `CORS_ALLOWED_ORIGINS`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `RATE_LIMIT_*` | as above | Passed through to the app container (not `RATE_LIMIT_REFRESH_PER_USER`, which keeps its default there) |
 | `DEMO_DATA`, `DEMO_PASSWORD` | as above | Passed to the `local` and `dev` app containers only |
 
 When you add a variable, update `application*.yml`, this page and `env/.env.example` together.

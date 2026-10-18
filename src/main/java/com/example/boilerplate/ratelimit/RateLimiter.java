@@ -11,8 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * In-memory token buckets, one per policy and key (an IP or an email). Limits are per instance; see
- * docs/plans/0002-users-files-rate-limits.md for moving them to shared storage.
+ * In-memory token buckets, one per policy and key (an IP, an email or a user id). Limits are per
+ * instance; see docs/plans/0002-users-files-rate-limits.md for moving them to shared storage.
  */
 @Component
 public class RateLimiter {
@@ -20,7 +20,8 @@ public class RateLimiter {
   public enum Policy {
     LOGIN_PER_IP,
     LOGIN_FAILURES_PER_EMAIL,
-    REGISTER_PER_IP
+    REGISTER_PER_IP,
+    REFRESH_PER_USER
   }
 
   private final RateLimitProperties properties;
@@ -41,7 +42,8 @@ public class RateLimiter {
         Stream.of(
                 properties.loginPerIp(),
                 properties.loginFailuresPerEmail(),
-                properties.registerPerIp())
+                properties.registerPerIp(),
+                properties.refreshPerUser())
             .map(RateLimitProperties.Limit::period)
             .max(Duration::compareTo)
             .orElseThrow();
@@ -82,6 +84,7 @@ public class RateLimiter {
           case LOGIN_PER_IP -> properties.loginPerIp();
           case LOGIN_FAILURES_PER_EMAIL -> properties.loginFailuresPerEmail();
           case REGISTER_PER_IP -> properties.registerPerIp();
+          case REFRESH_PER_USER -> properties.refreshPerUser();
         };
     return buckets.get(
         policy + ":" + key,

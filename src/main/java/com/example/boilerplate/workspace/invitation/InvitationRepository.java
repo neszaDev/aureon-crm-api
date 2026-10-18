@@ -33,4 +33,12 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
       where i.workspaceId = :workspaceId and i.invitedBy.id = :userId
         and i.acceptedAt is null and i.revokedAt is null and i.expiresAt > :now""")
   List<Invitation> findPendingSentBy(long workspaceId, long userId, Instant now);
+
+  /** In every workspace: outside one (an account being deleted), the user id scopes it. */
+  @Query(
+      """
+      select i from Invitation i
+      where i.invitedBy.id = :userId
+        and i.acceptedAt is null and i.revokedAt is null and i.expiresAt > :now""")
+  List<Invitation> findPendingSentBy(long userId, Instant now);
 }

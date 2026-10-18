@@ -5,6 +5,8 @@ import static net.logstash.logback.argument.StructuredArguments.kv;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Account security events, one INFO line each with ids and field names, never values: {@code
@@ -16,8 +18,30 @@ public final class AccountEvents {
 
   private AccountEvents() {}
 
-  /** {@code actorId} null: nobody signed in did it (a sign-in lockout, a refresh-token replay). */
+  /**
+   * A change: logged once the transaction has committed, so a change that fails at commit leaves no
+   * line. {@code actorId} null: nobody signed in did it (a refresh-token replay).
+   */
   public static void record(String event, Long actorId, Long targetId, List<String> fields) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      log(event, actorId, targetId, fields);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            log(event, actorId, targetId, fields);
+          }
+        });
+  }
+
+  /** An attempt whose transaction rolls back with its error (a sign-in lockout): logged now. */
+  public static void recordNow(String event, Long actorId, Long targetId, List<String> fields) {
+    log(event, actorId, targetId, fields);
+  }
+
+  private static void log(String event, Long actorId, Long targetId, List<String> fields) {
     log.info(
         "Account event {} {} {} {}",
         kv("event", event),

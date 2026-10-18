@@ -8,7 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.support.WorkspaceTestSupport;
+import java.sql.Connection;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @ExtendWith(OutputCaptureExtension.class)
 class AccountEventLogIT extends WorkspaceTestSupport {
   @Autowired JdbcTemplate jdbc;
+  @Autowired DataSource dataSource;
 
   @Test
   void anAdminsChangeOfEmailAndRoleIsLoggedWithoutTheValues(CapturedOutput out) throws Exception {
@@ -104,6 +111,57 @@ class AccountEventLogIT extends WorkspaceTestSupport {
         .contains(
             "Account event event=refresh.reuse actorId=null targetId=" + idOf(email) + " fields=[]")
         .doesNotContain(stolen);
+  }
+
+  /**
+   * Another admin's uncommitted change holds the new email in the unique index, so this change
+   * waits at commit and then fails (409): an event logged before the commit would lie.
+   */
+  @Test
+  void anAdminChangeWhoseCommitFailsLogsNothing(CapturedOutput out) throws Exception {
+    String email = uniqueEmail();
+    register(email);
+    long loser = idOf(email);
+    String other = uniqueEmail();
+    register(other);
+    String wanted = "wanted-" + email;
+    String admin = adminAccessToken();
+    ExecutorService thread = Executors.newSingleThreadExecutor();
+    try (Connection otherAdmin = dataSource.getConnection()) {
+      otherAdmin.setAutoCommit(false);
+      try (var update = otherAdmin.prepareStatement("update users set email = ? where id = ?")) {
+        update.setString(1, wanted);
+        update.setLong(2, idOf(other));
+        update.executeUpdate();
+      }
+      Future<Integer> change =
+          thread.submit(
+              () ->
+                  send(admin, patch("/api/v1/users/" + loser), Map.of("email", wanted))
+                      .andReturn()
+                      .getResponse()
+                      .getStatus());
+      awaitALockWait();
+      otherAdmin.commit();
+
+      assertThat(change.get(10, TimeUnit.SECONDS)).isEqualTo(409);
+    } finally {
+      thread.shutdownNow();
+    }
+    assertThat(out.getOut()).doesNotContain("targetId=" + loser + " ");
+  }
+
+  /** Until a backend waits on a lock (the change's commit, on the other transaction). */
+  private void awaitALockWait() throws InterruptedException {
+    for (int i = 0; i < 200; i++) {
+      Integer waiting =
+          jdbc.queryForObject(
+              "select count(*) from pg_stat_activity where wait_event_type = 'Lock'",
+              Integer.class);
+      if (waiting != null && waiting > 0) return;
+      Thread.sleep(25);
+    }
+    throw new AssertionError("The change never waited on the other transaction");
   }
 
   private void refresh(String refreshToken) throws Exception {

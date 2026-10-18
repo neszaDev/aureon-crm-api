@@ -18,6 +18,7 @@ import com.example.boilerplate.audit.AuditEventRepository;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -253,12 +254,71 @@ class MemberIT extends WorkspaceTestSupport {
         .containsExactlyInAnyOrder(fromRemoved.get("id").asLong(), fromDemoted.get("id").asLong());
   }
 
+  /** An owner demoted to admin can't invite owners any more: those links go, the others stay. */
+  @Test
+  void anOwnerDemotedToAdminLosesTheOwnerInvitationsTheySent() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    String coOwnerEmail = uniqueEmail();
+    String coOwner = tokenFor(coOwnerEmail);
+    addMember(w, coOwnerEmail, WorkspaceRole.OWNER);
+    JsonNode asOwner = invite(coOwner, w, "OWNER");
+    JsonNode asRep = invite(coOwner, w, "SALES_REP");
+
+    changeRole(owner, w, idOf(coOwnerEmail), "ADMIN").andExpect(status().isOk());
+
+    previewStatus(asOwner).andExpect(jsonPath("$.status").value("REVOKED"));
+    previewStatus(asRep).andExpect(jsonPath("$.status").value("PENDING"));
+    assertThat(inviteRevocations(w)).containsExactly(asOwner.get("id").asLong());
+  }
+
+  /** A system admin deleting an account revokes its pending invitations in every workspace. */
+  @Test
+  void deletingAUserRevokesTheInvitationsTheySent() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long first = createWorkspace(owner, "One");
+    long second = createWorkspace(owner, "Two");
+    String inviterEmail = uniqueEmail();
+    String inviter = tokenFor(inviterEmail);
+    addMember(first, inviterEmail, WorkspaceRole.ADMIN);
+    addMember(second, inviterEmail, WorkspaceRole.ADMIN);
+    JsonNode inFirst = invite(inviter, first, "SALES_REP");
+    JsonNode inSecond = invite(inviter, second, "MANAGER");
+    JsonNode byOwner = invite(owner, first, "SALES_REP");
+
+    send(adminAccessToken(), delete("/api/v1/users/{id}", idOf(inviterEmail)))
+        .andExpect(status().isNoContent());
+
+    previewStatus(inFirst).andExpect(jsonPath("$.status").value("REVOKED"));
+    previewStatus(inSecond).andExpect(jsonPath("$.status").value("REVOKED"));
+    previewStatus(byOwner).andExpect(jsonPath("$.status").value("PENDING"));
+    assertThat(inviteRevocations(first)).containsExactly(inFirst.get("id").asLong());
+    assertThat(inviteRevocations(second)).containsExactly(inSecond.get("id").asLong());
+    // By the system admin, who is no member of either workspace.
+    assertThat(
+            events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(first).stream()
+                .filter(e -> e.getAction() == AuditAction.INVITE_REVOKE)
+                .map(AuditEvent::getActorEmail))
+        .containsExactly(ADMIN_EMAIL);
+  }
+
+  private List<Long> inviteRevocations(long workspaceId) {
+    return events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(workspaceId).stream()
+        .filter(e -> e.getAction() == AuditAction.INVITE_REVOKE)
+        .map(AuditEvent::getEntityId)
+        .toList();
+  }
+
   private JsonNode invite(String token, long workspaceId) throws Exception {
+    return invite(token, workspaceId, "SALES_REP");
+  }
+
+  private JsonNode invite(String token, long workspaceId, String role) throws Exception {
     return body(
         send(
                 token,
                 post("/api/v1/workspaces/{w}/invitations", workspaceId),
-                Map.of("email", uniqueEmail(), "role", "SALES_REP"))
+                Map.of("email", uniqueEmail(), "role", role))
             .andExpect(status().isCreated()));
   }
 
