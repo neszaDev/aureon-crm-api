@@ -51,8 +51,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,17 +67,18 @@ import org.springframework.stereotype.Component;
 
 /**
  * The demo workspace (docs/crm/README.md, Try it): with {@code app.demo.enabled} ({@code
- * DEMO_DATA}), at startup, once, in the local and dev profiles only. Four members, one per role,
- * and fictional records written through the services as the owner (activities as their authors), so
- * they follow the same rules and leave the same audit events as any. Then the deals' creation and
- * stage history are spread over the last 180 days by plain SQL; the audit trail keeps the real
- * times (it is append-only).
+ * DEMO_DATA}), at startup, once, in the local and dev profiles only, never together with prod. Four
+ * members, one per role, and fictional records written through the services as the owner
+ * (activities as their authors), so they follow the same rules and leave the same audit events as
+ * any. Then the deals' creation and stage history are spread over the last 180 days by plain SQL;
+ * the audit trail keeps the real times (it is append-only).
  *
  * <p>Not {@code @Transactional}: {@link WorkspaceContext#runAs} refuses to run inside a
  * transaction, so a failure part-way leaves what was written; {@code make db-reset} starts over.
  */
 @Component
-@Profile({"local", "dev"})
+// An expression, not {"local", "dev"}: that is an OR, which "prod,dev" would satisfy.
+@Profile("(local | dev) & !prod")
 public class DemoDataSeeder implements ApplicationRunner {
   static final String WORKSPACE = "Northwind Supply (demo)";
   private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
@@ -127,7 +130,7 @@ public class DemoDataSeeder implements ApplicationRunner {
           "Book a demo",
           "Check the contract terms",
           "Call about the renewal");
-  // Subject i % 8 suits ActivityType.values()[i % 4]: CALL, EMAIL, MEETING, NOTE.
+  // Subjects k and k + 4 suit ActivityType.values()[k]: CALL, EMAIL, MEETING, NOTE.
   private static final List<String> SUBJECTS =
       List.of(
           "Discovery call",
@@ -197,10 +200,25 @@ public class DemoDataSeeder implements ApplicationRunner {
         jdbc.queryForList(
             "SELECT id FROM workspaces WHERE name = ? ORDER BY id LIMIT 1", Long.class, WORKSPACE);
     long workspaceId = found.isEmpty() ? seed(password) : found.get(0);
+    List<String> logins = LOGINS.stream().filter(email -> opens(email, password)).toList();
     log.info(
         "Demo workspace {}: sign in as {} with DEMO_PASSWORD",
         workspaceId,
-        String.join(", ", LOGINS));
+        String.join(", ", logins));
+  }
+
+  /**
+   * Whether {@code password} opens the login: an account that existed before the seeding keeps its
+   * own password, and DEMO_PASSWORD may have changed since; a warning names only the email.
+   */
+  private boolean opens(String email, String password) {
+    boolean opens =
+        users
+            .findByEmail(email)
+            .filter(u -> encoder.matches(password, u.getPasswordHash()))
+            .isPresent();
+    if (!opens) log.warn("Demo login {} does not take DEMO_PASSWORD (another password)", email);
+    return opens;
   }
 
   private long seed(String password) {
@@ -352,7 +370,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     }
 
     // Deal i ends in stage i % 6 (four in each) through the open stages before it; a lost deal
-    // drops out after a random one.
+    // drops out after a random one. The first six, one per stage, are under 30 days old, so the
+    // dashboard's default 30 days show a won and a lost deal.
+    Map<Long, Instant> dealCreated = new HashMap<>();
     List<StageResponse> pipeline = stages.list();
     List<StageResponse> open = pipeline.stream().filter(s -> s.kind() == StageKind.OPEN).toList();
     for (int i = 0; i < dealIds.size(); i++) {
@@ -368,10 +388,11 @@ public class DemoDataSeeder implements ApplicationRunner {
       if (target.kind() == StageKind.WON) deal = move(deal, target, null);
       if (target.kind() == StageKind.LOST) deal = move(deal, target, "Chose another supplier");
       Instant created =
-          now.minus(Duration.ofDays(10 + random.nextInt(170)))
+          now.minus(Duration.ofDays(10 + random.nextInt(i < pipeline.size() ? 20 : 170)))
               .minus(Duration.ofMinutes(random.nextInt(600)))
               .truncatedTo(ChronoUnit.SECONDS);
       backdate(w, deal, created, now);
+      dealCreated.put(deal.id(), created);
     }
 
     // A quarter each: completed, overdue, due within the week, due later.
@@ -398,19 +419,26 @@ public class DemoDataSeeder implements ApplicationRunner {
       if (i % 4 == 0) tasks.complete(task.id(), new VersionRequest(task.version()));
     }
 
-    // Over the last 60 days, on deals and contacts, by each member in turn.
+    // Over the last 60 days (never before the deal they are on), on deals and contacts, each by a
+    // random member: type, author and record drawn apart.
+    Instant until = now.minus(Duration.ofMinutes(30));
     for (int i = 0; i < 60; i++) {
+      ActivityType type = ActivityType.values()[random.nextInt(4)];
+      Long dealId = random.nextBoolean() ? dealIds.get(random.nextInt(dealIds.size())) : null;
+      Instant from = now.minus(Duration.ofDays(60));
+      if (dealId != null && dealCreated.get(dealId).isAfter(from)) from = dealCreated.get(dealId);
       CreateActivityRequest activity =
           new CreateActivityRequest(
-              ActivityType.values()[i % 4],
-              SUBJECTS.get(i % SUBJECTS.size()),
+              type,
+              SUBJECTS.get(type.ordinal() + 4 * random.nextInt(2)),
               null,
-              now.minus(Duration.ofMinutes(30 + random.nextInt(60 * 24 * 60))),
+              from.plusSeconds(random.nextLong(Duration.between(from, until).toSeconds())),
               null,
-              i % 2 == 1 ? contactIds.get(i % contactIds.size()) : null,
+              dealId == null ? contactIds.get(random.nextInt(contactIds.size())) : null,
               null,
-              i % 2 == 0 ? dealIds.get(i % dealIds.size()) : null);
-      WorkspaceContext.runAs(team.get(i % team.size()), () -> activities.create(activity));
+              dealId);
+      Membership author = team.get(random.nextInt(team.size()));
+      WorkspaceContext.runAs(author, () -> activities.create(activity));
     }
     return null;
   }
@@ -441,8 +469,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     OffsetDateTime start = created.atOffset(ZoneOffset.UTC);
     for (int k = 0; k < changes.size(); k++) {
       jdbc.update(
-          "UPDATE deal_stage_changes SET changed_at = ? WHERE id = ?",
+          "UPDATE deal_stage_changes SET changed_at = ? WHERE workspace_id = ? AND id = ?",
           start.plus(step.multipliedBy(k)),
+          w,
           changes.get(k));
     }
     OffsetDateTime lastChange = start.plus(step.multipliedBy(changes.size() - 1));

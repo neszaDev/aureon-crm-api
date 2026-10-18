@@ -16,8 +16,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.env.MockEnvironment;
 
 class DemoDataSeederIT extends AbstractIntegrationTest {
   /** {@code app.demo.password} of application-test.yml. */
@@ -156,12 +158,24 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
         .isEqualTo(won + lost);
     assertThat(count("SELECT count(*) FROM deals WHERE workspace_id = ? AND closed_at IS NULL", w))
         .isEqualTo(24 - won - lost);
+    // An activity on a deal never predates it.
+    assertThat(
+            count(
+                "SELECT count(*) FROM activities WHERE workspace_id = ? AND deal_id IS NOT NULL",
+                w))
+        .isPositive();
+    assertThat(
+            count(
+                "SELECT count(*) FROM activities a JOIN deals d ON d.id = a.deal_id"
+                    + " WHERE a.workspace_id = ? AND a.occurred_at < d.created_at",
+                w))
+        .isZero();
 
     // The reports read that history and agree with it. The owner signs in with the password.
     String token = login("owner@demo.test", DEMO_PASSWORD).get("accessToken").asText();
     LocalDate today = LocalDate.now(ZoneId.of("Asia/Bangkok"));
     String period = "?from=" + today.minusDays(200) + "&to=" + today;
-    JsonNode funnel = report(token, w, "funnel" + period);
+    JsonNode funnel = read(token, w, "reports/funnel" + period);
     assertThat(funnel.get("created").asLong()).isEqualTo(24);
     assertThat(funnel.get("stages").get(4).get("stage").get("name").asText()).isEqualTo("Won");
     assertThat(funnel.get("stages").get(4).get("reached").asLong()).isEqualTo(won);
@@ -172,7 +186,7 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
                     + " WHERE workspace_id = ?",
                 String.class,
                 w));
-    JsonNode months = report(token, w, "won-lost" + period).get("months");
+    JsonNode months = read(token, w, "reports/won-lost" + period).get("months");
     long reportedWon = 0;
     long reportedLost = 0;
     for (JsonNode m : months) {
@@ -181,6 +195,10 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
     }
     assertThat(reportedWon).isEqualTo(won);
     assertThat(reportedLost).isEqualTo(lost);
+    // The first impression: the default 30 days of the dashboard show a won and a lost deal.
+    JsonNode dashboard = read(token, w, "dashboard");
+    assertThat(dashboard.get("won").get("count").asLong()).isPositive();
+    assertThat(dashboard.get("lost").get("count").asLong()).isPositive();
     for (String login : List.of("admin@demo.test", "manager@demo.test", "rep@demo.test")) {
       login(login, DEMO_PASSWORD);
     }
@@ -193,9 +211,22 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
 
   @Test
   void notInProdProfile() {
-    assertThat(DemoDataSeeder.class.getAnnotation(Profile.class).value())
-        .containsExactlyInAnyOrder("local", "dev");
+    Profiles profiles = Profiles.of(DemoDataSeeder.class.getAnnotation(Profile.class).value());
+    assertThat(activeWith(profiles, "prod", "dev")).isFalse();
+    assertThat(activeWith(profiles, "prod", "local")).isFalse();
+    assertThat(activeWith(profiles, "dev")).isTrue();
+    assertThat(activeWith(profiles, "local")).isTrue();
+    assertThat(activeWith(profiles)).isFalse();
     assertThat(context.getBeansOfType(DemoDataSeeder.class)).isEmpty();
+  }
+
+  /** Whether the bean's profiles accept these active ones (none: only the default profile). */
+  private static boolean activeWith(Profiles profiles, String... active) {
+    // MockEnvironment: no system properties or environment, so SPRING_PROFILES_ACTIVE can't leak
+    // in.
+    MockEnvironment environment = new MockEnvironment();
+    environment.setActiveProfiles(active);
+    return environment.acceptsProfiles(profiles);
   }
 
   /** The one demo workspace. */
@@ -228,10 +259,10 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
     return jdbc.queryForObject(sql, Long.class, w);
   }
 
-  private JsonNode report(String token, long w, String path) throws Exception {
+  private JsonNode read(String token, long w, String path) throws Exception {
     return json.readTree(
         mvc.perform(
-                get("/api/v1/workspaces/{w}/reports/" + path, w)
+                get("/api/v1/workspaces/{w}/" + path, w)
                     .header(HttpHeaders.AUTHORIZATION, bearer(token)))
             .andExpect(status().isOk())
             .andReturn()
