@@ -24,7 +24,7 @@ final class DealSpecifications {
       where.add(
           f.archived() ? cb.isNotNull(root.get("archivedAt")) : cb.isNull(root.get("archivedAt")));
       if (pattern != null) {
-        Expression<String> p = cb.lower(cb.literal(pattern));
+        Expression<String> p = cb.lower(TextSearch.bound(cb, pattern));
         where.add(
             cb.or(
                 contains(cb, root.get("name"), p),

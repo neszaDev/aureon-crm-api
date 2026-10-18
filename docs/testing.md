@@ -18,8 +18,8 @@ ownership checks, `runAs`), `WorkspaceAccessInterceptorTest` (the context is cle
 request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs). The CRM adds
 `crm/common/` (`CrmRecordTest` archive and owner, `CurrenciesTest`, `ListParamsTest` paging and
 sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
-`TextSearchTest` wildcard escaping, `common/text/TextsTest` stripping and the NUL check of a text
-parameter), `crm/lead/LeadStatusTest` (the status transition table),
+`TextSearchTest` wildcard escaping, `NoInlineLiteralTest` no `cb.literal` in `src/main`,
+`common/text/TextsTest` stripping and the NUL check of a text parameter), `crm/lead/LeadStatusTest` (the status transition table),
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
 transitions, overdue, microsecond times), `crm/export/CsvWriterTest` (quoting, `;` too, formula protection also after leading blanks,
 CRLF), `ExportPropertiesTest` (`max-rows` 1 to 30000) and `RecordRefsTest` (`D-0042`), `crm/insight/PeriodTest` (defaults and bounds in the
@@ -85,6 +85,7 @@ What the existing ITs cover:
 | `crm/common/ListHelpersIT` | The list helpers on real queries: literal search, sorting with the id tie-breaker in both directions, nulls last |
 | `crm/common/UnassignedFilterIT` | `unassigned=true` on every list with an owner (or assignee) filter and on the deal board, and its 400 together with an owner |
 | `crm/common/NulTextParameterIT` | A NUL character in every text-valued query parameter of the API (`q`, `industry`, `tag`, the duplicate checks, the dates of the dashboard and reports, the admin user search) is a 400 `VALIDATION_FAILED` on that parameter, never a 500; a second test fails when a controller gains a text parameter that is not in the list |
+| `crm/common/BoundTextFilterIT` | `q`, `industry` and `tag` with `O'Brien\%_x` on every list that filters on text, its export and the deal board: exactly the right rows (any case, `' \ % _` literal), and the SQL Hibernate logs carries none of the text (it is bound) |
 | `crm/company/CompanyIT` | Create/get/update, validation, search, filters, sorting, paging, archive/restore, duplicate warning, owner rules, a removed member's companies become unassigned, stale version (409), other workspace (404) |
 | `crm/contact/ContactIT` | The same for contacts, plus tags (normalized, filtered, listed), sorting by name and company, duplicates by email and phone, company links, the company's contact count, the composite foreign keys (company, source, owner of another workspace) |
 | `crm/lead/LeadIT` | Create/update, validation, estimated value and currency, the status lifecycle and its rules, follow-up date, filters, search, sorting (nulls last, priority), archive/restore, owner rules, a removed member's leads become unassigned, versions |

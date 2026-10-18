@@ -24,7 +24,7 @@ final class ContactSpecifications {
       where.add(
           f.archived() ? cb.isNotNull(root.get("archivedAt")) : cb.isNull(root.get("archivedAt")));
       if (pattern != null) {
-        Expression<String> p = cb.lower(cb.literal(pattern));
+        Expression<String> p = cb.lower(TextSearch.bound(cb, pattern));
         Expression<String> first = root.get("firstName");
         Expression<String> last = root.get("lastName");
         where.add(
@@ -51,7 +51,7 @@ final class ContactSpecifications {
                     "array_position",
                     Integer.class,
                     root.get("tags"),
-                    cb.literal(tag.toLowerCase(Locale.ROOT))),
+                    TextSearch.bound(cb, tag.toLowerCase(Locale.ROOT))),
                 0));
       }
       return cb.and(where.toArray(Predicate[]::new));

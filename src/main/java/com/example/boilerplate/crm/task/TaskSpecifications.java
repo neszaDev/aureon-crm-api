@@ -21,7 +21,8 @@ final class TaskSpecifications {
     return (root, query, cb) -> {
       List<Predicate> where = new ArrayList<>();
       if (pattern != null) {
-        where.add(cb.like(cb.lower(root.get("title")), cb.lower(cb.literal(pattern)), '\\'));
+        where.add(
+            cb.like(cb.lower(root.get("title")), cb.lower(TextSearch.bound(cb, pattern)), '\\'));
       }
       if (f.statuses() != null && !f.statuses().isEmpty()) {
         where.add(root.get("status").in(f.statuses()));

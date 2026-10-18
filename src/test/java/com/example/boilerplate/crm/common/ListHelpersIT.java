@@ -45,7 +45,8 @@ class ListHelpersIT extends WorkspaceTestSupport {
     String pattern = TextSearch.pattern(q).orElseThrow();
     Specification<LeadSource> spec =
         (root, query, cb) ->
-            cb.like(cb.lower(root.<String>get("name")), cb.lower(cb.literal(pattern)), '\\');
+            cb.like(
+                cb.lower(root.<String>get("name")), cb.lower(TextSearch.bound(cb, pattern)), '\\');
     return names(m, spec, ListParams.pageable(0, 100, Direction.ASC, "name")).getContent();
   }
 

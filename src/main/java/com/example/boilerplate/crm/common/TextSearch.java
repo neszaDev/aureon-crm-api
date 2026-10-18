@@ -2,13 +2,17 @@ package com.example.boilerplate.crm.common;
 
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.common.text.Texts;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import java.util.Optional;
+import org.hibernate.query.criteria.HibernateCriteriaBuilder;
 
 /**
  * The {@code q} of a list: a case-insensitive substring match. The pattern keeps its case, so the
  * specification lowers both sides in SQL and Java's idea of lower case can't disagree with
- * Postgres': {@code cb.like(cb.lower(path), cb.lower(cb.literal(pattern)), '\\')} (in JPQL: {@code
- * lower(x) like lower(:pattern) escape '\'}).
+ * Postgres': {@code cb.like(cb.lower(path), cb.lower(bound(cb, pattern)), '\\')} (in JPQL: {@code
+ * lower(x) like lower(:pattern) escape '\'}). Text from a request is always {@linkplain #bound
+ * bound}, never a {@code cb.literal}.
  */
 public final class TextSearch {
   private static final int MAX_LENGTH = 200;
@@ -25,6 +29,14 @@ public final class TextSearch {
     if (text == null) return Optional.empty();
     if (text.length() > MAX_LENGTH) throw new FieldValidationException("q", "is too long");
     return Optional.of("%" + escape(text) + "%");
+  }
+
+  /**
+   * {@code text} as a bound parameter of the query. Not {@code cb.literal(text)}: Hibernate writes
+   * that into the SQL text, which a request must never reach (NoInlineLiteralTest).
+   */
+  public static Expression<String> bound(CriteriaBuilder cb, String text) {
+    return ((HibernateCriteriaBuilder) cb).value(text);
   }
 
   /**

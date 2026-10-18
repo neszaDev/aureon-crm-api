@@ -30,8 +30,8 @@ public final class Texts {
 
   /**
    * The stripped value of the text query parameter {@code field}, null when blank. A NUL character
-   * is a 400 on {@code field}: PostgreSQL can't hold or compare it, and Hibernate writes a string
-   * literal into the SQL, where it breaks the connection (a 500).
+   * is a 400 on {@code field}: PostgreSQL can't hold or compare it (and where a query wrote the
+   * text into its SQL, it broke the connection: a 500).
    */
   public static String param(String field, String value) {
     if (value != null && value.indexOf('\0') >= 0) {

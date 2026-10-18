@@ -23,7 +23,7 @@ final class LeadSpecifications {
       where.add(
           f.archived() ? cb.isNotNull(root.get("archivedAt")) : cb.isNull(root.get("archivedAt")));
       if (pattern != null) {
-        Expression<String> p = cb.lower(cb.literal(pattern));
+        Expression<String> p = cb.lower(TextSearch.bound(cb, pattern));
         Expression<String> first = root.get("firstName");
         Expression<String> last = root.get("lastName");
         where.add(

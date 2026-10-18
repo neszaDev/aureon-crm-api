@@ -130,10 +130,11 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
   through `Money.scale2`, so `1250` from a request and `1250.00` from `numeric(15,2)` are not a
   change.
 - **Record lists** use `JpaSpecificationExecutor.findAll(spec, ListParams.pageable(...))` and
-  `TextSearch.pattern` with `cb.like(cb.lower(path), cb.lower(cb.literal(pattern)), '\\')`. A column
-  that must list nulls last in both directions adds `Ordering.nullsLast` to the spec and uses
-  `ListParams.unsorted`: Spring Data's Criteria sorting throws on `Sort.Order.nullsLast()`;
-  `Ordering.byPriority` (HIGH, MEDIUM, LOW) works the same way.
+  `TextSearch.pattern` with `cb.like(cb.lower(path), cb.lower(TextSearch.bound(cb, pattern)),
+  '\\')`. Request text is always bound, never `cb.literal` (Hibernate writes that into the SQL;
+  `NoInlineLiteralTest` fails on one). A column that must list nulls last in both directions adds
+  `Ordering.nullsLast` to the spec and uses `ListParams.unsorted`: Spring Data's Criteria sorting
+  throws on `Sort.Order.nullsLast()`; `Ordering.byPriority` (HIGH, MEDIUM, LOW) works the same way.
   Currency fields of requests take no `@IsoCurrency` (case-sensitive); `Currencies.resolve` checks.
   A `SortField` lists its `keys` (several for one sort, e.g. last then first name; a to-one path
   such as `company.name` is left-joined); a name key is `Key.ignoringCase` (Alpine's PostgreSQL

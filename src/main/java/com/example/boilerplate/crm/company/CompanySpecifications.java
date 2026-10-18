@@ -23,7 +23,7 @@ final class CompanySpecifications {
       where.add(
           f.archived() ? cb.isNotNull(root.get("archivedAt")) : cb.isNull(root.get("archivedAt")));
       if (pattern != null) {
-        Expression<String> p = cb.lower(cb.literal(pattern));
+        Expression<String> p = cb.lower(TextSearch.bound(cb, pattern));
         where.add(
             cb.or(
                 contains(cb, root, "name", p),
@@ -33,7 +33,8 @@ final class CompanySpecifications {
       if (f.ownerId() != null) where.add(cb.equal(root.get("ownerId"), f.ownerId()));
       if (f.unassigned()) where.add(cb.isNull(root.get("ownerId")));
       if (industry != null) {
-        where.add(cb.equal(cb.lower(root.get("industry")), cb.lower(cb.literal(industry))));
+        where.add(
+            cb.equal(cb.lower(root.get("industry")), cb.lower(TextSearch.bound(cb, industry))));
       }
       return cb.and(where.toArray(Predicate[]::new));
     };
