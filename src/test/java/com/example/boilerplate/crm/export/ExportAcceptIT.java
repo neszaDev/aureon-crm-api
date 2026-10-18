@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * A client that accepts nothing but {@code text/csv}, on a real Tomcat: MockMvc can't tell what the
- * container answers when the JSON error can't be written for it. The test profile caps an export at
- * 3 rows.
+ * container answers when the error body can't be written for the client's {@code Accept}. The test
+ * profile caps an export at 3 rows.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -31,13 +32,13 @@ class ExportAcceptIT {
   @LocalServerPort int port;
 
   /**
-   * Documents what api.md says (Export). The handler's {@code ApiError} body has no media type the
-   * client accepts, so the exception leaves Spring (the log shows {@code HttpMediaTypeNotAcceptable
-   * Exception} from the exception handler) and the container answers: 401, not the 400 or a 406. If
-   * that is fixed, change this test and the sentence in api.md.
+   * Errors are JSON for any {@code Accept}: {@code GlobalExceptionHandler} sets the content type,
+   * so Spring doesn't negotiate it. Before, {@code Accept: text/csv} made the handler fail with
+   * {@code HttpMediaTypeNotAcceptableException}, the exception left Spring and the container's
+   * error dispatch answered a 401.
    */
   @Test
-  void anOverCapExportToAClientAcceptingOnlyCsvIs401() throws Exception {
+  void errorsAreJsonForAClientAcceptingOnlyCsv() throws Exception {
     String email = "csv-" + UUID.randomUUID() + "@example.com";
     String token =
         JSON.readTree(
@@ -58,20 +59,30 @@ class ExportAcceptIT {
     String companies = "/api/v1/workspaces/" + workspace.get("id").asLong() + "/companies";
     for (int i = 0; i < 4; i++) post(companies, token, Map.of("name", "Co " + i));
 
-    HttpResponse<String> json = export(companies, token, "application/json");
-    assertThat(json.statusCode()).isEqualTo(400);
-    assertThat(JSON.readTree(json.body()).get("code").asText()).isEqualTo("EXPORT_TOO_LARGE");
+    // Over the cap: the 400 with its code, whatever the Accept.
+    for (String accept : List.of("text/csv", "application/json", "*/*")) {
+      HttpResponse<String> over = export(companies + "/export", token, accept);
+      assertThat(over.statusCode()).as(accept).isEqualTo(400);
+      assertThat(over.headers().firstValue("Content-Type")).as(accept).contains("application/json");
+      assertThat(JSON.readTree(over.body()).get("code").asText()).isEqualTo("EXPORT_TOO_LARGE");
+    }
 
-    HttpResponse<String> csv = export(companies, token, "text/csv");
-    assertThat(csv.statusCode()).isEqualTo(401);
-    assertThat(JSON.readTree(csv.body()).get("message").asText())
-        .isEqualTo("Authentication required");
+    // Another error, from the handler's not-found path.
+    HttpResponse<String> missing = export(companies + "/999999", token, "text/csv");
+    assertThat(missing.statusCode()).isEqualTo(404);
+    assertThat(missing.headers().firstValue("Content-Type")).contains("application/json");
+    assertThat(JSON.readTree(missing.body()).get("code").asText()).isEqualTo("NOT_FOUND");
+
+    // The CSV itself is still sent to a client that accepts it (one row, under the cap).
+    HttpResponse<String> csv = export(companies + "/export?q=Co%200", token, "text/csv");
+    assertThat(csv.statusCode()).isEqualTo(200);
+    assertThat(csv.headers().firstValue("Content-Type")).contains("text/csv;charset=UTF-8");
+    assertThat(csv.body()).contains("Co 0").doesNotContain("Co 1");
   }
 
-  private HttpResponse<String> export(String companies, String token, String accept)
-      throws Exception {
+  private HttpResponse<String> export(String path, String token, String accept) throws Exception {
     return http.send(
-        HttpRequest.newBuilder(URI.create("http://localhost:" + port + companies + "/export"))
+        HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
             .header("Authorization", "Bearer " + token)
             .header("Accept", accept)
             .build(),

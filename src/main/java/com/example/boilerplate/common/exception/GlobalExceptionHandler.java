@@ -115,6 +115,7 @@ public class GlobalExceptionHandler {
   ResponseEntity<ApiError> tooManyRequests(RateLimitExceededException e, HttpServletRequest r) {
     HttpStatus s = HttpStatus.TOO_MANY_REQUESTS;
     return ResponseEntity.status(s)
+        .contentType(MediaType.APPLICATION_JSON)
         .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds()))
         .body(
             new ApiError(
@@ -235,9 +236,15 @@ public class GlobalExceptionHandler {
     return ErrorCode.CONFLICT;
   }
 
+  /**
+   * Always JSON, whatever the request accepts: with the type preset Spring doesn't negotiate it, so
+   * a client accepting only {@code text/csv} gets this body, not a failure to write it (which left
+   * Spring and came back as the container's 401).
+   */
   private ResponseEntity<ApiError> error(
       HttpStatus s, ErrorCode c, String m, HttpServletRequest r, Map<String, String> f) {
     return ResponseEntity.status(s)
+        .contentType(MediaType.APPLICATION_JSON)
         .body(
             new ApiError(
                 Instant.now(), s.value(), s.getReasonPhrase(), c, m, RequestPaths.safePath(r), f));

@@ -44,16 +44,17 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   with a `fieldErrors` entry for it. A list with an owner filter (`ownerId`; tasks: `assigneeId`),
   and the deal board, also take `unassigned=true`: only the records without one; together with an
   owner (tasks: or `mine=true`) it is a 400 on `unassigned`.
-- **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...). 400 invalid
-  input or query parameter; 401 no valid token; 403 member without the permission; 404 unknown
-  record, **or not a member of the workspace**; 409 version conflict, duplicate name, or a rule
-  (convert a lead that isn't qualified, delete a stage in use, remove the last owner, ...).
-  `message` is English, for logs and API users; clients translate by **`code`**, which is stable.
-  The OpenAPI spec has the body as `components.schemas.ApiError`, `code` as an enum.
-  A 400 on fields also has `fieldErrors` (`{ field: message }`). Errors outside this table have no
-  `code` (it is left out): 401, a malformed body or a query parameter of the wrong type (400; the
-  dashboard's and reports' `from` / `to` are the exception: `VALIDATION_FAILED` on the field), an
-  unknown route (404), 405, 413, 415, the file uploads' 400/413/415, 500. Show those by status.
+- **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...), as
+  `application/json` whatever the request's `Accept`. 400 invalid input or query parameter; 401 no
+  valid token; 403 member without the permission; 404 unknown record, **or not a member of the
+  workspace**; 409 version conflict, duplicate name, or a rule (convert a lead that isn't qualified,
+  delete a stage in use, remove the last owner, ...). `message` is English, for logs and API users;
+  clients translate by **`code`**, which is stable. The OpenAPI spec has the body as
+  `components.schemas.ApiError`, `code` as an enum. A 400 on fields also has `fieldErrors`
+  (`{ field: message }`). Errors outside this table have no `code` (it is left out): 401, a malformed
+  body or a query parameter of the wrong type (400; the dashboard's and reports' `from` / `to` are
+  the exception: `VALIDATION_FAILED` on the field), an unknown route (404), 405, 413, 415, the file
+  uploads' 400/413/415, 500. Show those by status.
 
   | `code` | Status | Meaning |
   |---|---|---|
@@ -370,14 +371,14 @@ An empty workspace answers zeros and empty lists.
 `GET .../{companies|contacts|leads|deals}/export` takes the list's filters (the same parameters,
 `unassigned` included; no paging or sort) → 200 `text/csv;charset=UTF-8`, `Content-Disposition:
 attachment; filename="<list>-<yyyy-MM-dd>.csv"` (today in the workspace's time zone). The OpenAPI
-spec types that 200 as a `text/csv` string. Send no `Accept` (or `*/*`, or `application/json`):
-the endpoint has no `produces`, so its errors are the usual `ApiError` JSON. A client that sends
-exactly `Accept: text/csv` gets no JSON error: an over-cap export answers 401 `Authentication
-required` instead of the 400 (tested; not a 406), so don't send it. The rows are the list's for
-those filters, in its default order: companies and contacts by name, leads newest first, deals most
-recently updated first. Needs `EXPORT` (403, checked before the count, so a role without it never
-learns the count). At most `app.export.max-rows` rows (default 10,000), counted first: more is a 400
-`EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the filters`, `fieldErrors: {}`).
+spec types that 200 as a `text/csv` string. Any `Accept` works (none, `*/*`, `application/json` or
+`text/csv`): the 200 is the CSV, and every error is the usual `ApiError` as `application/json`
+whatever the `Accept`, so a client that accepts only `text/csv` gets the 400 `EXPORT_TOO_LARGE` JSON
+too. The rows are the list's for those filters, in its default order: companies and contacts by
+name, leads newest first, deals most recently updated first. Needs `EXPORT` (403, checked before the
+count, so a role without it never learns the count). At most `app.export.max-rows` rows (default
+10,000), counted first: more is a 400 `EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the
+filters`, `fieldErrors: {}`).
 
 The file is UTF-8 with a byte order mark (Excel then reads Thai and any other text), with CRLF line
 ends and a header row. A value with a quote, comma, semicolon or line break is quoted, its quotes
