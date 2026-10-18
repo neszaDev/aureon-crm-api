@@ -413,6 +413,28 @@ class ExportIT extends WorkspaceTestSupport {
   }
 
   @Test
+  void aClientAcceptingJsonGetsTheCsvAndJsonErrors() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Acme");
+    records(owner, w);
+
+    for (String list : LISTS) {
+      send(owner, get(W + "/" + list + "/export", w).accept(MediaType.APPLICATION_JSON))
+          .andExpect(status().isOk())
+          .andExpect(content().contentType("text/csv;charset=utf-8"));
+    }
+
+    for (int i = 0; i < 3; i++) records(owner, w);
+    for (String list : LISTS) {
+      send(owner, get(W + "/" + list + "/export", w).accept(MediaType.APPLICATION_JSON))
+          .andExpect(status().isBadRequest())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+          .andExpect(jsonPath("$.code").value("EXPORT_TOO_LARGE"))
+          .andExpect(jsonPath("$.fieldErrors").isEmpty());
+    }
+  }
+
+  @Test
   void exportIsAudited() throws Exception {
     String owner = tokenFor(uniqueEmail());
     long w = createWorkspace(owner, "Acme");

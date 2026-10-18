@@ -371,12 +371,13 @@ An empty workspace answers zeros and empty lists.
 `unassigned` included; no paging or sort) → 200 `text/csv;charset=UTF-8`, `Content-Disposition:
 attachment; filename="<list>-<yyyy-MM-dd>.csv"` (today in the workspace's time zone). The OpenAPI
 spec types that 200 as a `text/csv` string. Send no `Accept` (or `*/*`, or `application/json`):
-the endpoint has no `produces`, so its errors are the usual `ApiError` JSON. The rows are the
-list's for those filters, in its default order: companies and contacts by name, leads newest
-first, deals most recently updated first. Needs `EXPORT` (403, checked before the count, so a
-role without it never learns the count). At most `app.export.max-rows` rows (default 10,000),
-counted first: more is a 400 `EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the
-filters`, `fieldErrors: {}`).
+the endpoint has no `produces`, so its errors are the usual `ApiError` JSON. A client that sends
+exactly `Accept: text/csv` gets no JSON error: an over-cap export answers 401 `Authentication
+required` instead of the 400 (tested; not a 406), so don't send it. The rows are the list's for
+those filters, in its default order: companies and contacts by name, leads newest first, deals most
+recently updated first. Needs `EXPORT` (403, checked before the count, so a role without it never
+learns the count). At most `app.export.max-rows` rows (default 10,000), counted first: more is a 400
+`EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the filters`, `fieldErrors: {}`).
 
 The file is UTF-8 with a byte order mark (Excel then reads Thai and any other text), with CRLF line
 ends and a header row. A value with a quote, comma, semicolon or line break is quoted, its quotes
