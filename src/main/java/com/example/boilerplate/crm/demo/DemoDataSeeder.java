@@ -52,12 +52,10 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -70,11 +68,13 @@ import org.springframework.stereotype.Component;
 /**
  * The demo workspace (docs/crm/README.md, Try it): with {@code app.demo.enabled} ({@code
  * DEMO_DATA}), at startup, once, in the local and dev profiles only, never together with prod. Four
- * members, one per role, and fictional records written through the services as the owner
- * (activities as their authors), so they follow the same rules and leave the same audit events as
- * any. Then the creation and stage history of 21 of the 24 deals are spread over the last 180 days
- * by plain SQL (the three made by lead conversions keep their real times); the audit trail keeps
- * the real times (it is append-only).
+ * members, one per role, and fictional records written through the services as the owner, except
+ * that a deal is created and moved by its owner, or now and then by the manager, a lead is
+ * converted by its owner, and activities are written by their authors, so they follow the same
+ * rules and leave the same audit events as any. Then the creation and stage history of the deals
+ * are spread over the last 180 days by plain SQL (a converted lead's deal and the lead itself keep
+ * their order, the deal a few minutes to days after the conversion, and a week of moves at most);
+ * the audit trail keeps the real times (it is append-only).
  *
  * <p>Not {@code @Transactional}: {@link WorkspaceContext#runAs} refuses to run inside a
  * transaction, so a failure part-way leaves what was written; {@code make db-reset} starts over.
@@ -304,31 +304,34 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     // 21 here and 3 from the converted leads; deal i is with contact i and their company.
     List<Long> dealIds = new ArrayList<>();
-    Set<Long> convertedDeals = new HashSet<>();
+    Map<Long, Long> convertedLeads = new HashMap<>(); // deal id to the lead it came from
     for (int i = 0; i < 21; i++) {
+      long owner = pick(people, random);
+      CreateDealRequest deal =
+          new CreateDealRequest(
+              COMPANIES.get(i % COMPANIES.size()) + " " + DEAL_KINDS.get(i % DEAL_KINDS.size()),
+              amount(random),
+              i % 5 == 3 ? "EUR" : null,
+              null,
+              null,
+              today.plusDays(15 + random.nextInt(90)),
+              owner,
+              companyIds.get(i % companyIds.size()),
+              contactIds.get(i),
+              null,
+              null);
       dealIds.add(
-          deals
-              .create(
-                  new CreateDealRequest(
-                      COMPANIES.get(i % COMPANIES.size())
-                          + " "
-                          + DEAL_KINDS.get(i % DEAL_KINDS.size()),
-                      amount(random),
-                      i % 5 == 3 ? "EUR" : null,
-                      null,
-                      null,
-                      today.plusDays(15 + random.nextInt(90)),
-                      pick(people, random),
-                      companyIds.get(i % companyIds.size()),
-                      contactIds.get(i),
-                      null,
-                      null))
-              .id());
+          WorkspaceContext.runAs(actor(team, owner, random), () -> deals.create(deal).id()));
     }
 
     // Three in each status: NEW, CONTACTED, QUALIFIED, UNQUALIFIED, CONVERTED.
     for (int i = 0; i < 15; i++) {
       LeadStatus target = LeadStatus.values()[i % 5];
+      // A converted lead is with the company it converts into; the others are still prospects.
+      String companyName =
+          target == LeadStatus.CONVERTED
+              ? COMPANIES.get(i % COMPANIES.size())
+              : PROSPECTS.get(i % PROSPECTS.size());
       String first = FIRST_NAMES.get(i);
       String last = LEAD_LAST_NAMES.get(i % LEAD_LAST_NAMES.size());
       LeadResponse lead =
@@ -336,7 +339,7 @@ public class DemoDataSeeder implements ApplicationRunner {
               new CreateLeadRequest(
                   first,
                   last,
-                  PROSPECTS.get(i % PROSPECTS.size()),
+                  companyName,
                   email(first, last),
                   null,
                   JOB_TITLES.get(i % JOB_TITLES.size()),
@@ -355,29 +358,28 @@ public class DemoDataSeeder implements ApplicationRunner {
         lead = status(lead, LeadStatus.UNQUALIFIED, "No budget this year");
       }
       if (target == LeadStatus.CONVERTED) {
+        LeadConversionInput input =
+            new LeadConversionInput(
+                companyIds.get(i % companyIds.size()),
+                false,
+                null,
+                new DealDraft(
+                    companyName + " first order", amount(random), null, null, today.plusDays(30)));
+        long leadId = lead.id();
         LeadConversionResponse converted =
-            conversions.convert(
-                lead.id(),
-                new LeadConversionInput(
-                    companyIds.get(i % companyIds.size()),
-                    false,
-                    null,
-                    new DealDraft(
-                        lead.companyName() + " first order",
-                        amount(random),
-                        null,
-                        null,
-                        today.plusDays(30))));
+            WorkspaceContext.runAs(
+                member(team, lead.owner().userId()), () -> conversions.convert(leadId, input));
         contactIds.add(converted.contact().id());
         dealIds.add(converted.deal().id());
-        convertedDeals.add(converted.deal().id());
+        convertedLeads.put(converted.deal().id(), leadId);
       }
     }
 
     // Deal i ends in stage i % 6 (four in each) through the open stages before it; a lost deal
     // drops out after a random one. The first six, one per stage, are under 30 days old, so the
-    // dashboard's default 30 days show a won and a lost deal. The deals of the converted leads
-    // keep their real times: back-dated, they would predate their lead and its conversion.
+    // dashboard's default 30 days show a won and a lost deal. A converted lead's deal follows its
+    // lead: the lead is converted 20 to 60 days ago, the deal made 5 minutes to 2 days after, its
+    // moves within the next week.
     Map<Long, Instant> dealCreated = new HashMap<>();
     List<StageResponse> pipeline = stages.list();
     List<StageResponse> open = pipeline.stream().filter(s -> s.kind() == StageKind.OPEN).toList();
@@ -390,15 +392,35 @@ public class DemoDataSeeder implements ApplicationRunner {
             case LOST -> random.nextInt(open.size());
           };
       DealResponse deal = deals.get(dealIds.get(i));
-      for (StageResponse stage : open.subList(1, reached + 1)) deal = move(deal, stage, null);
-      if (target.kind() == StageKind.WON) deal = move(deal, target, null);
-      if (target.kind() == StageKind.LOST) deal = move(deal, target, "Chose another supplier");
-      if (convertedDeals.contains(deal.id())) continue;
-      Instant created =
-          now.minus(Duration.ofDays(10 + random.nextInt(i < pipeline.size() ? 20 : 170)))
-              .minus(Duration.ofMinutes(random.nextInt(600)))
-              .truncatedTo(ChronoUnit.SECONDS);
-      backdate(w, deal, created, now);
+      Long owner = deal.owner() == null ? null : deal.owner().userId();
+      for (StageResponse stage : open.subList(1, reached + 1)) {
+        deal = move(actor(team, owner, random), deal, stage, null);
+      }
+      if (target.kind() == StageKind.WON) {
+        deal = move(actor(team, owner, random), deal, target, null);
+      }
+      if (target.kind() == StageKind.LOST) {
+        deal = move(actor(team, owner, random), deal, target, "Chose another supplier");
+      }
+      Instant created;
+      Instant until = now;
+      Long leadId = convertedLeads.get(deal.id());
+      if (leadId == null) {
+        created =
+            now.minus(Duration.ofDays(10 + random.nextInt(i < pipeline.size() ? 20 : 170)))
+                .minus(Duration.ofMinutes(random.nextInt(600)))
+                .truncatedTo(ChronoUnit.SECONDS);
+      } else {
+        Instant converted =
+            now.minus(Duration.ofDays(20 + random.nextInt(40)))
+                .minus(Duration.ofMinutes(random.nextInt(600)))
+                .truncatedTo(ChronoUnit.SECONDS);
+        backdateLead(
+            w, leadId, converted.minus(Duration.ofDays(1 + random.nextInt(10))), converted);
+        created = converted.plus(Duration.ofMinutes(5 + random.nextInt(2 * 24 * 60)));
+        until = created.plus(Duration.ofHours(6 + random.nextInt(7 * 24)));
+      }
+      backdate(w, deal, created, until);
       dealCreated.put(deal.id(), created);
     }
 
@@ -426,13 +448,12 @@ public class DemoDataSeeder implements ApplicationRunner {
       if (i % 4 == 0) tasks.complete(task.id(), new VersionRequest(task.version()));
     }
 
-    // Over the last 60 days (never before the deal they are on), on the back-dated deals and on
-    // contacts, each by a random member: type, author and record drawn apart.
+    // Over the last 60 days (never before the deal they are on), on deals and on contacts, each by
+    // a random member: type, author and record drawn apart.
     Instant until = now.minus(Duration.ofMinutes(30));
-    List<Long> dated = dealIds.stream().filter(dealCreated::containsKey).toList();
     for (int i = 0; i < 60; i++) {
       ActivityType type = ActivityType.values()[random.nextInt(4)];
-      Long dealId = random.nextBoolean() ? dated.get(random.nextInt(dated.size())) : null;
+      Long dealId = random.nextBoolean() ? dealIds.get(random.nextInt(dealIds.size())) : null;
       Instant from = now.minus(Duration.ofDays(60));
       if (dealId != null && dealCreated.get(dealId).isAfter(from)) from = dealCreated.get(dealId);
       CreateActivityRequest activity =
@@ -455,17 +476,32 @@ public class DemoDataSeeder implements ApplicationRunner {
     return leads.changeStatus(lead.id(), new LeadStatusRequest(status, reason, lead.version()));
   }
 
-  private DealResponse move(DealResponse deal, StageResponse stage, String lostReason) {
-    return deals.move(deal.id(), new MoveDealRequest(stage.id(), deal.version(), lostReason));
+  private DealResponse move(
+      Membership by, DealResponse deal, StageResponse stage, String lostReason) {
+    MoveDealRequest request = new MoveDealRequest(stage.id(), deal.version(), lostReason);
+    return WorkspaceContext.runAs(by, () -> deals.move(deal.id(), request));
+  }
+
+  /** The member with this id; the manager for a record without an owner. */
+  private static Membership member(List<Membership> team, Long userId) {
+    return team.stream()
+        .filter(m -> userId != null && m.userId() == userId)
+        .findFirst()
+        .orElse(team.get(ROLES.indexOf(MANAGER)));
+  }
+
+  /** Who works on a deal of {@code owner}: the owner, in one case of four the manager. */
+  private static Membership actor(List<Membership> team, Long owner, Random random) {
+    return random.nextInt(4) == 0 ? team.get(ROLES.indexOf(MANAGER)) : member(team, owner);
   }
 
   /**
    * Moves the deal's creation to {@code created} and spreads its stage changes evenly from there
-   * towards {@code now}, in their order, so the first is the creation's; a closed deal's {@code
+   * towards {@code until}, in their order, so the first is the creation's; a closed deal's {@code
    * closedAt} becomes its last change, the move into Won or Lost, as {@link DealService#move} sets
    * it. Never the audit trail: it is append-only.
    */
-  private void backdate(long w, DealResponse deal, Instant created, Instant now) {
+  private void backdate(long w, DealResponse deal, Instant created, Instant until) {
     List<Long> changes =
         jdbc.queryForList(
             "SELECT id FROM deal_stage_changes WHERE workspace_id = ? AND deal_id = ? ORDER BY id",
@@ -473,7 +509,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             w,
             deal.id());
     Duration step =
-        Duration.between(created, now).dividedBy(changes.size()).truncatedTo(ChronoUnit.SECONDS);
+        Duration.between(created, until).dividedBy(changes.size()).truncatedTo(ChronoUnit.SECONDS);
     OffsetDateTime start = created.atOffset(ZoneOffset.UTC);
     for (int k = 0; k < changes.size(); k++) {
       jdbc.update(
@@ -489,6 +525,16 @@ public class DemoDataSeeder implements ApplicationRunner {
         deal.closedAt() == null ? null : lastChange,
         w,
         deal.id());
+  }
+
+  /** A converted lead made at {@code created}, converted at {@code converted}. */
+  private void backdateLead(long w, long leadId, Instant created, Instant converted) {
+    jdbc.update(
+        "UPDATE leads SET created_at = ?, converted_at = ? WHERE workspace_id = ? AND id = ?",
+        created.atOffset(ZoneOffset.UTC),
+        converted.atOffset(ZoneOffset.UTC),
+        w,
+        leadId);
   }
 
   private static long pick(List<Long> people, Random random) {

@@ -36,14 +36,6 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
           "deal_stage_changes",
           "audit_events");
 
-  /** Narrows a query on {@code deals d} to those the seeder back-dated: not from a conversion. */
-  static final String DATED =
-      " AND d.id NOT IN (SELECT converted_deal_id FROM leads WHERE converted_deal_id IS NOT NULL)";
-
-  /** Narrows a query on {@code deals d} to those made by a lead conversion: at their real times. */
-  static final String CONVERTED =
-      " AND d.id IN (SELECT converted_deal_id FROM leads WHERE converted_deal_id IS NOT NULL)";
-
   @Autowired ApplicationContext context;
   @Autowired JdbcTemplate jdbc;
 
@@ -132,8 +124,6 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
 
     // The back-dated history stays what the services would have written: every deal starts with
     // its creation entry at its createdAt, the moves follow in order, the close is the last move.
-    // The deals of the three converted leads are left at their real times (they come after
-    // their lead): their entries are the services', a few microseconds apart from createdAt.
     assertThat(
             count(
                 "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
@@ -144,10 +134,9 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
             count(
                 "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
                     + " WHERE d.workspace_id = ? AND c.from_stage_id IS NULL"
-                    + " AND c.changed_at = d.created_at"
-                    + DATED,
+                    + " AND c.changed_at = d.created_at",
                 w))
-        .isEqualTo(21);
+        .isEqualTo(24);
     assertThat(
             count(
                 "SELECT count(*) FROM deal_stage_changes a JOIN deal_stage_changes b"
@@ -155,16 +144,71 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
                     + " WHERE a.workspace_id = ? AND b.changed_at <= a.changed_at",
                 w))
         .isZero();
+    // Who made the moves (the seals of the board): several members, all of them members, mostly
+    // the deal's owner, and the manager moving deals that are not theirs.
+    assertThat(
+            count(
+                "SELECT count(DISTINCT c.changed_by) FROM deal_stage_changes c"
+                    + " WHERE c.workspace_id = ?",
+                w))
+        .isGreaterThanOrEqualTo(3);
+    assertThat(
+            count(
+                "SELECT count(*) FROM deal_stage_changes c WHERE c.workspace_id = ?"
+                    + " AND NOT EXISTS (SELECT 1 FROM workspace_members m"
+                    + " WHERE m.workspace_id = c.workspace_id AND m.user_id = c.changed_by)",
+                w))
+        .isZero();
+    assertThat(
+            count(
+                "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
+                    + " WHERE c.workspace_id = ? AND c.changed_by = d.owner_id",
+                w))
+        .isGreaterThan(
+            count("SELECT count(*) FROM deal_stage_changes WHERE workspace_id = ?", w) / 2);
+    assertThat(
+            count(
+                "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
+                    + " JOIN users u ON u.id = c.changed_by"
+                    + " WHERE c.workspace_id = ? AND u.email = 'manager@demo.test'"
+                    + " AND d.owner_id <> c.changed_by",
+                w))
+        .isPositive();
+    // No deal's history sits at one instant, and none is in the future.
+    assertThat(
+            count(
+                "SELECT count(*) FROM (SELECT 1 FROM deal_stage_changes c WHERE c.workspace_id = ?"
+                    + " GROUP BY c.deal_id HAVING count(*) >= 2"
+                    + " AND max(c.changed_at) - min(c.changed_at) < interval '1 hour') spread",
+                w))
+        .isZero();
+    assertThat(
+            count(
+                "SELECT count(*) FROM deal_stage_changes WHERE workspace_id = ?"
+                    + " AND changed_at >= now()",
+                w))
+        .isZero();
+    // A converted lead's deal and lead are named after the company they convert into, and the
+    // deal follows the conversion by minutes to days.
+    assertThat(
+            count(
+                "SELECT count(*) FROM leads l JOIN deals d ON d.id = l.converted_deal_id"
+                    + " JOIN companies c ON c.id = d.company_id WHERE l.workspace_id = ?"
+                    + " AND l.converted_company_id = c.id AND l.company_name = c.name"
+                    + " AND d.name = c.name || ' first order'"
+                    + " AND l.created_at < l.converted_at"
+                    + " AND d.created_at >= l.converted_at + interval '1 minute'"
+                    + " AND d.created_at <= l.converted_at + interval '3 days'",
+                w))
+        .isEqualTo(3);
     assertThat(
             count(
                 "SELECT count(*) FROM deals d WHERE d.workspace_id = ?"
                     + " AND d.created_at > now() - interval '180 days'"
-                    + " AND d.created_at < now() - interval '1 day'"
-                    + DATED,
+                    + " AND d.created_at < now() - interval '1 day'",
                 w))
-        .isEqualTo(21);
-    // A converted lead's deal is not older than the lead, nor than its conversion (the deal is
-    // made inside it, just before the lead is marked).
+        .isEqualTo(24);
+    // A converted lead's deal is not older than the lead, nor than its conversion.
     assertThat(
             count(
                 "SELECT count(*) FROM leads WHERE workspace_id = ? AND converted_deal_id IS NOT NULL",
@@ -185,55 +229,26 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
             count(
                 "SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.id = d.stage_id"
                     + " WHERE d.workspace_id = ? AND s.kind <> 'OPEN' AND d.closed_at ="
-                    + " (SELECT max(changed_at) FROM deal_stage_changes c WHERE c.deal_id = d.id)"
-                    + DATED,
+                    + " (SELECT max(changed_at) FROM deal_stage_changes c WHERE c.deal_id = d.id)",
                 w))
         .isEqualTo(
             count(
                 "SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.id = d.stage_id"
-                    + " WHERE d.workspace_id = ? AND s.kind <> 'OPEN'"
-                    + DATED,
+                    + " WHERE d.workspace_id = ? AND s.kind <> 'OPEN'",
                 w))
         .isPositive();
-    // The converted deals close at the real time, so on their own they would give the dashboard
-    // its first impression: the back-dated ones alone have a won and a lost deal in the last 30
-    // days.
+    // The first impression: the last 30 days have a won and a lost deal.
     for (String kind : List.of("WON", "LOST")) {
       assertThat(
               count(
                   "SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.id = d.stage_id"
                       + " WHERE d.workspace_id = ? AND s.kind = '"
                       + kind
-                      + "' AND d.closed_at > now() - interval '30 days'"
-                      + DATED,
+                      + "' AND d.closed_at > now() - interval '30 days'",
                   w))
-          .as(kind + " back-dated deals closed in the last 30 days")
+          .as(kind + " deals closed in the last 30 days")
           .isPositive();
     }
-    // The converted deals' own timestamps: the services wrote the creation entry, and the close,
-    // microseconds after createdAt and the last change (not at the very same instant).
-    assertThat(
-            count(
-                "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
-                    + " WHERE d.workspace_id = ? AND c.from_stage_id IS NULL"
-                    + " AND abs(extract(epoch from c.changed_at - d.created_at)) < 1"
-                    + CONVERTED,
-                w))
-        .isEqualTo(3);
-    long convertedClosed =
-        count(
-            "SELECT count(*) FROM deals d WHERE d.workspace_id = ? AND d.closed_at IS NOT NULL"
-                + CONVERTED,
-            w);
-    assertThat(convertedClosed).isPositive();
-    assertThat(
-            count(
-                "SELECT count(*) FROM deals d WHERE d.workspace_id = ? AND d.closed_at IS NOT NULL"
-                    + " AND abs(extract(epoch from d.closed_at - (SELECT max(changed_at)"
-                    + " FROM deal_stage_changes c WHERE c.deal_id = d.id))) < 1"
-                    + CONVERTED,
-                w))
-        .isEqualTo(convertedClosed);
     assertThat(count("SELECT count(*) FROM deals WHERE workspace_id = ? AND closed_at IS NULL", w))
         .isEqualTo(24 - won - lost);
     // An activity on a deal never predates it.
