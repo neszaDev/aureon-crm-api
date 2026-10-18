@@ -123,5 +123,6 @@ part of a migration, so production never gets it. `crm/demo/DemoDataSeeder` writ
 through the services, so they carry the usual rules and audit events, then back-dates the deals'
 `created_at`, stage history (`changed_at`) and `closed_at` with plain SQL so the reports have
 months to show: each deal's first history entry stays at its creation and its close at the move
-into Won or Lost. The audit trail is never updated, so its events keep the real time of the
+into Won or Lost. The deals that came from a lead conversion are left at their real times: they
+would predate their lead and its conversion. The audit trail is never updated, so its events keep the real time of the
 seeding.

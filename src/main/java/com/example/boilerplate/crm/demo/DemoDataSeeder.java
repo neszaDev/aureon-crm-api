@@ -52,10 +52,12 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -301,6 +303,7 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     // 21 here and 3 from the converted leads; deal i is with contact i and their company.
     List<Long> dealIds = new ArrayList<>();
+    Set<Long> convertedDeals = new HashSet<>();
     for (int i = 0; i < 21; i++) {
       dealIds.add(
           deals
@@ -366,12 +369,14 @@ public class DemoDataSeeder implements ApplicationRunner {
                         today.plusDays(30))));
         contactIds.add(converted.contact().id());
         dealIds.add(converted.deal().id());
+        convertedDeals.add(converted.deal().id());
       }
     }
 
     // Deal i ends in stage i % 6 (four in each) through the open stages before it; a lost deal
     // drops out after a random one. The first six, one per stage, are under 30 days old, so the
-    // dashboard's default 30 days show a won and a lost deal.
+    // dashboard's default 30 days show a won and a lost deal. The deals of the converted leads
+    // keep their real times: back-dated, they would predate their lead and its conversion.
     Map<Long, Instant> dealCreated = new HashMap<>();
     List<StageResponse> pipeline = stages.list();
     List<StageResponse> open = pipeline.stream().filter(s -> s.kind() == StageKind.OPEN).toList();
@@ -387,6 +392,7 @@ public class DemoDataSeeder implements ApplicationRunner {
       for (StageResponse stage : open.subList(1, reached + 1)) deal = move(deal, stage, null);
       if (target.kind() == StageKind.WON) deal = move(deal, target, null);
       if (target.kind() == StageKind.LOST) deal = move(deal, target, "Chose another supplier");
+      if (convertedDeals.contains(deal.id())) continue;
       Instant created =
           now.minus(Duration.ofDays(10 + random.nextInt(i < pipeline.size() ? 20 : 170)))
               .minus(Duration.ofMinutes(random.nextInt(600)))
@@ -419,12 +425,13 @@ public class DemoDataSeeder implements ApplicationRunner {
       if (i % 4 == 0) tasks.complete(task.id(), new VersionRequest(task.version()));
     }
 
-    // Over the last 60 days (never before the deal they are on), on deals and contacts, each by a
-    // random member: type, author and record drawn apart.
+    // Over the last 60 days (never before the deal they are on), on the back-dated deals and on
+    // contacts, each by a random member: type, author and record drawn apart.
     Instant until = now.minus(Duration.ofMinutes(30));
+    List<Long> dated = dealIds.stream().filter(dealCreated::containsKey).toList();
     for (int i = 0; i < 60; i++) {
       ActivityType type = ActivityType.values()[random.nextInt(4)];
-      Long dealId = random.nextBoolean() ? dealIds.get(random.nextInt(dealIds.size())) : null;
+      Long dealId = random.nextBoolean() ? dated.get(random.nextInt(dated.size())) : null;
       Instant from = now.minus(Duration.ofDays(60));
       if (dealId != null && dealCreated.get(dealId).isAfter(from)) from = dealCreated.get(dealId);
       CreateActivityRequest activity =

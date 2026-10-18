@@ -162,7 +162,8 @@ password: the log warns about it and leaves it out.
 | `rep@demo.test` | Riley Rep | Sales rep |
 
 It holds 12 companies, 30 contacts (some tagged `vip` or `partner`), 15 leads in every status (3
-converted), 24 deals in every stage (a few in EUR) whose history goes back up to 180 days, 30
+converted), 24 deals in every stage (a few in EUR) whose history goes back up to 180 days (the 3 deals of the
+converted leads are as new as their leads), 30
 tasks (completed, overdue, due this week, later) and 60 activities from the last 60 days (none
 before its deal), all fictional with `example.com` addresses, made the same way each time; the
 dashboard's default 30 days show won and lost deals. A restart finds the workspace and adds

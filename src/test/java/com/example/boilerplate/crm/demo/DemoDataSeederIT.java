@@ -36,6 +36,10 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
           "deal_stage_changes",
           "audit_events");
 
+  /** Narrows a query on {@code deals d} to those the seeder back-dated: not from a conversion. */
+  static final String DATED =
+      " AND d.id NOT IN (SELECT converted_deal_id FROM leads WHERE converted_deal_id IS NOT NULL)";
+
   @Autowired ApplicationContext context;
   @Autowired JdbcTemplate jdbc;
 
@@ -124,13 +128,22 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
 
     // The back-dated history stays what the services would have written: every deal starts with
     // its creation entry at its createdAt, the moves follow in order, the close is the last move.
+    // The deals of the three converted leads are left at their real times (they come after
+    // their lead): their entries are the services', a few microseconds apart from createdAt.
+    assertThat(
+            count(
+                "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
+                    + " WHERE d.workspace_id = ? AND c.from_stage_id IS NULL",
+                w))
+        .isEqualTo(24);
     assertThat(
             count(
                 "SELECT count(*) FROM deal_stage_changes c JOIN deals d ON d.id = c.deal_id"
                     + " WHERE d.workspace_id = ? AND c.from_stage_id IS NULL"
-                    + " AND c.changed_at = d.created_at",
+                    + " AND c.changed_at = d.created_at"
+                    + DATED,
                 w))
-        .isEqualTo(24);
+        .isEqualTo(21);
     assertThat(
             count(
                 "SELECT count(*) FROM deal_stage_changes a JOIN deal_stage_changes b"
@@ -142,9 +155,24 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
             count(
                 "SELECT count(*) FROM deals d WHERE d.workspace_id = ?"
                     + " AND d.created_at > now() - interval '180 days'"
-                    + " AND d.created_at < now() - interval '1 day'",
+                    + " AND d.created_at < now() - interval '1 day'"
+                    + DATED,
                 w))
-        .isEqualTo(24);
+        .isEqualTo(21);
+    // A converted lead's deal is not older than the lead, nor than its conversion (the deal is
+    // made inside it, just before the lead is marked).
+    assertThat(
+            count(
+                "SELECT count(*) FROM leads WHERE workspace_id = ? AND converted_deal_id IS NOT NULL",
+                w))
+        .isEqualTo(3);
+    assertThat(
+            count(
+                "SELECT count(*) FROM leads l JOIN deals d ON d.id = l.converted_deal_id"
+                    + " WHERE l.workspace_id = ? AND (d.created_at < l.created_at"
+                    + " OR d.created_at < l.converted_at - interval '1 minute')",
+                w))
+        .isZero();
     long won = closed(w, "WON");
     long lost = closed(w, "LOST");
     assertThat(won).isPositive();
@@ -153,9 +181,16 @@ class DemoDataSeederIT extends AbstractIntegrationTest {
             count(
                 "SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.id = d.stage_id"
                     + " WHERE d.workspace_id = ? AND s.kind <> 'OPEN' AND d.closed_at ="
-                    + " (SELECT max(changed_at) FROM deal_stage_changes c WHERE c.deal_id = d.id)",
+                    + " (SELECT max(changed_at) FROM deal_stage_changes c WHERE c.deal_id = d.id)"
+                    + DATED,
                 w))
-        .isEqualTo(won + lost);
+        .isEqualTo(
+            count(
+                "SELECT count(*) FROM deals d JOIN pipeline_stages s ON s.id = d.stage_id"
+                    + " WHERE d.workspace_id = ? AND s.kind <> 'OPEN'"
+                    + DATED,
+                w))
+        .isPositive();
     assertThat(count("SELECT count(*) FROM deals WHERE workspace_id = ? AND closed_at IS NULL", w))
         .isEqualTo(24 - won - lost);
     // An activity on a deal never predates it.
