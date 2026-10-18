@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 /** Scoped to the current workspace by {@code @TenantId}, except for the native {@link #tags}. */
 public interface ContactRepository
     extends JpaRepository<Contact, Long>, JpaSpecificationExecutor<Contact> {
+  long countByArchivedAtIsNull();
+
   @Query(
       """
       select c from Contact c

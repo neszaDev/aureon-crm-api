@@ -46,6 +46,8 @@ src/main/java/com/example/boilerplate/
                keeps the last state), an author instead of an owner with author-only edit rights,
                and the company filled in from the contact or deal; export/ = the CSV export of
                the four record lists (Exporter: permission, row cap, audit; CsvWriter, RecordRefs);
+               insight/ = the dashboard (Period: from/to days in the workspace zone; tenant-
+               filtered JPQL aggregates, the lists through the record services' mappers);
                common/ = what every record type shares (CrmRecord, ListParams, SortField,
                TextSearch, RecordLinks, LinkRefs, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)

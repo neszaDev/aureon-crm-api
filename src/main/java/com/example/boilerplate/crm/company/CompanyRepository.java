@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 /** Scoped to the current workspace by {@code @TenantId}, including {@code findById}. */
 public interface CompanyRepository
     extends JpaRepository<Company, Long>, JpaSpecificationExecutor<Company> {
+  long countByArchivedAtIsNull();
+
   @Query(
       """
       select c from Company c

@@ -21,7 +21,8 @@ sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTe
 `TextSearchTest` wildcard escaping), `crm/lead/LeadStatusTest` (the status transition table),
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
 transitions, overdue, microsecond times), `crm/export/CsvWriterTest` (quoting, formula protection,
-CRLF) and `RecordRefsTest` (`D-0042`), `common/entity/TimestampPrecisionTest` and
+CRLF) and `RecordRefsTest` (`D-0042`), `crm/insight/PeriodTest` (defaults and bounds in the
+workspace zone, the 366-day cap, date parsing), `common/entity/TimestampPrecisionTest` and
 `common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
 codes of unique indexes, stale updates and deadlocks).
 
@@ -86,6 +87,7 @@ What the existing ITs cover:
 | `crm/task/TaskIT` | Create/assign/update, assignee-or-creator edit rights, complete/reopen/cancel with their audit events (no derived fields), the overdue flag, sorting (due date nulls last, priority), filters (`dueFrom` inclusive / `dueTo` exclusive), links (the company from the contact or deal, the contact of a converted lead), a removed member's tasks become unassigned, no delete |
 | `crm/task/ReminderIT` | The caller's overdue and due-soon tasks and follow-up leads: ordering, the cap of 20, the workspace time zone |
 | `crm/export/ExportIT` | CSV export of companies, contacts, leads and deals: header and columns, BOM, file name, the same rows in the same order as the list for each filter (`unassigned` too), formula protection, Thai text, `EXPORT` permission (403), other workspaces' rows never exported, the row cap (400 `EXPORT_TOO_LARGE`, nothing recorded), the audit event |
+| `crm/insight/DashboardIT` | The dashboard: all zeros and empty lists for an empty workspace, every value against stored data (archived records left out, totals and weighted amounts per currency, the deal's probability override, won/lost in the period, the caller's task lists, record changes only), half-up rounding per currency, a deal closed at 23:30 in Bangkok on `to` inside the period, other workspaces never counted (also for a member of both), period 400s on `from` / `to` |
 | `crm/activity/ActivityIT` | Log/edit/delete with the audited last state, the company filled in from the contact or deal (create and update), the contact of a converted lead, a link required (400 `links`, and the database check), author-only edits, an author who left, timelines and filters (type, links, author, `from` inclusive / `to` exclusive), links of another workspace (400, foreign keys), archived records linkable |
 
 `WorkspaceEndpointsGuardIT` finds a new workspace controller's endpoints itself and fails if one

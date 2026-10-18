@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,17 @@ public class AuditEventService {
             ListParams.unsorted(page, size));
     Map<Long, String> names = displayNames(found.getContent());
     return found.map(e -> response(e, names));
+  }
+
+  /**
+   * The newest {@code limit} events on records, which every member may read (the record pages show
+   * them); bound to the current workspace like {@link #list}.
+   */
+  public List<AuditEventResponse> recentRecordChanges(int limit) {
+    List<AuditEvent> found =
+        events.findRecent(WorkspaceContext.workspaceId(), RECORD_TYPES, Limit.of(limit));
+    Map<Long, String> names = displayNames(found);
+    return found.stream().map(e -> response(e, names)).toList();
   }
 
   /** The current display name of each actor whose account still exists: one query for the page. */

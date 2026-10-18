@@ -69,11 +69,11 @@ public class TaskService {
   }
 
   /**
-   * As above, with overdue measured against {@code now}: the reminders ask for several lists that
-   * must not leave a gap between them.
+   * As above, with overdue measured against {@code now}: the reminders and the dashboard ask for
+   * several lists that must not leave a gap between them.
    */
   @Transactional(readOnly = true)
-  Page<TaskResponse> list(
+  public Page<TaskResponse> list(
       TaskFilter filter, Instant now, int page, int size, TaskSort sort, Direction direction) {
     Specification<CrmTask> matching =
         TaskSpecifications.matching(filter, WorkspaceContext.require().userId(), now);

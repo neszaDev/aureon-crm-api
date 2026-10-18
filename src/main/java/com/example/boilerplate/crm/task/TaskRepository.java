@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Scoped to the current workspace by {@code @TenantId}, including {@code findById}. */
 public interface TaskRepository
     extends JpaRepository<CrmTask, Long>, JpaSpecificationExecutor<CrmTask> {
+  long countByStatusAndDueAtBefore(TaskStatus status, Instant now);
 
   /** As {@code ActivityRepository.linkConvertedLead}, for the lead's tasks. */
   @Transactional

@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.lead;
 
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -9,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 
 /** Scoped to the current workspace by {@code @TenantId}. */
 public interface LeadRepository extends JpaRepository<Lead, Long>, JpaSpecificationExecutor<Lead> {
+  long countByArchivedAtIsNullAndStatusIn(Collection<LeadStatus> statuses);
+
   /** Archived leads included. */
   boolean existsBySourceId(long sourceId);
 

@@ -342,12 +342,17 @@ Activity      = { id, ...ActivityInput fields, author?: MemberRef, company?: Ref
 
 ## Dashboard and reports
 
-All take `from` / `to` dates (inclusive, in the workspace time zone; default the last 30 days)
-where a period applies.
+All take `from` / `to` dates (`YYYY-MM-DD`, both inclusive, in the workspace time zone: the
+instants from `from` 00:00 to the day after `to` 00:00 there) where a period applies. Without `to`,
+today there; without `from`, 29 days before `to` (the last 30 days). `from` after `to` is a 400 on
+`from`, more than 366 days a 400 on `to`, a value that isn't such a date a 400 on its field (all
+`VALIDATION_FAILED` with `fieldErrors`). Every member reads them. Archived records count nowhere;
+totals are per currency, by code, never added across currencies. An empty workspace answers zeros
+and empty lists.
 
 | Path | Response |
 |---|---|
-| `GET /workspaces/{w}/dashboard` | `{ period, counts: { companies, contacts, openLeads, openDeals, overdueTasks }, openPipeline: [{ currency, amount, weightedAmount }], won: { count, totals }, lost: { count }, byStage: [{ stage, count, totals }], recentActivities (8), myUpcomingTasks (8), myOverdueTasks (8), recentChanges (10 audit events on records) }` |
+| `GET /workspaces/{w}/dashboard` | `{ period: { from, to }, counts: { companies, contacts, openLeads, openDeals, overdueTasks }, openPipeline: [{ currency, amount, weightedAmount }], won: { count, totals }, lost: { count }, byStage: [{ stage, count, totals }], recentActivities (8), myUpcomingTasks (8), myOverdueTasks (8), recentChanges (10 audit events on records) }`. Only `won` and `lost` follow the period: deals whose `closedAt` is in it and whose current stage is `WON` / `LOST`; the rest is as of now. Open leads are `NEW`, `CONTACTED` or `QUALIFIED`, open deals in an `OPEN` stage; `overdueTasks` counts the workspace's open tasks due in the past. `weightedAmount`: the sum of amount × probability (the deal's, else its stage's) / 100, rounded half up to cents once per currency. `byStage`: every open stage in order, those without deals too. `recentActivities`: `Activity`, newest `occurredAt` first; `myUpcomingTasks` / `myOverdueTasks`: the caller's open `Task`s due from now (soonest first) / before now (longest overdue first); `recentChanges`: `AuditEvent`s on `COMPANY`, `CONTACT`, `LEAD`, `DEAL`, `TASK` and `ACTIVITY`, newest first |
 | `GET /workspaces/{w}/reports/pipeline` | open deals `{ byStage: [...], byOwner: [{ owner?, count, totals }] }` |
 | `GET /workspaces/{w}/reports/won-lost` | `{ months: [{ month: "2026-09", won, lost, wonTotals }] }`, every month of the period, by `closedAt` |
 | `GET /workspaces/{w}/reports/funnel` | deals created in the period: `{ created, stages: [{ stage, reached }] }`, where reached = deals whose history entered that stage or a later one |
