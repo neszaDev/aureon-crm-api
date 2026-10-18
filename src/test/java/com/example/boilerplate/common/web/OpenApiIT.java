@@ -3,13 +3,16 @@ package com.example.boilerplate.common.web;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.boilerplate.support.AbstractIntegrationTest;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.ResultActions;
 
 /** The spec the frontend generates its types from describes the error body and its codes. */
 class OpenApiIT extends AbstractIntegrationTest {
@@ -88,5 +91,48 @@ class OpenApiIT extends AbstractIntegrationTest {
                     "last",
                     "empty")))
         .andExpect(jsonPath(schemas + "PageableObject.required").doesNotExist());
+  }
+
+  /**
+   * An export's 200 is a CSV text, not springdoc's default wildcard-typed byte string, so the
+   * generated client types it as a string; the errors stay JSON (no {@code produces}).
+   */
+  @Test
+  void exportsAreCsvInTheSpec() throws Exception {
+    ResultActions spec = mvc.perform(get("/v3/api-docs"));
+    for (String list : List.of("companies", "contacts", "leads", "deals")) {
+      String ok =
+          "$.paths['/api/v1/workspaces/{workspaceId}/" + list + "/export'].get.responses['200']";
+      spec.andExpect(jsonPath(ok + ".content['text/csv'].schema.type").value("string"))
+          .andExpect(jsonPath(ok + ".content", not(hasKey("*/*"))));
+    }
+  }
+
+  /** The dashboard and the reports say what they always carry, and what can be absent. */
+  @Test
+  void insightSchemasSayWhatIsRequired() throws Exception {
+    String schemas = "$.components.schemas.";
+    mvc.perform(get("/v3/api-docs"))
+        .andExpect(
+            jsonPath(
+                schemas + "DashboardResponse.required",
+                containsInAnyOrder(
+                    "period",
+                    "counts",
+                    "openPipeline",
+                    "won",
+                    "lost",
+                    "byStage",
+                    "recentActivities",
+                    "myUpcomingTasks",
+                    "myOverdueTasks",
+                    "recentChanges")))
+        .andExpect(jsonPath(schemas + "AuditEventResponse.required", not(hasItem("actor"))))
+        .andExpect(jsonPath(schemas + "AuditEventResponse.required", hasItem("action")))
+        .andExpect(jsonPath(schemas + "OwnerBucket.required", not(hasItem("owner"))))
+        .andExpect(jsonPath(schemas + "OwnerBucket.required", hasItems("count", "totals")))
+        .andExpect(jsonPath(schemas + "WonLostReport.required", hasItems("period", "months")))
+        .andExpect(jsonPath(schemas + "FunnelReport.required", hasItems("period", "stages")))
+        .andExpect(jsonPath(schemas + "ActivityReport.required", hasItems("period", "byUser")));
   }
 }

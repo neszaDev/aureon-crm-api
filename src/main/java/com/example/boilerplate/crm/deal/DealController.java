@@ -2,6 +2,7 @@ package com.example.boilerplate.crm.deal;
 
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.deal.dto.*;
+import com.example.boilerplate.crm.export.CsvResponse;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -62,6 +63,7 @@ public class DealController {
   }
 
   // Literal segments outrank {id}.
+  @CsvResponse
   @GetMapping("/export")
   ResponseEntity<byte[]> export(
       @PathVariable long workspaceId,

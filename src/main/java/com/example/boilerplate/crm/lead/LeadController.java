@@ -2,6 +2,7 @@ package com.example.boilerplate.crm.lead;
 
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.common.Priority;
+import com.example.boilerplate.crm.export.CsvResponse;
 import com.example.boilerplate.crm.lead.dto.*;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -51,6 +52,7 @@ public class LeadController {
   }
 
   // A literal segment outranks {id}.
+  @CsvResponse
   @GetMapping("/export")
   ResponseEntity<byte[]> export(
       @PathVariable long workspaceId,

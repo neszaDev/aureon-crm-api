@@ -129,7 +129,7 @@ public class DashboardService {
     }
 
     return new DashboardResponse(
-        new PeriodDto(period.from(), period.to()),
+        period.dto(),
         new Counts(
             companies.countByArchivedAtIsNull(),
             contacts.countByArchivedAtIsNull(),

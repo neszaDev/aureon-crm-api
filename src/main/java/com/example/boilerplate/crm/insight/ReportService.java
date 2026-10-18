@@ -144,7 +144,7 @@ public class ReportService {
       }
       months.add(new MonthBucket(month.toString(), won, lost, wonTotals));
     }
-    return new WonLostReport(months);
+    return new WonLostReport(period.dto(), months);
   }
 
   /** The open stages in order, then Won, with the cohort's deals that reached each. */
@@ -166,6 +166,7 @@ public class ReportService {
             .toList();
     Instant first = history.firstChangedAt();
     return new FunnelReport(
+        period.dto(),
         byTop.values().stream().mapToLong(Long::longValue).sum(),
         first == null ? null : LocalDate.ofInstant(first, period.zone()),
         steps);
@@ -194,6 +195,7 @@ public class ReportService {
         Comparator.comparingLong(
             u -> u.calls() + u.emails() + u.meetings() + u.notes() + u.tasksCompleted());
     return new ActivityReport(
+        period.dto(),
         byUser.entrySet().stream()
             .map(
                 e -> {

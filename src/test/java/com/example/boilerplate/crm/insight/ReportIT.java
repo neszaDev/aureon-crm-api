@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -147,18 +149,7 @@ class ReportIT extends WorkspaceTestSupport {
   void wonLostByMonthInWorkspaceZone() throws Exception {
     String token = tokenFor(uniqueEmail());
     long w = createWorkspace(token, "Bangkok", "Asia/Bangkok");
-    Map<String, Long> stage = stages(token, w);
-    long won = stage.get("Won");
-    long lost = stage.get("Lost");
-    closed(token, w, won, "7.00", "USD", "2026-07-14T17:00:00Z");
-    closed(token, w, won, "9.00", "USD", "2026-07-14T16:59:59Z");
-    closed(token, w, lost, "1.00", "USD", "2026-08-31T16:59:59Z");
-    closed(token, w, won, "100.00", "USD", "2026-08-31T18:00:00Z");
-    closed(token, w, won, "40.00", "EUR", "2026-09-15T00:00:00Z");
-    long archived = closed(token, w, won, "500.00", "EUR", "2026-09-16T00:00:00Z");
-    send(token, post(W + "/deals/{id}/archive", w, archived)).andExpect(status().isOk());
-    closed(token, w, lost, "2.00", "USD", "2026-10-31T16:59:59Z");
-    closed(token, w, won, "11.00", "USD", "2026-10-31T17:00:00Z");
+    closedAcrossMonths(token, w);
 
     report(token, w, "won-lost", "from", "2026-07-15", "to", "2026-10-31")
         .andExpect(status().isOk())
@@ -357,6 +348,75 @@ class ReportIT extends WorkspaceTestSupport {
     }
   }
 
+  /** The three period reports return the period they used, as the dashboard does. */
+  @Test
+  void periodReportsReturnTheirPeriod() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Bangkok", "Asia/Bangkok");
+    ZoneId zone = ZoneId.of("Asia/Bangkok");
+    for (String r : List.of("won-lost", "funnel", "activities")) {
+      // The default: 30 days, up to today in the workspace's zone.
+      LocalDate before = LocalDate.now(zone);
+      JsonNode period = body(report(token, w, r).andExpect(status().isOk())).get("period");
+      LocalDate after = LocalDate.now(zone);
+      LocalDate to = LocalDate.parse(period.get("to").asText());
+      assertThat(to).as(r).isIn(before, after);
+      assertThat(LocalDate.parse(period.get("from").asText())).as(r).isEqualTo(to.minusDays(29));
+
+      report(token, w, r, "from", "2026-08-15", "to", "2026-10-17")
+          .andExpect(jsonPath("$.period.from").value("2026-08-15"))
+          .andExpect(jsonPath("$.period.to").value("2026-10-17"));
+      // A blank date counts as absent: from is 29 days before to.
+      report(token, w, r, "from", "", "to", "2026-10-17")
+          .andExpect(jsonPath("$.period.from").value("2026-09-18"))
+          .andExpect(jsonPath("$.period.to").value("2026-10-17"));
+    }
+  }
+
+  /** One period: the dashboard's won and lost are the sums over the won-lost months. */
+  @Test
+  void dashboardWonLostIsTheSumOverTheMonths() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Bangkok", "Asia/Bangkok");
+    closedAcrossMonths(token, w);
+
+    JsonNode months =
+        body(send(
+                token,
+                get(W + "/reports/won-lost", w)
+                    .param("from", "2026-07-15")
+                    .param("to", "2026-10-31")))
+            .get("months");
+    JsonNode dashboard =
+        body(
+            send(
+                token,
+                get(W + "/dashboard", w).param("from", "2026-07-15").param("to", "2026-10-31")));
+
+    long won = 0;
+    long lost = 0;
+    Map<String, BigDecimal> totals = new TreeMap<>();
+    for (JsonNode month : months) {
+      won += month.get("won").asLong();
+      lost += month.get("lost").asLong();
+      for (JsonNode t : month.get("wonTotals")) {
+        totals.merge(
+            t.get("currency").asText(), new BigDecimal(t.get("amount").asText()), BigDecimal::add);
+      }
+    }
+    Map<String, BigDecimal> dashboardTotals = new TreeMap<>();
+    for (JsonNode t : dashboard.at("/won/totals")) {
+      dashboardTotals.put(t.get("currency").asText(), new BigDecimal(t.get("amount").asText()));
+    }
+    // Not vacuous: 3 won (EUR 40.00, USD 107.00) and 2 lost.
+    assertThat(won).isEqualTo(3);
+    assertThat(lost).isEqualTo(2);
+    assertThat(totals).containsOnlyKeys("EUR", "USD");
+    assertThat(dashboard.at("/won/count").asLong()).isEqualTo(won);
+    assertThat(dashboard.at("/lost/count").asLong()).isEqualTo(lost);
+    assertThat(dashboardTotals).isEqualTo(totals);
+  }
+
   @Test
   void badPeriodsAre400OnTheirField() throws Exception {
     String token = tokenFor(uniqueEmail());
@@ -368,6 +428,26 @@ class ReportIT extends WorkspaceTestSupport {
       badPeriod(token, w, r, "to", "to", "yesterday");
       report(token, w, r, "from", "2025-10-17", "to", "2026-10-17").andExpect(status().isOk());
     }
+  }
+
+  /**
+   * Deals closed around the month borders of Asia/Bangkok, for the period 2026-07-15 to 2026-10-31:
+   * 3 won (July, September twice) and 2 lost (August, October), one more of each just outside, and
+   * an archived one.
+   */
+  private void closedAcrossMonths(String token, long w) throws Exception {
+    Map<String, Long> stage = stages(token, w);
+    long won = stage.get("Won");
+    long lost = stage.get("Lost");
+    closed(token, w, won, "7.00", "USD", "2026-07-14T17:00:00Z");
+    closed(token, w, won, "9.00", "USD", "2026-07-14T16:59:59Z");
+    closed(token, w, lost, "1.00", "USD", "2026-08-31T16:59:59Z");
+    closed(token, w, won, "100.00", "USD", "2026-08-31T18:00:00Z");
+    closed(token, w, won, "40.00", "EUR", "2026-09-15T00:00:00Z");
+    long archived = closed(token, w, won, "500.00", "EUR", "2026-09-16T00:00:00Z");
+    send(token, post(W + "/deals/{id}/archive", w, archived)).andExpect(status().isOk());
+    closed(token, w, lost, "2.00", "USD", "2026-10-31T16:59:59Z");
+    closed(token, w, won, "11.00", "USD", "2026-10-31T17:00:00Z");
   }
 
   /** One of everything the reports count, by the token's user. */

@@ -2,6 +2,7 @@ package com.example.boilerplate.crm.company;
 
 import com.example.boilerplate.crm.common.ListParams;
 import com.example.boilerplate.crm.company.dto.*;
+import com.example.boilerplate.crm.export.CsvResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,7 @@ public class CompanyController {
   }
 
   // Literal segments outrank {id}.
+  @CsvResponse
   @GetMapping("/export")
   ResponseEntity<byte[]> export(
       @PathVariable long workspaceId,

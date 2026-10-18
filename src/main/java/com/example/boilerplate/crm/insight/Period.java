@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.insight;
 
 import com.example.boilerplate.common.exception.FieldValidationException;
+import com.example.boilerplate.crm.insight.dto.PeriodDto;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,6 +16,10 @@ import java.time.temporal.ChronoUnit;
 public record Period(LocalDate from, LocalDate to, ZoneId zone) {
   static final int DEFAULT_DAYS = 30;
   static final int MAX_DAYS = 366;
+
+  public PeriodDto dto() {
+    return new PeriodDto(from, to);
+  }
 
   public Instant start() {
     return from.atStartOfDay(zone).toInstant();
