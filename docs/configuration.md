@@ -45,8 +45,9 @@ Select one with `SPRING_PROFILES_ACTIVE`. Compose sets it for you.
 `app.security.*`, `app.cors.*`, `app.admin.*`, `app.files.*`, `app.rate-limit.*` and
 `app.export.*` bind to validated records (`auth/AuthProperties`, `security/CorsProperties`,
 `user/AdminProperties`, `file/FileProperties`, `ratelimit/RateLimitProperties`,
-`crm/export/ExportProperties`: `max-rows`, default 10000, the most rows one CSV export may have;
-the `test` profile sets 3). An invalid value
+`crm/export/ExportProperties`: `max-rows`, default 10000, 1 to 30000, the most rows one CSV export
+may have; the upper bound keeps the export's `IN` lookups of the rows' links under PgJDBC's 32,767
+bind parameters; the `test` profile sets 3). An invalid value
 stops the app at startup with the property name. `app.demo.*` (`crm/demo/DemoProperties`:
 `enabled`, `password`) comes from `DEMO_DATA` and `DEMO_PASSWORD` in the `local` and `dev`
 profiles, the only ones with the seeder; `application.yml` has `enabled: false` and no password

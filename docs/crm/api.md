@@ -49,15 +49,16 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   `message` is English, for logs and API users; clients translate by **`code`**, which is stable.
   The OpenAPI spec has the body as `components.schemas.ApiError`, `code` as an enum.
   A 400 on fields also has `fieldErrors` (`{ field: message }`). Errors outside this table have no
-  `code` (it is left out): 401, a malformed body or a parameter of the wrong type (400), an unknown
-  route (404), 405, 413, 415, the file uploads' 400/413/415, 500. Show those by status.
+  `code` (it is left out): 401, a malformed body or a query parameter of the wrong type (400; the
+  dashboard's and reports' `from` / `to` are the exception: `VALIDATION_FAILED` on the field), an
+  unknown route (404), 405, 413, 415, the file uploads' 400/413/415, 500. Show those by status.
 
   | `code` | Status | Meaning |
   |---|---|---|
   | `VALIDATION_FAILED` | 400 | Invalid input or query parameter: `fieldErrors` names the fields when it can (bean validation, a link not in this workspace, a blank required text, `page`/`size` out of range, ...) |
   | `TEXT_INVALID` | 400 | The database refused a value: text with a NUL character, a value too long, a number out of range for its column, or a date or time it can't hold (such as the year 300000) |
   | `PIPELINE_CHANGED` | 400 | `PUT /pipeline-stages/order`: `stageIds` isn't exactly the current open stages (someone added or deleted one): reload the pipeline |
-  | `EXPORT_TOO_LARGE` | 400 | An export would have more than 10,000 rows (`Too many rows to export (N); narrow the filters`, no `fieldErrors`): narrow the filters |
+  | `EXPORT_TOO_LARGE` | 400 | An export would have more rows than `app.export.max-rows` (default 10,000): `Too many rows to export (N); narrow the filters`, `fieldErrors: {}`. The message is English: show your own text for the code |
   | `FORBIDDEN` | 403 | The role lacks the permission, or the record isn't the caller's to edit; admin-only endpoints |
   | `REGISTRATION_DISABLED` | 403 | `POST /auth/register` with `REGISTRATION_ENABLED=false` (invite-only) |
   | `OWNER_ONLY` | 403 | Only owners manage owners: an admin changing an owner's role or making someone owner, removing an owner, inviting as `OWNER` or revoking an `OWNER` invitation |
@@ -345,8 +346,9 @@ Activity      = { id, ...ActivityInput fields, author?: MemberRef, company?: Ref
 All take `from` / `to` dates (`YYYY-MM-DD`, both inclusive, in the workspace time zone: the
 instants from `from` 00:00 to the day after `to` 00:00 there) where a period applies: the
 dashboard, `won-lost`, `funnel` and `activities`; `pipeline` and `follow-ups` are as of now and
-take none. Without `to`, today there; without `from`, 29 days before `to` (the last 30 days).
-`from` after `to` is a 400 on `from`, more than 366 days a 400 on `to`, a value that isn't such a
+take none. Without `to`, today there; without `from`, 29 days before `to` (the last 30 days); a
+blank `from=` or `to=` counts as absent. The dashboard and the three period reports return the
+`period` they used (`{ from, to }`), so a call with the defaults can label its range. `from` after `to` is a 400 on `from`, more than 366 days a 400 on `to`, a value that isn't such a
 date a 400 on its field (all `VALIDATION_FAILED` with `fieldErrors`). Every member reads them.
 Archived records count nowhere; totals are per currency, by code, never added across currencies.
 An empty workspace answers zeros and empty lists.
@@ -355,24 +357,30 @@ An empty workspace answers zeros and empty lists.
 |---|---|
 | `GET /workspaces/{w}/dashboard` | `{ period: { from, to }, counts: { companies, contacts, openLeads, openDeals, overdueTasks }, openPipeline: [{ currency, amount, weightedAmount }], won: { count, totals }, lost: { count }, byStage: [{ stage, count, totals }], recentActivities (8), myUpcomingTasks (8), myOverdueTasks (8), recentChanges (10 audit events on records) }`. Only `won` and `lost` follow the period: deals whose `closedAt` is in it and whose current stage is `WON` / `LOST`; the rest is as of now. Open leads are `NEW`, `CONTACTED` or `QUALIFIED`, open deals in an `OPEN` stage; `overdueTasks` counts the workspace's open tasks due in the past. `weightedAmount`: the sum of amount × probability (the deal's, else its stage's) / 100, rounded half up to cents once per currency. `byStage`: every open stage in order, those without deals too. `recentActivities`: `Activity`, newest `occurredAt` first; `myUpcomingTasks` / `myOverdueTasks`: the caller's open `Task`s due from now (soonest first) / before now (longest overdue first); `recentChanges`: `AuditEvent`s on `COMPANY`, `CONTACT`, `LEAD`, `DEAL`, `TASK` and `ACTIVITY`, newest first |
 | `GET /workspaces/{w}/reports/pipeline` | The open deals: `{ byStage: [{ stage, count, totals }], byOwner: [{ owner?, count, totals }] }`. `byStage` as on the dashboard; `byOwner`: one entry per owner with open deals, no `owner` for the unassigned ones; the largest single-currency total first (the amount alone decides the order, whatever its currency), then by owner email, unassigned last among equals |
-| `GET /workspaces/{w}/reports/won-lost` | `{ months: [{ month: "2026-09", won, lost, wonTotals }] }`: every month from `from`'s through `to`'s, oldest first, months without deals too; each counts the deals of the period whose `closedAt` falls in that month in the workspace time zone, by their current stage `WON` / `LOST` (as the dashboard's `won` / `lost`) |
-| `GET /workspaces/{w}/reports/funnel` | `{ created, historyFrom?, stages: [{ stage, reached }] }`. `created`: the deals created in the period; `stages`: every open stage in order, then `WON`; `reached`: how many of those deals reached that stage or a later one, by the highest position (as the stages stand now) among the open and `WON` stages their history entered (`LOST` and deleted stages count for nothing). `historyFrom`: the day (in the workspace time zone) of the workspace's earliest stage change, absent without one |
-| `GET /workspaces/{w}/reports/activities` | `{ byUser: [{ user?, calls, emails, meetings, notes, tasksCompleted }] }`: activities by author with `occurredAt` in the period, tasks completed in the period by assignee. No `user`: members who left (and tasks completed without an assignee), together. Members with nothing in the period are left out; most in total first, then by email, the entry without `user` last among equals |
+| `GET /workspaces/{w}/reports/won-lost` | `{ period, months: [{ month: "2026-09", won, lost, wonTotals }] }`: every month from `from`'s through `to`'s, oldest first, months without deals too; each counts the deals of the period whose `closedAt` falls in that month in the workspace time zone, by their current stage `WON` / `LOST` (as the dashboard's `won` / `lost`) |
+| `GET /workspaces/{w}/reports/funnel` | `{ period, created, historyFrom?, stages: [{ stage, reached }] }`. `created`: the deals created in the period; `stages`: every open stage in order, then `WON`; `reached`: how many of those deals reached that stage or a later one, by the highest position (as the stages stand now) among the open and `WON` stages their history entered (`LOST` and deleted stages count for nothing). `historyFrom`: the day (in the workspace time zone) of the workspace's earliest stage change, absent without one |
+| `GET /workspaces/{w}/reports/activities` | `{ period, byUser: [{ user?, calls, emails, meetings, notes, tasksCompleted }] }`: activities by author with `occurredAt` in the period, tasks completed in the period by assignee. No `user`: members who left (and tasks completed without an assignee), together. Members with nothing in the period are left out; most in total first, then by email, the entry without `user` last among equals |
 | `GET /workspaces/{w}/reports/follow-ups` | `{ overdueTasks, upcomingTasks, dueLeads }`, each `{ count, first }`: how many in the workspace and the first 20. `overdueTasks`: open `Task`s due before now, longest overdue first; `upcomingTasks`: open `Task`s due from now to 7 days later (exclusive), soonest first; `dueLeads`: open `Lead`s (`NEW`, `CONTACTED`, `QUALIFIED`) with a follow-up date up to today in the workspace time zone, oldest date first |
 
 ## Export
 
 `GET .../{companies|contacts|leads|deals}/export` takes the list's filters (the same parameters,
-`unassigned` included; no paging or sort) → 200 `text/csv; charset=utf-8`, `Content-Disposition:
-attachment; filename="<list>-<yyyy-MM-dd>.csv"` (today in the workspace's time zone). The rows
-are the list's for those filters, in its default order: companies and contacts by name, leads
-newest first, deals most recently updated first. Needs `EXPORT` (403). At most 10,000 rows, counted
-first: more is a 400 `EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the filters`).
+`unassigned` included; no paging or sort) → 200 `text/csv;charset=UTF-8`, `Content-Disposition:
+attachment; filename="<list>-<yyyy-MM-dd>.csv"` (today in the workspace's time zone). The OpenAPI
+spec types that 200 as a `text/csv` string. Send no `Accept` (or `*/*`, or `application/json`):
+the endpoint has no `produces`, so its errors are the usual `ApiError` JSON. The rows are the
+list's for those filters, in its default order: companies and contacts by name, leads newest
+first, deals most recently updated first. Needs `EXPORT` (403, checked before the count, so a
+role without it never learns the count). At most `app.export.max-rows` rows (default 10,000),
+counted first: more is a 400 `EXPORT_TOO_LARGE` (`Too many rows to export (N); narrow the
+filters`, `fieldErrors: {}`).
 
 The file is UTF-8 with a byte order mark (Excel then reads Thai and any other text), with CRLF line
-ends and a header row. A value with a quote, comma or line break is quoted, its quotes doubled (RFC
-4180); a value starting with `=`, `+`, `-`, `@`, tab or carriage return is prefixed with `'` first,
-so spreadsheets don't run it as a formula (a phone `+66 ...` reads `'+66 ...`). An empty or absent
+ends and a header row. A value with a quote, comma, semicolon or line break is quoted, its quotes
+doubled (RFC 4180; the semicolon because semicolon-locale Excel splits on it but honours quotes);
+a value starting with `=`, `+`, `-`, `@`, tab or carriage return, or with one of `= + - @` after
+leading whitespace (no-break and ideographic spaces included), is prefixed with `'` at its very
+start first, so spreadsheets don't run it as a formula (a phone `+66 ...` reads `'+66 ...`). An empty or absent
 value is empty. Reference: the record reference (Conventions). Owner: the display name, else the
 email; empty once the owner left. Instants ISO-8601 UTC, dates `YYYY-MM-DD`, money as stored
 (`1250.00`), booleans `yes` / `no`.
@@ -386,7 +394,10 @@ email; empty once the owner left. Instants ISO-8601 UTC, dates `YYYY-MM-DD`, mon
 
 Every export is audited: `EXPORT` on `WORKSPACE` (entity id: the workspace's), label `<n> <list>
 exported` (`12 contacts exported`), changes `{ list: { from: null, to: "contacts" }, filters: {
-from: null, to: { ...the filters given } } }` (unset filters and `false` flags left out). It shows
+from: null, to: { ...the filters given } } }` (unset filters and `false` flags left out). The
+`filters` keys are the field names of the list's filter record, not the query parameters: a
+lead export with `?status=NEW&status=CONTACTED&followUpBefore=2026-11-15` records `{ statuses:
+["NEW", "CONTACTED"], followUpBefore: "2026-11-15" }`. It shows
 in the workspace's history, which needs `AUDIT_READ`; an export over the cap or refused records
 nothing.
 
