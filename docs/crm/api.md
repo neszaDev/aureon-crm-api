@@ -362,4 +362,4 @@ formula.
 
 | Path | Response | Permission |
 |---|---|---|
-| `GET /workspaces/{w}/audit-events` | `?entityType&entityId&actorId`, paging, newest first → `Page<AuditEvent>` (`id, occurredAt, actor?: MemberRef-like {userId?, email?}, action, entityType, entityId, entityLabel?, changes`) | `AUDIT_READ`, or any member when both `entityType` and `entityId` are given |
+| `GET /workspaces/{w}/audit-events` | `?entityType&entityId&actorId`, paging (`page`, `size`: default 20, at most 100), newest first, then by id descending → `Page<AuditEvent>` (`id, occurredAt, actor?: AuditActor, action, entityType, entityId, entityLabel?, changes`); `AuditActor = { userId?, email?, displayName? }` is the `MemberRef` shape for someone who may have left: `userId` and `email` as the event recorded them, `displayName` the user's current one (absent once the account is gone); no `actor` when the event has none. Every query is bound to the workspace: another workspace's record id lists nothing | `AUDIT_READ`, or any member when both `entityType` (a record type: `COMPANY`, `CONTACT`, `LEAD`, `DEAL`, `TASK`, `ACTIVITY`) and `entityId` are given; any other query is a 403 |

@@ -32,7 +32,8 @@ src/main/java/com/example/boilerplate/
   user/        User entity, /api/v1/users/me, admin user management, AdminBootstrap
   workspace/   workspaces, members, roles + permissions, WorkspaceContext, the access
                interceptor and tenant resolver; invitation/ (links, preview, accept, register)
-  audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges)
+  audit/       append-only audit trail (AuditTrail, AuditEvent, AuditChanges) and its read API
+               (AuditEventController/Service: workspace-bound queries only)
   crm/         CRM features, one subpackage per area; settings/ = pipeline stages, lead sources;
                company/ = the first record type, the pattern for the others; contact/ adds
                tags and a sort on a joined path; lead/ adds a status lifecycle, money with

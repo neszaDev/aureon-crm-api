@@ -84,7 +84,9 @@ class AuditTrailIT extends WorkspaceTestSupport {
         .isInstanceOf(DataAccessException.class)
         .hasMessageContaining("append-only");
 
-    assertThat(events.findById(eventId)).isPresent();
+    assertThat(events.findByWorkspaceIdOrderByOccurredAtDescIdDesc(workspaceId))
+        .extracting(AuditEvent::getId)
+        .contains(eventId);
   }
 
   @Test
