@@ -62,8 +62,10 @@ class OpenApiIT extends AbstractIntegrationTest {
         .andExpect(
             jsonPath(
                 schemas + "DealSummary.required",
-                hasItems("id", "name", "amount", "stage", "stageEnteredAt", "updatedAt")))
+                hasItems(
+                    "id", "name", "amount", "stage", "stageEnteredAt", "signatures", "updatedAt")))
         .andExpect(jsonPath(schemas + "DealSummary.required", not(hasItem("company"))))
+        .andExpect(jsonPath(schemas + "StageSignature.required", containsInAnyOrder("stageId")))
         .andExpect(jsonPath(schemas + "LeadResponse.required", not(hasItem("convertedContact"))))
         .andExpect(
             jsonPath(schemas + "CreateDealRequest.required", containsInAnyOrder("name", "amount")));

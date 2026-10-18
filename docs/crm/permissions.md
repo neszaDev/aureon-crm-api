@@ -41,8 +41,8 @@ deleted user's token can't attach to whoever registers the email again.
 6. The role is read from the database on every request, so a role change or removal takes effect
    on the next request, without waiting for the access token to expire.
 
-Native SQL (used only for reports) is not filtered by Hibernate and must bind the workspace id
-explicitly; each such query has a cross-workspace test.
+Native SQL (the reports, the contact tags, the deals' stage signatures) is not filtered by Hibernate
+and must bind the workspace id explicitly; each such query has a cross-workspace test.
 
 ## Matrix
 

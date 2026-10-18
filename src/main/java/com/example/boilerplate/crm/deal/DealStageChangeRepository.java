@@ -20,6 +20,23 @@ public interface DealStageChangeRepository extends JpaRepository<DealStageChange
       where c.dealId in :dealIds group by c.dealId""")
   List<Object[]> stageEnteredAt(Collection<Long> dealIds);
 
+  /**
+   * Who moved each deal into each stage it entered: {@code [dealId, toStageId, changedBy]} rows,
+   * one per deal and stage that still exists, from that stage's newest entry ({@code changed_at},
+   * then {@code id}); {@code changedBy} is a user id, null when unknown. One query for a page of
+   * deals. Native SQL is not tenant-filtered: the workspace is bound here.
+   */
+  @Query(
+      value =
+          """
+          SELECT DISTINCT ON (deal_id, to_stage_id) deal_id, to_stage_id, changed_by
+          FROM deal_stage_changes
+          WHERE workspace_id = :workspaceId AND deal_id IN (:dealIds) AND to_stage_id IS NOT NULL
+          ORDER BY deal_id, to_stage_id, changed_at DESC, id DESC
+          """,
+      nativeQuery = true)
+  List<Object[]> signatures(long workspaceId, Collection<Long> dealIds);
+
   /** The time of the workspace's earliest stage change, null without any. */
   @Query("select min(c.changedAt) from DealStageChange c")
   Instant firstChangedAt();

@@ -10,11 +10,13 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * A row of the deal list and a card of the board. {@code stageEnteredAt}: when the deal entered its
  * stage (its newest history entry); {@code status} is the stage's kind; {@code probability} the
- * deal's own, or else its stage's.
+ * deal's own, or else its stage's. {@code signatures}: who moved the deal into each stage it
+ * entered, one per stage that still exists.
  */
 public record DealSummary(
     long id,
@@ -26,6 +28,7 @@ public record DealSummary(
     @NotNull String currency,
     @NotNull StageRef stage,
     @NotNull Instant stageEnteredAt,
+    @NotNull List<StageSignature> signatures,
     @NotNull DealStatus status,
     int probability,
     LocalDate expectedCloseDate,

@@ -96,7 +96,8 @@ deletable) and at least one `OPEN` stage. Defaults for a new workspace:
 Moving a deal into `WON` or `LOST` records `closedAt`; moving to `LOST` needs a reason. Moving a
 closed deal back to an open stage reopens it (clears `closedAt` and the reason). Every stage
 change is kept in the deal's stage history, which feeds the funnel report; its newest entry is when
-the deal entered its stage (`stageEnteredAt`). A deal's probability is its own override, or else
+the deal entered its stage (`stageEnteredAt`), and the newest entry into each stage says who moved
+the deal there (`signatures`). A deal's probability is its own override, or else
 its stage's probability.
 
 ### Task

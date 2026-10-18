@@ -246,7 +246,7 @@ Every create and every move to another stage adds a history entry (the first one
 
 | Method and path | Body → response |
 |---|---|
-| `GET /board` | `?q&ownerId&unassigned&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage |
+| `GET /board` | `?q&ownerId&unassigned&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage. Each card carries its `signatures`, as in the list |
 | `POST /{id}/move` | `{ stageId, version, lostReason? (≤500, required for LOST, dropped for the others) }` → `Deal`; a stage of another workspace is a 400 (field `stageId`), LOST without a reason a 400 (field `lostReason`), both before the version is compared. Entering `WON` or `LOST` from another kind sets `closedAt`; an open stage clears it and the reason. The current stage again is a 200 that changes nothing, except LOST with a different reason, which saves the reason (new version, `STAGE_CHANGE` audit, no history entry) |
 | `GET /{id}/history` | → `StageChange[]` (`fromStage?: HistoryStageRef, toStage: HistoryStageRef, changedBy?: MemberRef, changedAt`), newest first; `HistoryStageRef = { id?, name }` is the stage as it was at the change: its name then (a later rename doesn't change it), its id until the stage is deleted. `fromStage` is null for the first entry, `changedBy` once that person is no member |
 
@@ -256,12 +256,20 @@ DealInput   = { name (1-200), amount (≥ 0), currency? (default the workspace's
                 the lowest position), probability? (0-100), expectedCloseDate?, ownerId?,
                 companyId?, contactId?, sourceId?, notes? (≤5000) }
 DealSummary = { id, name, amount, currency, stage: Stage-ref { id, name, kind }, stageEnteredAt,
-                status, probability, expectedCloseDate?, owner?: MemberRef, company?: Ref,
-                contact?: PersonRef, closedAt?, archived, updatedAt, version }
-Deal        = DealSummary + { probabilityOverride?, source?: Ref, lostReason?, lead?: PersonRef,
-                notes?, archivedAt?, createdAt }
+                signatures: StageSignature[], status, probability, expectedCloseDate?,
+                owner?: MemberRef, company?: Ref, contact?: PersonRef, closedAt?, archived,
+                updatedAt, version }
+StageSignature = { stageId, by?: MemberRef }
+Deal        = DealSummary without signatures + { probabilityOverride?, source?: Ref, lostReason?,
+                lead?: PersonRef, notes?, archivedAt?, createdAt }
 // stageEnteredAt: when the deal entered its current stage, the changedAt of its newest history
 // entry (a create or a move to another stage; a new lost reason is no move).
+// signatures: who moved the deal into each stage it entered, for the board's stamps. One per stage
+// that still exists (the entries of a deleted stage have no stage id), in order of stage id, and
+// only on the list and board summaries (a Deal carries the full history instead). The newest
+// history entry into a stage decides (changedAt, then the later entry): created in A by X, A to B by
+// Y, B to C by Z, C to B by W gives A: X, B: W, C: Z. `by` is absent exactly when the history's
+// `changedBy` is: that person is no member any more.
 ```
 
 ## Tasks and reminders

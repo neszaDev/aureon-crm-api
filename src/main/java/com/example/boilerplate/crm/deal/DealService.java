@@ -119,7 +119,7 @@ public class DealService {
         ordering == null
             ? deals.findAll(matching, ListParams.pageable(page, size, direction, sort))
             : deals.findAll(matching.and(ordering), ListParams.unsorted(page, size));
-    Related related = related(found.getContent());
+    Related related = related(found.getContent(), true);
     return found.map(d -> summary(d, related));
   }
 
@@ -133,7 +133,7 @@ public class DealService {
         DealSpecifications.matching(filter),
         ListParams.sort(DealSort.UPDATED_AT, Direction.DESC),
         found -> {
-          Related r = related(found);
+          Related r = related(found, false);
           return found.stream()
               .map(
                   d -> {
@@ -293,7 +293,7 @@ public class DealService {
 
   /** The board's cards: one {@link Related} for all of them, in the given order. */
   List<DealSummary> summaries(List<Deal> page) {
-    Related related = related(page);
+    Related related = related(page, true);
     return page.stream().map(d -> summary(d, related)).toList();
   }
 
@@ -359,7 +359,8 @@ public class DealService {
       Map<Long, Ref> companies,
       Map<Long, PersonRef> contacts,
       Map<Long, PipelineStage> stages,
-      Map<Long, Instant> stageEnteredAt) {
+      Map<Long, Instant> stageEnteredAt,
+      Map<Long, List<StageSignature>> signatures) {
     MemberRef owner(Deal d) {
       return d.getOwnerId() == null ? null : owners.get(d.getOwnerId());
     }
@@ -379,10 +380,17 @@ public class DealService {
     Instant stageEnteredAt(Deal d) {
       return stageEnteredAt.get(d.getId());
     }
+
+    List<StageSignature> signatures(Deal d) {
+      return signatures.getOrDefault(d.getId(), List.of());
+    }
   }
 
-  private Related related(List<Deal> page) {
-    if (page.isEmpty()) return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+  /** {@code signed}: the stage signatures too, which only the summaries show. */
+  private Related related(List<Deal> page, boolean signed) {
+    if (page.isEmpty()) {
+      return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+    }
     return new Related(
         directory.refs(page.stream().map(Deal::getOwnerId).toList()),
         companies.findAllById(ids(page, Deal::getCompanyId)).stream()
@@ -393,7 +401,23 @@ public class DealService {
         stages.findAllById(ids(page, Deal::getStageId)).stream()
             .collect(Collectors.toMap(s -> s.getId(), Function.identity())),
         history.stageEnteredAt(ids(page, Deal::getId)).stream()
-            .collect(Collectors.toMap(row -> (Long) row[0], row -> (Instant) row[1])));
+            .collect(Collectors.toMap(row -> (Long) row[0], row -> (Instant) row[1])),
+        signed ? signatures(ids(page, Deal::getId)) : Map.of());
+  }
+
+  /** Per deal, who moved it into each stage: one query for the entries, one for the people. */
+  private Map<Long, List<StageSignature>> signatures(List<Long> dealIds) {
+    List<Object[]> rows = history.signatures(WorkspaceContext.workspaceId(), dealIds);
+    Map<Long, MemberRef> people = directory.refs(rows.stream().map(row -> (Long) row[2]).toList());
+    return rows.stream()
+        .collect(
+            Collectors.groupingBy(
+                row -> (Long) row[0],
+                Collectors.mapping(
+                    row ->
+                        new StageSignature(
+                            (Long) row[1], row[2] == null ? null : people.get((Long) row[2])),
+                    Collectors.toList())));
   }
 
   private static List<Long> ids(List<Deal> page, Function<Deal, Long> link) {
@@ -409,6 +433,7 @@ public class DealService {
         d.getCurrency(),
         new StageRef(stage.getId(), stage.getName(), stage.getKind()),
         r.stageEnteredAt(d),
+        r.signatures(d),
         DealStatus.of(stage.getKind()),
         probability(d, stage),
         d.getExpectedCloseDate(),
@@ -422,7 +447,7 @@ public class DealService {
   }
 
   private DealResponse response(Deal d) {
-    Related r = related(List.of(d));
+    Related r = related(List.of(d), false);
     PipelineStage stage = r.stage(d);
     Ref source =
         d.getSourceId() == null
