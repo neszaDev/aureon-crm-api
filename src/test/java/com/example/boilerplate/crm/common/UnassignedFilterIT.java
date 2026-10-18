@@ -1,6 +1,7 @@
 package com.example.boilerplate.crm.common;
 
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -14,7 +15,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Every list with an owner filter (tasks: assignee) can ask for the records that have none. */
+/**
+ * Every list with an owner filter (tasks: assignee), and the deal board, can ask for the records
+ * that have none.
+ */
 class UnassignedFilterIT extends WorkspaceTestSupport {
   static final String W = "/api/v1/workspaces/{workspaceId}";
 
@@ -61,6 +65,23 @@ class UnassignedFilterIT extends WorkspaceTestSupport {
           .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
           .andExpect(jsonPath("$.fieldErrors.unassigned").exists());
     }
+    // The deal board filters as the deal list does; its counts follow.
+    String board = W + "/deals/board";
+    send(owner, get(board, w).param("unassigned", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.stages[*].deals[*].name", contains("Left")))
+        .andExpect(jsonPath("$.stages[0].count").value(1));
+    send(owner, get(board, w).param("unassigned", "false"))
+        .andExpect(jsonPath("$.stages[*].deals[*].name", containsInAnyOrder("Kept", "Left")))
+        .andExpect(jsonPath("$.stages[0].count").value(2));
+    send(
+            owner,
+            get(board, w)
+                .param("unassigned", "true")
+                .param("ownerId", String.valueOf(userId(ownerEmail))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.fieldErrors.unassigned").exists());
     // The caller's own tasks have an assignee too.
     send(owner, get(W + "/tasks", w).param("unassigned", "true").param("mine", "true"))
         .andExpect(status().isBadRequest())

@@ -66,8 +66,9 @@ public class DealController {
       @PathVariable long workspaceId,
       @RequestParam(required = false) String q,
       @RequestParam(required = false) Long ownerId,
+      @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long companyId) {
-    return board.board(q, ownerId, companyId);
+    return board.board(q, ownerId, unassigned, companyId);
   }
 
   @PostMapping

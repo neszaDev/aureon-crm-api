@@ -35,15 +35,16 @@ public class DealBoardService {
   }
 
   /**
-   * Every stage in position order with the active deals that match ({@code q} as in the list):
-   * their count and totals per currency from one grouped query, and the 50 most recently updated,
-   * one query per stage that has any.
+   * Every stage in position order with the active deals that match ({@code q}, {@code ownerId} and
+   * {@code unassigned} as in the list, a 400 on {@code unassigned} with an owner): their count and
+   * totals per currency from one grouped query, and the 50 most recently updated, one query per
+   * stage that has any.
    */
-  public BoardResponse board(String q, Long ownerId, Long companyId) {
+  public BoardResponse board(String q, Long ownerId, boolean unassigned, Long companyId) {
     Map<Long, Long> counts = new HashMap<>();
     Map<Long, List<MoneyTotal>> totals = new HashMap<>();
     // By currency, so each stage's totals come out sorted.
-    for (StageTotal t : deals.totalsByStage(matching(q, null, ownerId, companyId))) {
+    for (StageTotal t : deals.totalsByStage(matching(q, null, ownerId, unassigned, companyId))) {
       counts.merge(t.stageId(), t.count(), Long::sum);
       totals
           .computeIfAbsent(t.stageId(), id -> new ArrayList<>())
@@ -55,7 +56,7 @@ public class DealBoardService {
       if (!counts.containsKey(stage.id())) continue;
       shown.addAll(
           deals.findBy(
-              matching(q, stage.id(), ownerId, companyId),
+              matching(q, stage.id(), ownerId, unassigned, companyId),
               query -> query.sortBy(RECENT_FIRST).limit(DEALS_PER_STAGE).all()));
     }
     // groupingBy keeps each stage's deals in the order they were found.
@@ -74,8 +75,8 @@ public class DealBoardService {
   }
 
   private static Specification<Deal> matching(
-      String q, Long stageId, Long ownerId, Long companyId) {
+      String q, Long stageId, Long ownerId, boolean unassigned, Long companyId) {
     return DealSpecifications.matching(
-        new DealFilter(q, stageId, null, ownerId, false, companyId, null, null, null, false));
+        new DealFilter(q, stageId, null, ownerId, unassigned, companyId, null, null, null, false));
   }
 }
