@@ -22,7 +22,7 @@ sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTe
 `crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
 transitions, overdue, microsecond times), `common/entity/TimestampPrecisionTest` and
 `common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
-codes of unique indexes and stale updates).
+codes of unique indexes, stale updates and deadlocks).
 
 ## Integration tests
 
@@ -61,7 +61,7 @@ What the existing ITs cover:
 | `auth/RegistrationDisabledIT` | `REGISTRATION_ENABLED=false`: register is 403, existing accounts still sign in (own context) |
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
-| `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types; request money is a string; never-null response fields are required, nullable ones optional |
+| `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types; request money is a string; never-null response fields are required, nullable ones optional; the `Page*` wrappers require their fields |
 | `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index, a stage or source delete that loses the race to its foreign key |
 | `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
 | `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |
@@ -69,12 +69,12 @@ What the existing ITs cover:
 | `workspace/TenantIsolationIT` | `@TenantId`: another workspace's ids are 404, queries without a workspace context return nothing, inserts without one fail |
 | `workspace/WorkspaceEndpointsGuardIT` | Takes every `/api/v1/workspaces/{workspaceId}/...` endpoint from the running application: 404 for a non-member, 401 without a token |
 | `audit/AuditTrailIT` | Audit events written with the change, append-only (the database refuses `UPDATE`/`DELETE`), refuses to run outside a transaction |
-| `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, concurrent deletes of the last two open stages, permissions, versions, validation |
+| `crm/settings/PipelineStageIT` | Default stages, add/rename/reorder/delete rules, concurrent deletes of the last two open stages, a reorder or a create racing a delete, permissions, versions, validation |
 | `crm/settings/LeadSourceIT` | Default sources, create/rename/archive/delete, duplicate names, permissions, versions |
 | `workspace/MemberDirectoryIT` | Owner, assignee and author names: only members of the current workspace resolve |
 | `crm/common/RecordLinksIT` | Record links: the workspace's pass, any other (or unknown) id is a 400 on its field |
 | `crm/common/ListHelpersIT` | The list helpers on real queries: literal search, sorting with the id tie-breaker in both directions, nulls last |
-| `crm/common/UnassignedFilterIT` | `unassigned=true` on every list with an owner (or assignee) filter, and its 400 together with an owner |
+| `crm/common/UnassignedFilterIT` | `unassigned=true` on every list with an owner (or assignee) filter and on the deal board, and its 400 together with an owner |
 | `crm/company/CompanyIT` | Create/get/update, validation, search, filters, sorting, paging, archive/restore, duplicate warning, owner rules, a removed member's companies become unassigned, stale version (409), other workspace (404) |
 | `crm/contact/ContactIT` | The same for contacts, plus tags (normalized, filtered, listed), sorting by name and company, duplicates by email and phone, company links, the company's contact count, the composite foreign keys (company, source, owner of another workspace) |
 | `crm/lead/LeadIT` | Create/update, validation, estimated value and currency, the status lifecycle and its rules, follow-up date, filters, search, sorting (nulls last, priority), archive/restore, owner rules, a removed member's leads become unassigned, versions |

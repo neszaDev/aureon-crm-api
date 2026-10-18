@@ -36,9 +36,9 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   `CREATED_AT`, `UPDATED_AT`, `AMOUNT` and `PRIORITY`, `ASC` for `NAME`, `COMPANY`,
   `FOLLOW_UP_DATE`, `DUE_AT` and `EXPECTED_CLOSE_DATE`. The id is always a tie-breaker. Archived
   records are excluded unless `archived=true` (then only archived ones). Text search `q` is
-  trimmed; blank means no search. A list with an owner filter (`ownerId`; tasks: `assigneeId`)
-  also takes `unassigned=true`: only the records without one; together with an owner (tasks: or
-  `mine=true`) it is a 400 on `unassigned`.
+  trimmed; blank means no search. A list with an owner filter (`ownerId`; tasks: `assigneeId`),
+  and the deal board, also take `unassigned=true`: only the records without one; together with an
+  owner (tasks: or `mine=true`) it is a 400 on `unassigned`.
 - **Errors** always use `ApiError` (`status`, `code`, `message`, `fieldErrors`, ...). 400 invalid
   input or query parameter; 401 no valid token; 403 member without the permission; 404 unknown
   record, **or not a member of the workspace**; 409 version conflict, duplicate name, or a rule
@@ -59,7 +59,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `OWNER_ONLY` | 403 | Only owners manage owners: an admin changing an owner's role or making someone owner, removing an owner, inviting as `OWNER` or revoking an `OWNER` invitation |
   | `INVITATION_EMAIL_MISMATCH` | 403 | Accepting an invitation made for another email address |
   | `NOT_FOUND` | 404 | The record, invitation or user doesn't exist, or belongs to another workspace or user; a workspace the caller isn't a member of |
-  | `VERSION_CONFLICT` | 409 | Stale `version`, or a concurrent update won: reload and retry |
+  | `VERSION_CONFLICT` | 409 | Stale `version`, a concurrent update won, or the database aborted this request in a deadlock with another: reload and retry |
   | `EMAIL_TAKEN` | 409 | An account with this email exists (registration, registering through an invitation, an admin changing an email) |
   | `OWN_ACCOUNT` | 409 | An admin changing or deleting their own account (`/users/{id}`) |
   | `ACCOUNT_OWNS_WORKSPACE` | 409 | Deleting an account that is the only owner of a workspace: add another owner first |
@@ -133,7 +133,7 @@ Invitation rules:
 | `POST /workspaces/{w}/pipeline-stages` | `{ name (1-60), probability (0-100) }` → 201 `Stage` (an `OPEN` stage, placed after the open ones) | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/{id}` | `{ name, probability, version }` → `Stage` | `SETTINGS_MANAGE` |
 | `PUT /workspaces/{w}/pipeline-stages/order` | `{ stageIds: [...] }` all `OPEN` stage ids in the new order → `Stage[]` | `SETTINGS_MANAGE` |
-| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, or a deal in it (archived ones too: `Stage has deals; move them first`). Deals' stage history keeps the stage's name; its id there becomes null. Deletes and reorders of one pipeline run one after the other, so two deletes at once can't leave it without an open stage | `SETTINGS_MANAGE` |
+| `DELETE /workspaces/{w}/pipeline-stages/{id}` | → 204; 409 `WON`/`LOST`, the last open stage, or a deal in it (archived ones too: `Stage has deals; move them first`). Deals' stage history keeps the stage's name; its id there becomes null. Creates, deletes and reorders of one pipeline run one after the other, so two deletes at once can't leave it without an open stage | `SETTINGS_MANAGE` |
 | `GET /workspaces/{w}/lead-sources` | `?includeArchived` → `LeadSource[]` (`id, name, archived, version`) | member |
 | `POST /workspaces/{w}/lead-sources` | `{ name (1-60) }` → 201 | `SETTINGS_MANAGE`; 409 duplicate name |
 | `PUT /workspaces/{w}/lead-sources/{id}` | `{ name, archived, version }` | `SETTINGS_MANAGE` |
@@ -238,7 +238,7 @@ Every create and every move to another stage adds a history entry (the first one
 
 | Method and path | Body → response |
 |---|---|
-| `GET /board` | `?q&ownerId&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage |
+| `GET /board` | `?q&ownerId&unassigned&companyId` → `{ stages: [{ stage: Stage, count, totals: MoneyTotal[], deals: DealSummary[] }] }`, all stages in order (those without deals too), up to 50 active deals each, most recently updated first; `count` and `totals` (per currency, by code) cover every matching active deal of the stage |
 | `POST /{id}/move` | `{ stageId, version, lostReason? (≤500, required for LOST, dropped for the others) }` → `Deal`; a stage of another workspace is a 400 (field `stageId`), LOST without a reason a 400 (field `lostReason`), both before the version is compared. Entering `WON` or `LOST` from another kind sets `closedAt`; an open stage clears it and the reason. The current stage again is a 200 that changes nothing, except LOST with a different reason, which saves the reason (new version, `STAGE_CHANGE` audit, no history entry) |
 | `GET /{id}/history` | → `StageChange[]` (`fromStage?: HistoryStageRef, toStage: HistoryStageRef, changedBy?: MemberRef, changedAt`), newest first; `HistoryStageRef = { id?, name }` is the stage as it was at the change: its name then (a later rename doesn't change it), its id until the stage is deleted. `fromStage` is null for the first entry, `changedBy` once that person is no member |
 
