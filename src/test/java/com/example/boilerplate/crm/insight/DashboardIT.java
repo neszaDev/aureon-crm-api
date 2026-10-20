@@ -5,8 +5,10 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.in;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,12 +77,14 @@ class DashboardIT extends WorkspaceTestSupport {
     long repId = users.findByEmail(repEmail).orElseThrow().getId();
     Map<String, Long> stage = stages(owner, w);
 
-    // 2 companies, one archived; 3 contacts.
+    // 2 companies, one archived; 3 contacts and an archived one.
     long acme = create(owner, w, "/companies", Map.of("name", "Acme"));
     long gone = create(owner, w, "/companies", Map.of("name", "Gone"));
     long ann = create(owner, w, "/contacts", Map.of("firstName", "Ann"));
     create(owner, w, "/contacts", Map.of("firstName", "Bo"));
     create(owner, w, "/contacts", Map.of("firstName", "Cy"));
+    long oldContact = create(owner, w, "/contacts", Map.of("firstName", "Old"));
+    send(owner, post(W + "/contacts/{id}/archive", w, oldContact)).andExpect(status().isOk());
 
     // Leads NEW, QUALIFIED, CONVERTED (onto Ann: no new contact), UNQUALIFIED; an archived NEW one.
     create(owner, w, "/leads", Map.of("firstName", "New"));
@@ -98,7 +102,8 @@ class DashboardIT extends WorkspaceTestSupport {
     long archivedLead = create(owner, w, "/leads", Map.of("firstName", "Archived"));
     send(owner, post(W + "/leads/{id}/archive", w, archivedLead)).andExpect(status().isOk());
 
-    // Open deals in two currencies; one won and one lost today; an archived open deal.
+    // Open deals in two currencies; one won and one lost today; an archived open deal and an
+    // archived won one.
     deal(owner, w, "USD 1000.00", "1000.00", "USD", stage.get("Proposal"), null);
     deal(owner, w, "USD 500.00", "500.00", "USD", stage.get("Qualification"), 20);
     deal(owner, w, "EUR 300.00", "300.00", "EUR", stage.get("Negotiation"), null);
@@ -108,6 +113,10 @@ class DashboardIT extends WorkspaceTestSupport {
     move(owner, w, lost, stage.get("Lost"), "Budget");
     long archivedDeal = deal(owner, w, "Archived", "9999.00", "USD", stage.get("Proposal"), null);
     send(owner, post(W + "/deals/{id}/archive", w, archivedDeal)).andExpect(status().isOk());
+    long archivedWon =
+        deal(owner, w, "Archived won", "5000.00", "USD", stage.get("Proposal"), null);
+    move(owner, w, archivedWon, stage.get("Won"), null);
+    send(owner, post(W + "/deals/{id}/archive", w, archivedWon)).andExpect(status().isOk());
 
     // The owner's overdue and upcoming tasks, the rep's overdue one; a done one and an undated
     // one count nowhere.
@@ -135,9 +144,14 @@ class DashboardIT extends WorkspaceTestSupport {
               "companyId",
               acme));
     }
-    // The newest record change, then an export: a WORKSPACE event, not a record change.
+    // The newest record change, then an export (a WORKSPACE event), a role change (MEMBER) and a
+    // stage made and deleted (PIPELINE_STAGE): none of them a record change.
     send(owner, post(W + "/companies/{id}/archive", w, gone)).andExpect(status().isOk());
     send(owner, get(W + "/companies/export", w)).andExpect(status().isOk());
+    send(owner, put(W + "/members/{userId}", w, repId), Map.of("role", "MANAGER"))
+        .andExpect(status().isOk());
+    long temp = create(owner, w, "/pipeline-stages", Map.of("name", "Temp", "probability", 5));
+    send(owner, delete(W + "/pipeline-stages/{id}", w, temp)).andExpect(status().isNoContent());
 
     dashboard(owner, w)
         .andExpect(status().isOk())
@@ -194,6 +208,47 @@ class DashboardIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.myUpcomingTasks", empty()))
         .andExpect(jsonPath("$.openPipeline[*].weightedAmount", contains("225.00", "600.00")))
         .andExpect(jsonPath("$.recentChanges.length()").value(10));
+  }
+
+  /** A deal's own 0% weighs nothing: the override counts, not its stage's probability. */
+  @Test
+  void aZeroPercentOverrideWeighsNothing() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Zero");
+    deal(token, w, "Zero", "100.00", "USD", stages(token, w).get("Proposal"), 0);
+
+    dashboard(token, w)
+        .andExpect(jsonPath("$.openPipeline[*].amount", contains("100.00")))
+        .andExpect(jsonPath("$.openPipeline[*].weightedAmount", contains("0.00")));
+  }
+
+  /**
+   * The caller's task lists hold 8 each: overdue longest overdue first, upcoming soonest first,
+   * whatever the order they were created in.
+   */
+  @Test
+  void myTaskListsAreOrderedAndHoldEight() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Tasks");
+    for (int i = 1; i <= 3; i++) task(token, w, "Overdue " + i, hours(-i), null);
+    for (int i = 9; i >= 1; i--) task(token, w, "Upcoming " + i, hours(i), null);
+
+    dashboard(token, w)
+        .andExpect(jsonPath("$.counts.overdueTasks").value(3))
+        .andExpect(
+            jsonPath("$.myOverdueTasks[*].title", contains("Overdue 3", "Overdue 2", "Overdue 1")))
+        .andExpect(
+            jsonPath(
+                "$.myUpcomingTasks[*].title",
+                contains(
+                    "Upcoming 1",
+                    "Upcoming 2",
+                    "Upcoming 3",
+                    "Upcoming 4",
+                    "Upcoming 5",
+                    "Upcoming 6",
+                    "Upcoming 7",
+                    "Upcoming 8")));
   }
 
   /**

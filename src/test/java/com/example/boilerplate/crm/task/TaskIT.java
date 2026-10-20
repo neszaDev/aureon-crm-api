@@ -359,6 +359,13 @@ class TaskIT extends WorkspaceTestSupport {
     send(r2.token(), put(TASK, w, created), edit("Not r2's", null, 7))
         .andExpect(status().isForbidden());
     action(r2.token(), w, created, "complete", 7).andExpect(status().isForbidden());
+    // Taking it is assigning it: its creator, a rep, can't assign it to themselves either
+    // (RECORDS_ASSIGN, permissions.md).
+    send(r1.token(), put(TASK, w, created), edit("Still r1's", r1.userId(), 7))
+        .andExpect(status().isForbidden());
+    send(r1.token(), get(TASK, w, created))
+        .andExpect(jsonPath("$.assignee").doesNotExist())
+        .andExpect(jsonPath("$.version").value(7));
   }
 
   @Test

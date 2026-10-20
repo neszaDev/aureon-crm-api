@@ -172,6 +172,100 @@ class ReportIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.months[3].wonTotals", empty()));
   }
 
+  /**
+   * Months in Europe/Paris across summer time and the new year: the first instant of April (22:00
+   * UTC, summer time) and of November and January (23:00 UTC, winter time) opens its month, the
+   * second before it closes the month before.
+   */
+  @Test
+  void wonLostMonthsFollowSummerTimeAndTheNewYear() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Paris");
+    Map<String, Long> stage = stages(token, w);
+    long won = stage.get("Won");
+    long lost = stage.get("Lost");
+    closed(token, w, won, "1.00", "EUR", "2026-03-31T21:59:59Z");
+    closed(token, w, lost, "1.00", "EUR", "2026-03-31T22:00:00Z");
+    closed(token, w, won, "2.00", "EUR", "2026-10-31T22:59:59Z");
+    closed(token, w, lost, "2.00", "EUR", "2026-10-31T23:00:00Z");
+    closed(token, w, won, "3.00", "EUR", "2026-12-31T22:59:59Z");
+    closed(token, w, won, "4.00", "EUR", "2026-12-31T23:00:00Z");
+
+    report(token, w, "won-lost", "from", "2026-03-01", "to", "2027-01-31")
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath(
+                "$.months[*].month",
+                contains(
+                    "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09",
+                    "2026-10", "2026-11", "2026-12", "2027-01")))
+        .andExpect(jsonPath("$.months[*].won", contains(1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1)))
+        .andExpect(jsonPath("$.months[*].lost", contains(0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0)))
+        .andExpect(jsonPath("$.months[0].wonTotals[*].amount", contains("1.00")))
+        .andExpect(jsonPath("$.months[7].wonTotals[*].amount", contains("2.00")))
+        .andExpect(jsonPath("$.months[9].wonTotals[*].amount", contains("3.00")))
+        .andExpect(jsonPath("$.months[10].wonTotals[*].amount", contains("4.00")));
+  }
+
+  /**
+   * The first and last years a date may name, in zones whose offset takes the period's instants
+   * past them in UTC: Pago Pago's 1 January of year 1 begins in 1 BC (its local mean time then was
+   * +12:37) and its 31 December 9999 ends in 10000 (UTC-11); Kiritimati's the other way round.
+   */
+  @Test
+  void theFirstAndLastYearsAnswerInEveryZone() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    for (String zone : List.of("Pacific/Pago_Pago", "Pacific/Kiritimati")) {
+      long w = createWorkspace(token, zone, zone);
+      for (String year : List.of("0001", "9999")) {
+        for (String path : List.of("dashboard", "reports/won-lost", "reports/funnel")) {
+          send(
+                  token,
+                  get(W + "/" + path, w)
+                      .param("from", year + "-01-01")
+                      .param("to", year + "-12-31"))
+              .andExpect(status().isOk())
+              .andExpect(jsonPath("$.period.from").value(year + "-01-01"));
+        }
+        report(token, w, "activities", "from", year + "-01-01", "to", year + "-12-31")
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.period.to").value(year + "-12-31"));
+      }
+    }
+  }
+
+  /** Equal totals: by email, and the entry without a member last. */
+  @Test
+  void equalTotalsGoByEmailThenTheEntryWithoutAMember() throws Exception {
+    String ownerEmail = uniqueEmail();
+    String owner = tokenFor(ownerEmail);
+    long w = createWorkspace(owner, "Acme");
+    String managerEmail = uniqueEmail();
+    String manager = tokenFor(managerEmail);
+    addMember(w, managerEmail, WorkspaceRole.MANAGER);
+    String leaverEmail = uniqueEmail();
+    String leaver = tokenFor(leaverEmail);
+    addMember(w, leaverEmail, WorkspaceRole.SALES_REP);
+    long company = create(owner, w, "/companies", Map.of("name", "Acme"));
+    long proposal = stages(owner, w).get("Proposal");
+    for (String token : List.of(owner, manager, leaver)) {
+      activity(token, w, "CALL", company, hours(-1));
+      deal(token, w, "100.00", "EUR", proposal);
+    }
+    send(owner, delete(W + "/members/{userId}", w, userId(leaverEmail)))
+        .andExpect(status().isNoContent());
+
+    List<String> byEmail = Stream.of(ownerEmail, managerEmail).sorted().toList();
+    report(owner, w, "activities")
+        .andExpect(jsonPath("$.byUser[*].total", contains(1, 1, 1)))
+        .andExpect(jsonPath("$.byUser[*].user.email", contains(byEmail.toArray())))
+        .andExpect(jsonPath("$.byUser[2].user").doesNotExist());
+    report(owner, w, "pipeline")
+        .andExpect(jsonPath("$.byOwner.length()").value(3))
+        .andExpect(jsonPath("$.byOwner[*].owner.email", contains(byEmail.toArray())))
+        .andExpect(jsonPath("$.byOwner[2].owner").doesNotExist());
+  }
+
   @Test
   void funnelCountsReachedStages() throws Exception {
     String token = tokenFor(uniqueEmail());

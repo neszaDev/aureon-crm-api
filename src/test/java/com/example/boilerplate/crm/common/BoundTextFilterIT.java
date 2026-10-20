@@ -45,10 +45,12 @@ class BoundTextFilterIT extends WorkspaceTestSupport {
 
   /**
    * What q must not find: no backslash, wildcards that would match if {@code % _ \} were not
-   * literal, no quote.
+   * literal (both, only {@code _}, only {@code %}), no quote.
    */
   static final List<String> NOT_FOUND =
-      List.of("A O'Brien%_x B", "A O'Brien\\abZx B", "A OBrien\\%_x B");
+      List.of(
+          "A O'Brien%_x B",
+          "A O'Brien\\abZx B", "A O'Brien\\%Zx B", "A O'Brien\\ab_x B", "A OBrien\\%_x B");
 
   @Test
   void qMeansTheTextItself() throws Exception {
@@ -87,7 +89,14 @@ class BoundTextFilterIT extends WorkspaceTestSupport {
     }
     // Longer, wildcards that would match, no quote, no backslash.
     for (String industry :
-        List.of(NEEDLE + "y", "O'Brien\\abZx", "OBrien\\%_x", "O'Brien%_x", "xO'Brien\\%_x")) {
+        List.of(
+            NEEDLE + "y",
+            "O'Brien\\abZx",
+            "O'Brien\\%Zx",
+            "O'Brien\\ab_x",
+            "OBrien\\%_x",
+            "O'Brien%_x",
+            "xO'Brien\\%_x")) {
       create(token, w, companies, "name", "Co " + industry, Map.of("industry", industry));
     }
 
@@ -105,7 +114,14 @@ class BoundTextFilterIT extends WorkspaceTestSupport {
     Listing contacts = LISTINGS.get(1);
     create(token, w, contacts, "firstName", "Found", Map.of("tags", List.of("vip", NEEDLE)));
     create(token, w, contacts, "firstName", "Lower", Map.of("tags", List.of("o'brien\\%_X")));
-    for (String tag : List.of(NEEDLE + "y", "O'Brien\\abZx", "OBrien\\%_x", "O'Brien%_x")) {
+    for (String tag :
+        List.of(
+            NEEDLE + "y",
+            "O'Brien\\abZx",
+            "O'Brien\\%Zx",
+            "O'Brien\\ab_x",
+            "OBrien\\%_x",
+            "O'Brien%_x")) {
       create(token, w, contacts, "firstName", "No " + tag, Map.of("tags", List.of(tag)));
     }
 

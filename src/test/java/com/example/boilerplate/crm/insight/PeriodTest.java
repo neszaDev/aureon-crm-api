@@ -72,6 +72,33 @@ class PeriodTest {
             FieldValidationException.class, e -> assertThat(e.field()).isEqualTo("to"));
   }
 
+  /**
+   * Years 1 and 9999, the first and last a date may name, and a zone behind UTC: whole days there,
+   * the one its summer time starts too.
+   */
+  @Test
+  void theFirstAndLastYearsAndAZoneBehindUtc() {
+    assertThat(Period.date("from", "0001-01-01")).isEqualTo(LocalDate.of(1, 1, 1));
+    assertThat(Period.date("to", "9999-12-31")).isEqualTo(LocalDate.of(9999, 12, 31));
+    assertThatThrownBy(() -> Period.date("from", "0000-12-31"))
+        .isInstanceOfSatisfying(
+            FieldValidationException.class, e -> assertThat(e.field()).isEqualTo("from"));
+
+    ZoneId losAngeles = ZoneId.of("America/Los_Angeles");
+    // Summer time starts on 8 March 2026 there: a day of 23 hours.
+    Period march =
+        new Period(LocalDate.parse("2026-03-08"), LocalDate.parse("2026-03-08"), losAngeles);
+    assertThat(march.start()).isEqualTo(Instant.parse("2026-03-08T08:00:00Z"));
+    assertThat(march.endExclusive()).isEqualTo(Instant.parse("2026-03-09T07:00:00Z"));
+    // 03:00 UTC on the 17th is still the 16th there (UTC-7).
+    assertThat(Period.resolve(null, null, losAngeles, NOW).to())
+        .isEqualTo(LocalDate.parse("2026-10-16"));
+    Period last =
+        Period.resolve(
+            LocalDate.parse("9999-01-01"), LocalDate.parse("9999-12-31"), losAngeles, NOW);
+    assertThat(last.endExclusive()).isEqualTo(Instant.parse("+10000-01-01T08:00:00Z"));
+  }
+
   @Test
   void datesParseOrFailOnTheirField() {
     assertThat(Period.date("from", "2026-02-28")).isEqualTo(LocalDate.parse("2026-02-28"));
