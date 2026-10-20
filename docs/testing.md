@@ -15,19 +15,23 @@ as in `auth/JwtServiceTest` and `auth/RefreshTokenServiceTest`. To test configur
 use `ApplicationContextRunner` (see `auth/AuthPropertiesTest`). The workspace layer has its own:
 `workspace/WorkspaceRoleTest` (permissions per role), `WorkspaceAccessTest` (permission and
 ownership checks, `runAs`), `WorkspaceAccessInterceptorTest` (the context is cleared after a
-request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs). The CRM adds
-`crm/common/` (`CrmRecordTest` archive and owner, `CurrenciesTest`, `ListParamsTest` paging and
-sort orders, `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
-`TextSearchTest` wildcard escaping, `NoInlineLiteralTest` no `cb.literal` in `src/main`,
-`common/text/TextsTest` stripping and the NUL check of a text parameter), `crm/lead/LeadStatusTest` (the status transition table),
-`crm/deal/DealTest` (status from the stage kind, closing time), `crm/task/TaskTest` (task
-transitions, overdue, microsecond times), `crm/export/CsvWriterTest` (quoting, `;` too, formula protection also after leading blanks,
-CRLF), `ExportPropertiesTest` (`max-rows` 1 to 30000) and `RecordRefsTest` (`D-0042`), `crm/insight/PeriodTest` (defaults and bounds in the
-workspace zone, the 366-day cap, date parsing), `crm/demo/DemoDataSeederTest` (the opt-in gate,
-the password check that never shows the value, a login with another password left out),
-`common/entity/TimestampPrecisionTest` and
-`common/exception/GlobalExceptionHandlerTest` (database data exceptions are the client's 400, the
-codes of unique indexes, stale updates and deadlocks).
+request, an exception or async handling) and `audit/AuditChangesTest` (audit diffs).
+`common/text/TextsTest` covers stripping and the NUL check of a text parameter,
+`common/entity/TimestampPrecisionTest` the times the app sets in microseconds (and, as a
+microsecond clock such as the Macs' can't show a miss, that every `Instant.now()` an entity takes
+is cut to them, read from the source) and `common/exception/GlobalExceptionHandlerTest` database
+data exceptions as the client's 400, the codes of unique indexes and foreign keys (a foreign key's
+"in use" only for a delete), stale updates and deadlocks. The CRM adds `crm/common/`
+(`CrmRecordTest` archive and owner, `CurrenciesTest`, `ListParamsTest` paging and sort orders,
+`MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
+`TextSearchTest` wildcard escaping, `NoInlineLiteralTest` no `cb.literal` in `src/main`),
+`crm/lead/LeadStatusTest` (the status transition table), `crm/deal/DealTest` (status from the
+stage kind, closing time), `crm/task/TaskTest` (task transitions, overdue, microsecond times),
+`crm/export/CsvWriterTest` (quoting, `;` too, formula protection also after leading blanks, CRLF),
+`ExportPropertiesTest` (`max-rows` 1 to 30000) and `RecordRefsTest` (`D-0042`),
+`crm/insight/PeriodTest` (defaults and bounds in the workspace zone, the 366-day cap, date
+parsing) and `crm/demo/DemoDataSeederTest` (the opt-in gate, the password check that never shows
+the value, a login with another password left out).
 
 ## Integration tests
 

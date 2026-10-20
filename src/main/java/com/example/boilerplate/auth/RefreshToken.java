@@ -3,6 +3,7 @@ package com.example.boilerplate.auth;
 import com.example.boilerplate.user.User;
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -47,7 +48,7 @@ public class RefreshToken {
     this.user = user;
     this.tokenHash = tokenHash;
     this.expiresAt = expiresAt;
-    this.createdAt = Instant.now();
+    this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     this.familyId = familyId;
     this.familyCreatedAt = familyCreatedAt;
     this.tokenVersion = user.getTokenVersion();
