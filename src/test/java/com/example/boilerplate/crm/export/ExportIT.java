@@ -772,7 +772,7 @@ class ExportIT extends WorkspaceTestSupport {
   /** The lines of a CSV without line breaks inside values: the BOM and the last CRLF checked. */
   private static List<String> lines(MvcResult result) {
     String csv = new String(result.getResponse().getContentAsByteArray(), UTF_8);
-    assertThat(csv).startsWith("﻿").endsWith("\r\n");
+    assertThat(csv).startsWith("\uFEFF").endsWith("\r\n");
     return List.of(csv.substring(1, csv.length() - 2).split("\r\n", -1));
   }
 

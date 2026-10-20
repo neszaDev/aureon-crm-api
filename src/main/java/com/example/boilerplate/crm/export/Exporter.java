@@ -96,7 +96,7 @@ public class Exporter {
         changes(list, filter));
     StringWriter csv = new StringWriter();
     // Excel reads a CSV as UTF-8 only after a byte order mark.
-    csv.write('﻿');
+    csv.write('\uFEFF');
     try {
       CsvWriter.write(csv, header, rows.apply(found));
     } catch (IOException e) {
