@@ -24,6 +24,16 @@ and `publish` has `needs: ci`.
 Images: `https://github.com/<owner>/<repo>/pkgs/container/<repo>`. Pull with
 `docker pull ghcr.io/<owner>/<repo>:latest`.
 
+## The CRM branch (`feat/crm`)
+
+`ci.yml` runs on `pull_request` and `workflow_call` only, and no pull request from `feat/crm`
+exists yet, so **CI has not run on this branch**: its checks were run locally instead
+([CRM status](crm/status.md#verification)). In this project the publishing workflows
+(`cd-dev.yml`, `cd-main.yml`) are disabled in GitHub, because publishing an image needs the
+owner's approval: no image of this API exists in the registry. The web repository's CI E2E job runs
+against that image, so it can't pass until publishing is enabled. CI runs here once a pull request
+from `feat/crm` is opened.
+
 ## CI checks
 
 Each job runs the same command you can run locally. They run in parallel after

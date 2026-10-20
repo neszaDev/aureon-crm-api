@@ -61,7 +61,7 @@ erDiagram
 
 | Table | Columns | Constraints and indexes |
 |---|---|---|
-| `users` (existing) | + `display_name varchar(100)?` | |
+| `users` (existing) | + `display_name varchar(100)?`, + `token_version int` (V20, default 0: see [database.md](../database.md#current-schema)) | |
 | `workspaces` | `name varchar(100)`, `default_currency char(3)`, `timezone varchar(64)` | |
 | `workspace_members` | `workspace_id`, `user_id → users ON DELETE CASCADE`, `role varchar(16)` (`OWNER`, `ADMIN`, `MANAGER`, `SALES_REP`) | `UNIQUE (workspace_id, user_id)`; index `(user_id)` |
 | `workspace_invitations` | `workspace_id`, `email varchar(254)` (lower case), `role`, `token_hash varchar(64)` (SHA-256 hex, `UNIQUE`), `invited_by → users ON DELETE SET NULL`, `expires_at`, `accepted_at?`, `revoked_at?` | partial `UNIQUE (workspace_id, email) WHERE accepted_at IS NULL AND revoked_at IS NULL`; index `(invited_by)` |
@@ -87,8 +87,8 @@ Referral, Event, Outbound, Partner, Other) in the transaction that creates it.
 |---|---|
 | `companies` | `name varchar(200)`, `industry varchar(100)?`, `website varchar(255)?`, `phone varchar(50)?`, `address varchar(500)?`, `employee_count int?`, `owner_id?`, `notes varchar(5000)?`, `archived_at?` |
 | `contacts` | `first_name varchar(100)`, `last_name varchar(100)?`, `email varchar(254)?`, `phone varchar(50)?`, `job_title varchar(100)?`, `company_id?`, `owner_id?`, `source_id?`, `tags text[]` (lower case, then Unicode NFC; ≤ 20 of ≤ 40 chars), `notes?`, `archived_at?` |
-| `leads` | `first_name`, `last_name?`, `company_name varchar(200)?`, `email?`, `phone?`, `job_title?`, `source_id?`, `owner_id?`, `status varchar(16)`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `follow_up_date date?`, `estimated_value numeric(15,2)?` + `currency char(3)?`, `unqualified_reason varchar(500)?`, `notes?`, `converted_at?`, `converted_company_id?`, `converted_contact_id?`, `converted_deal_id?`, `archived_at?`; `CHECK`s (V21): `unqualified_reason` set exactly when `UNQUALIFIED`, `converted_at` and `converted_contact_id` exactly when `CONVERTED`, `converted_company_id` and `converted_deal_id` only then |
-| `deals` | `name varchar(200)`, `amount numeric(15,2) ≥ 0`, `currency char(3)`, `stage_id`, `probability smallint?` (override), `expected_close_date date?`, `owner_id?`, `company_id?`, `contact_id?`, `source_id?`, `lead_id?` (`UNIQUE`: one deal per converted lead), `lost_reason varchar(500)?`, `closed_at?`, `notes?`, `archived_at?` |
+| `leads` | `first_name`, `last_name?`, `company_name varchar(200)?`, `email?`, `phone?`, `job_title?`, `source_id?`, `owner_id?`, `status varchar(16)`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `follow_up_date date?`, `estimated_value numeric(15,2)?` (≥ 0) + `currency char(3)?` (`CHECK`: both or neither), `unqualified_reason varchar(500)?`, `notes?`, `converted_at?`, `converted_company_id?`, `converted_contact_id?`, `converted_deal_id?`, `archived_at?`; `CHECK`s (V21): `unqualified_reason` set exactly when `UNQUALIFIED`, `converted_at` and `converted_contact_id` exactly when `CONVERTED`, `converted_company_id` and `converted_deal_id` only then |
+| `deals` | `name varchar(200)`, `amount numeric(15,2) ≥ 0`, `currency char(3)`, `stage_id`, `probability smallint?` (override, 0-100), `expected_close_date date?`, `owner_id?`, `company_id?`, `contact_id?`, `source_id?`, `lead_id?` (`UNIQUE`: one deal per converted lead), `lost_reason varchar(500)?`, `closed_at?`, `notes?`, `archived_at?` |
 | `deal_stage_changes` | `deal_id`, `from_stage_id?` + `from_stage_name varchar(60)?` (both null for the first entry), `to_stage_id?` + `to_stage_name varchar(60)`, `changed_by?` (user id, no FK: history outlives memberships and accounts), `changed_at`; the names are snapshots taken at the change, the ids `ON DELETE SET NULL (column)` so deleting a stage keeps the rows; the app only inserts, no `updated_at` or `version`, and no append-only trigger (SET NULL updates rows) |
 | `tasks` | `title varchar(200)`, `description varchar(5000)?`, `due_at timestamptz?`, `priority varchar(8)` (`LOW`, `MEDIUM`, `HIGH`), `status varchar(16)` (`OPEN`, `COMPLETED`, `CANCELLED`), `assignee_id?`, `created_by?` (user id; a member foreign key like the owners: `ON DELETE SET NULL (created_by)`, so a creator who leaves becomes null), `completed_at?` (`CHECK`: set exactly when `COMPLETED`), `company_id?`, `contact_id?`, `lead_id?`, `deal_id?` |
 | `activities` | `type varchar(16)` (`CALL`, `EMAIL`, `MEETING`, `NOTE`), `subject varchar(200)`, `body varchar(5000)?`, `occurred_at`, `author_id?` (user id; a member foreign key like the owners: `ON DELETE SET NULL (author_id)`, so an author who leaves becomes null), `company_id?`, `contact_id?`, `lead_id?`, `deal_id?`; `CHECK (num_nonnulls(company_id, contact_id, lead_id, deal_id) >= 1)`: at least one link |
@@ -98,7 +98,8 @@ deals` too), except `deal_stage_changes → pipeline_stages`, which is `SET NULL
 column: the history keeps the stage's name. Removing a pipeline stage or lead source in use fails
 with a foreign-key error, which the API reports as 409 before it gets that far.
 
-Indexes: every foreign key; `(workspace_id, lower(name))` on companies;
+Indexes: every foreign key (`workspace_invitations.workspace_id` only through its partial unique
+index: workspaces are never deleted); `(workspace_id, lower(name))` on companies;
 `(workspace_id, lower(email))` on contacts and leads; `GIN (tags)` on contacts;
 `(workspace_id, status)` on leads; `(workspace_id, stage_id)` and `(workspace_id, closed_at)` on
 deals; `(workspace_id, assignee_id, status, due_at)` on tasks (the reminders and `mine`);

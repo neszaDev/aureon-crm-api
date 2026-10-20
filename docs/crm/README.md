@@ -11,6 +11,9 @@ derived products rename it (frontend `AppConfig.name` and locale copy).
 | [data-model.md](data-model.md) | tables, relationships, tenant boundary, archival, money |
 | [permissions.md](permissions.md) | roles, the permission matrix, how it is enforced |
 | [api.md](api.md) | the REST contract the frontend codes against |
+| [status.md](status.md) | feature matrix (implemented, partial, deferred, and the tests behind each), known limitations, follow-ups |
+| [security.md](security.md) | security model, what was verified and by which test, what wasn't, the Phase 4 findings |
+| [production-checklist.md](production-checklist.md) | what to set and check before going live: API, web, reverse proxy and TLS |
 | [../plans/0004-crm.md](../plans/0004-crm.md) | phases, slices, acceptance checklist, status |
 
 ## Who uses it

@@ -10,9 +10,9 @@ A workspace's data is isolated from every other: each request is checked for mem
 database queries are filtered by workspace (Hibernate `@TenantId`) and backed by composite foreign
 keys. Changes are written to an append-only audit trail. On top of that sit the CRM features:
 pipeline stages, lead sources, companies, contacts, leads (with conversion), deals (with the
-pipeline board), tasks (with reminders) and activities today, and a dashboard and reports as the
-contract in [docs/crm/](docs/crm/README.md) is built out. That folder holds the specification, data
-model, permission matrix and REST contract.
+pipeline board), tasks (with reminders), activities, a dashboard, five reports and CSV export.
+[docs/crm/](docs/crm/README.md) holds the specification, data model, permission matrix and REST
+contract, and what the first release does and doesn't do ([status](docs/crm/status.md)).
 
 It was built from [spring-postgres-boilerplate](https://github.com/neszaDev/spring-postgres-boilerplate),
 so it also has JWT access tokens with rotating refresh tokens, sign-in rate limits, admin user
@@ -78,6 +78,9 @@ env/                            .env.example (tracked) and your local .env (git-
 | Guide | Covers |
 |---|---|
 | [CRM](docs/crm/README.md) | Product specification, [data model](docs/crm/data-model.md), [permissions](docs/crm/permissions.md), [API contract](docs/crm/api.md) |
+| [CRM status](docs/crm/status.md) | Feature matrix with the tests behind each row, known limitations, follow-ups |
+| [CRM security](docs/crm/security.md) | Security and authorization model, what was verified and what wasn't, Phase 4 findings |
+| [Production checklist](docs/crm/production-checklist.md) | Both services, the reverse proxy and TLS, before going live |
 | [Architecture](docs/architecture.md) | Request flow, feature layout, workspaces and tenancy, security model, persistence |
 | [API guide](docs/api.md) | Errors, accounts and sign-in, files, curl walkthrough (CRM endpoints: see above) |
 | [Configuration](docs/configuration.md) | Every environment variable and profile |
@@ -90,14 +93,19 @@ env/                            .env.example (tracked) and your local .env (git-
 
 ## Deploying
 
-CI/CD publishes the tested runtime image to GitHub Container Registry: `:dev` from the `dev`
-branch, and `:latest` / `:1.2.3` from `main` and version tags after an approval. See
-[CI/CD](docs/ci.md). To build it yourself: `docker build -f docker/Dockerfile --target runtime .`. Run it
+Nothing is deployed and no image is published: the project runs locally, and the CI/CD
+workflows that would publish to GitHub Container Registry (`:dev` from `dev`, `:latest` /
+`:1.2.3` from `main` and tags after an approval) are disabled in this repository
+([CI/CD](docs/ci.md)). Before going live, work through the
+[production checklist](docs/crm/production-checklist.md) (both services, the reverse proxy and
+TLS) and read the [security notes](docs/crm/security.md). To build the image:
+`docker build -f docker/Dockerfile --target runtime .`. Run it
 with `SPRING_PROFILES_ACTIVE=prod` and set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
 `JWT_SECRET` and `CORS_ALLOWED_ORIGINS`; the prod profile has no defaults for them. Pass
 `APP_VERSION` (shown at `/actuator/info`) and tag releases with semantic versions
 (`v1.2.0`). `make smoke` is the pre-deployment check. See
-[Configuration](docs/configuration.md).
+[Configuration](docs/configuration.md), and [Deployment](docs/deployment.md) for Azure Container
+Apps.
 
 ## Make it yours
 
