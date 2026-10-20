@@ -204,6 +204,27 @@ class ContactIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.tags", contains("partner", "vip")));
   }
 
+  /**
+   * A tag is stored in Unicode's composed form (NFC), so "café" typed with a combining accent is
+   * the same tag as with a precomposed é: one tag, one list entry, found by either spelling.
+   */
+  @Test
+  void tagsAreOneUnicodeForm() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    String composed = "caf\u00e9";
+    String decomposed = "cafe\u0301";
+
+    send(token, post(CONTACTS, w), Map.of("firstName", "Ada", "tags", List.of(decomposed)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.tags", contains(composed)));
+    create(token, w, Map.of("firstName", "Bob", "tags", List.of(composed, decomposed)));
+
+    list(token, w, "tag", decomposed).andExpect(jsonPath("$.totalElements").value(2));
+    list(token, w, "tag", composed).andExpect(jsonPath("$.totalElements").value(2));
+    send(token, get(CONTACTS + "/tags", w)).andExpect(jsonPath("$", contains(composed)));
+  }
+
   @Test
   void tagFilterAndTagList() throws Exception {
     String token = tokenFor(uniqueEmail());

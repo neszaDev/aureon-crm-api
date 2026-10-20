@@ -176,15 +176,16 @@ to 5 active contacts as `ContactRef` (`id, fullName, email?, phone?`): same emai
 first, then the same digits of the phone, at least 6 of them; as for companies, the contact being
 edited can be among them), plus `GET /tags` → the tags of the workspace's active contacts, each
 once, sorted. List filters: `q` (first and last name, both together, email, phone, company name),
-`companyId`, `ownerId`, `unassigned`, `sourceId`, `tag` (exactly, any case), `archived`; `sort`:
-`NAME` (default; last name, then first name, ignoring case), `COMPANY` (company name ignoring
-case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`NAME`) or a company (`COMPANY`)
-come last ascending and first descending.
+`companyId`, `ownerId`, `unassigned`, `sourceId`, `tag` (exactly, any case and Unicode form),
+`archived`; `sort`: `NAME` (default; last name, then first name, ignoring case), `COMPANY` (company
+name ignoring case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`NAME`) or a company
+(`COMPANY`) come last ascending and first descending.
 
 ```ts
 ContactInput   = { firstName (1-100), lastName? (≤100), email? (≤254, stored lower case), phone? (≤50),
                    jobTitle? (≤100), companyId?, ownerId?, sourceId?, tags? (≤20 once stripped,
-                   lower-cased and deduplicated, each 1-40; stored sorted), notes? (≤5000) }
+                   composed (Unicode NFC), lower-cased and deduplicated, each 1-40; stored
+                   sorted), notes? (≤5000) }
 ContactSummary = { id, firstName, lastName?, fullName (first + " " + last), email?, phone?,
                    jobTitle?, company?: Ref, owner?: MemberRef, tags, archived, updatedAt }
 Contact        = ContactSummary + { source?: Ref, notes?, archivedAt?, createdAt, version }

@@ -263,14 +263,17 @@ public class ContactService {
         Texts.optional(r.notes()));
   }
 
-  /** Stripped, in lower case, each once, sorted; a blank or too long tag, or a 21st, is a 400. */
+  /**
+   * Stripped, as {@link Contact#tag} stores them, each once, sorted; a blank or too long tag, or a
+   * 21st, is a 400.
+   */
   private static List<String> tags(List<String> requested) {
     if (requested == null) return List.of();
     SortedSet<String> tags = new TreeSet<>();
     for (String value : requested) {
       String tag = Texts.optional(value);
       if (tag == null) throw new FieldValidationException("tags", "must not contain a blank tag");
-      tag = tag.toLowerCase(Locale.ROOT);
+      tag = Contact.tag(tag);
       if (tag.length() > MAX_TAG_LENGTH) {
         throw new FieldValidationException(
             "tags", "must not contain a tag longer than " + MAX_TAG_LENGTH + " characters");

@@ -9,7 +9,6 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.data.jpa.domain.Specification;
 
 /** The contact list's filters as one specification; the workspace comes from the tenant filter. */
@@ -51,7 +50,7 @@ final class ContactSpecifications {
                     "array_position",
                     Integer.class,
                     root.get("tags"),
-                    TextSearch.bound(cb, tag.toLowerCase(Locale.ROOT))),
+                    TextSearch.bound(cb, Contact.tag(tag))),
                 0));
       }
       return cb.and(where.toArray(Predicate[]::new));

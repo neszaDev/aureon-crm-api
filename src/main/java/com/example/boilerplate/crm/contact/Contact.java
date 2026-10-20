@@ -3,7 +3,9 @@ package com.example.boilerplate.crm.contact;
 import com.example.boilerplate.crm.common.CrmRecord;
 import com.example.boilerplate.crm.company.Company;
 import jakarta.persistence.*;
+import java.text.Normalizer;
 import java.util.List;
+import java.util.Locale;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -105,6 +107,14 @@ public class Contact extends CrmRecord {
 
   public List<String> getTags() {
     return tags;
+  }
+
+  /**
+   * A tag as stored and filtered: composed (NFC), so an accent typed as a combining mark is the
+   * same tag, and in lower case.
+   */
+  public static String tag(String text) {
+    return Normalizer.normalize(text, Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
   }
 
   public String getNotes() {
