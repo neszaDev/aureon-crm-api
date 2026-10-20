@@ -93,7 +93,7 @@ public class Exporter {
         AuditEntityType.WORKSPACE,
         workspaceId,
         found.size() + " " + list + " exported",
-        changes(list, filter));
+        changes(list, found.size(), filter));
     StringWriter csv = new StringWriter();
     // Excel reads a CSV as UTF-8 only after a byte order mark.
     csv.write('\uFEFF');
@@ -130,14 +130,16 @@ public class Exporter {
   }
 
   /**
-   * The event's changes, shaped like an edit's: {@code list} and the {@code filters} given, without
-   * the unset ones (null) and the flags left at their default (false).
+   * The event's changes, shaped like an edit's: {@code list}, the {@code count} of rows exported
+   * (the label's number, for a client that translates) and the {@code filters} given, without the
+   * unset ones (null) and the flags left at their default (false).
    */
-  private Map<String, Map<String, Object>> changes(String list, Object filter) {
+  private Map<String, Map<String, Object>> changes(String list, int count, Object filter) {
     Map<String, Object> given = auditChanges.snapshot(filter);
     given.values().removeIf(Boolean.FALSE::equals);
     Map<String, Object> after = new LinkedHashMap<>();
     after.put("list", list);
+    after.put("count", count);
     after.put("filters", given);
     return AuditChanges.diff(Map.of(), after);
   }

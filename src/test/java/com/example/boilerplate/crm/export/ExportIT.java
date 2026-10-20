@@ -509,6 +509,7 @@ class ExportIT extends WorkspaceTestSupport {
             PLAIN.readTree(
                 """
                 {"list": {"from": null, "to": "leads"},
+                 "count": {"from": null, "to": 1},
                  "filters": {"from": null,
                   "to": {"statuses": ["NEW", "CONTACTED"], "priority": "HIGH",
                          "followUpBefore": "2026-11-15"}}}"""));
@@ -524,6 +525,7 @@ class ExportIT extends WorkspaceTestSupport {
             PLAIN.readTree(
                 """
                 {"list": {"from": null, "to": "contacts"},
+                 "count": {"from": null, "to": 2},
                  "filters": {"from": null, "to": {"q": "ann", "tag": "vip"}}}"""));
     // No filters given: none recorded (false is the default, not a filter).
     assertThat(exports.get(1).getEntityLabel()).isEqualTo("0 deals exported");
@@ -531,7 +533,8 @@ class ExportIT extends WorkspaceTestSupport {
         .isEqualTo(
             PLAIN.readTree(
                 """
-                {"list": {"from": null, "to": "deals"}, "filters": {"from": null, "to": {}}}"""));
+                {"list": {"from": null, "to": "deals"}, "count": {"from": null, "to": 0},
+                 "filters": {"from": null, "to": {}}}"""));
     assertThat(tree(exports.get(0).getChanges().get("filters")))
         .isEqualTo(PLAIN.readTree("{\"from\": null, \"to\": {\"archived\": true}}"));
 

@@ -408,13 +408,14 @@ stored (`1250.00`), booleans `yes` / `no`.
 | deals | Reference, Name, Amount, Currency, Stage, Status, Probability (the deal's, else its stage's), Expected close, Company, Contact, Owner, Closed, Lost reason, Created, Updated, Archived |
 
 Every export is audited: `EXPORT` on `WORKSPACE` (entity id: the workspace's), label `<n> <list>
-exported` (`12 contacts exported`), changes `{ list: { from: null, to: "contacts" }, filters: {
-from: null, to: { ...the filters given } } }` (unset filters and `false` flags left out). The
-`filters` keys are the field names of the list's filter record, not the query parameters: a
-lead export with `?status=NEW&status=CONTACTED&followUpBefore=2026-11-15` records `{ statuses:
-["NEW", "CONTACTED"], followUpBefore: "2026-11-15" }`. It shows in the workspace's history,
-which needs `AUDIT_READ`; an export over the cap or refused records nothing. The trail is
-append-only and has no retention period, so the filters (the search text `q` included) stay in it.
+exported` (`12 contacts exported`), changes `{ list: { from: null, to: "contacts" }, count: { from:
+null, to: 12 }, filters: { from: null, to: { ...the filters given } } }` (`count`: the rows
+exported, the label's number for a client that translates; unset filters and `false` flags left
+out). The `filters` keys are the field names of the list's filter record, not the query parameters:
+a lead export with `?status=NEW&status=CONTACTED&followUpBefore=2026-11-15` records `{ statuses:
+["NEW", "CONTACTED"], followUpBefore: "2026-11-15" }`. It shows in the workspace's history, which
+needs `AUDIT_READ`; an export over the cap or refused records nothing. The trail is append-only and
+has no retention period, so the filters (the search text `q` included) stay in it.
 
 ## Audit
 
