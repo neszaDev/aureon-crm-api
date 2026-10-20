@@ -2,6 +2,7 @@ package com.example.boilerplate.file;
 
 import com.example.boilerplate.common.exception.FileRejectedException;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.web.Paging;
 import com.example.boilerplate.file.dto.FileResponse;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserDeletionEvent;
@@ -17,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -86,7 +86,7 @@ public class FileService {
   public Page<FileResponse> list(long ownerId, int page, int size) {
     return files
         .findByOwnerId(
-            ownerId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
+            ownerId, Paging.request(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
         .map(FileService::response);
   }
 

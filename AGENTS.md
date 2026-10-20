@@ -60,7 +60,8 @@ src/main/java/com/example/boilerplate/
   file/        owner-scoped uploads (/api/v1/files), FileStorage + LocalFileStorage
   security/    SecurityConfig (access rules), JwtAuthenticationFilter, CORS
   common/      AuditableEntity, WorkspaceOwnedEntity, GlobalExceptionHandler + ApiError,
-               request-id filter, RequestPaths, validation constraints, Tokens, Texts
+               request-id filter, RequestPaths, Paging (a list's page and size), validation
+               constraints, Tokens, Texts
 docker/        Dockerfile (local/build/runtime stages), compose.yml + override
 infra/         Azure: main.bicep (one environment of both apps) + deploy.sh, docs/deployment.md
 env/           .env.example (tracked); local .env (git-ignored), read by compose via make

@@ -15,16 +15,13 @@ import org.springframework.mock.web.MockHttpServletResponse;
 /**
  * Security review probe (phase 4): paging, sort, direction and search inputs of every list can't
  * reach the database unchecked. Out-of-range paging and any sort or direction outside the list's
- * own are a 400 (never a 500), and SQL or LIKE syntax in the search text is plain text.
+ * own are a 400 (never a 500), and SQL or LIKE syntax in the search text is plain text. A page
+ * whose offset (page × size) is past an int is the 400 on {@code page} on every list, the
+ * boilerplate's too (finding S-1 of the review: they answered a 500).
  */
 class QueryInputProbeIT extends WorkspaceTestSupport {
 
-  /**
-   * {@code offsetChecked}: whether paging past an int offset is refused. The boilerplate's lists
-   * answer a 500 there (finding S-1 of the phase 4 security review); they are left out of that
-   * input until it is fixed.
-   */
-  record ListEndpoint(String path, boolean sorted, boolean searched, boolean offsetChecked) {}
+  record ListEndpoint(String path, boolean sorted, boolean searched) {}
 
   @Test
   void pagingSortAndSearchInputsAreCheckedOnEveryList() throws Exception {
@@ -36,16 +33,16 @@ class QueryInputProbeIT extends WorkspaceTestSupport {
 
     List<ListEndpoint> lists =
         List.of(
-            new ListEndpoint(base + "/companies", true, true, true),
-            new ListEndpoint(base + "/contacts", true, true, true),
-            new ListEndpoint(base + "/leads", true, true, true),
-            new ListEndpoint(base + "/deals", true, true, true),
-            new ListEndpoint(base + "/tasks", true, true, true),
-            new ListEndpoint(base + "/activities", false, false, true),
-            new ListEndpoint(base + "/audit-events", false, false, true),
-            new ListEndpoint("/api/v1/files", false, false, false),
-            new ListEndpoint("/api/v1/test-results", false, false, false),
-            new ListEndpoint("/api/v1/users", false, true, false));
+            new ListEndpoint(base + "/companies", true, true),
+            new ListEndpoint(base + "/contacts", true, true),
+            new ListEndpoint(base + "/leads", true, true),
+            new ListEndpoint(base + "/deals", true, true),
+            new ListEndpoint(base + "/tasks", true, true),
+            new ListEndpoint(base + "/activities", false, false),
+            new ListEndpoint(base + "/audit-events", false, false),
+            new ListEndpoint("/api/v1/files", false, false),
+            new ListEndpoint("/api/v1/test-results", false, false),
+            new ListEndpoint("/api/v1/users", false, true));
 
     List<String> bad = new ArrayList<>();
     List<String> refused =
@@ -72,12 +69,12 @@ class QueryInputProbeIT extends WorkspaceTestSupport {
     for (ListEndpoint list : lists) {
       String t = list.path().startsWith("/api/v1/users") ? admin : token;
       List<String> inputs = new ArrayList<>(refused);
-      if (list.offsetChecked()) inputs.addAll(offsets);
+      inputs.addAll(offsets);
       if (list.sorted()) inputs.addAll(sorts);
       for (String input : inputs) {
         MockHttpServletResponse res =
             send(t, get(list.path() + "?" + input)).andReturn().getResponse();
-        if (res.getStatus() != 400) {
+        if (res.getStatus() != 400 || (offsets.contains(input) && !pageTooLarge(res))) {
           bad.add(
               list.path()
                   + "?"
@@ -110,5 +107,10 @@ class QueryInputProbeIT extends WorkspaceTestSupport {
     assertThat(bad)
         .as("list inputs that were not refused (400) or not taken as plain text")
         .isEmpty();
+  }
+
+  private boolean pageTooLarge(MockHttpServletResponse res) throws Exception {
+    return "is too large"
+        .equals(json.readTree(res.getContentAsString()).path("fieldErrors").path("page").asText());
   }
 }

@@ -1,6 +1,7 @@
 package com.example.boilerplate.testresult;
 
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.web.Paging;
 import com.example.boilerplate.testresult.dto.*;
 import com.example.boilerplate.user.*;
 import java.util.*;
@@ -30,7 +31,7 @@ public class TestResultService {
   public Page<TestResultResponse> list(long ownerId, int page, int size) {
     return results
         .findByOwnerId(
-            ownerId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "testedAt")))
+            ownerId, Paging.request(page, size, Sort.by(Sort.Direction.DESC, "testedAt")))
         .map(this::response);
   }
 

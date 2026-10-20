@@ -5,6 +5,7 @@ import com.example.boilerplate.common.exception.ErrorCode;
 import com.example.boilerplate.common.exception.NotFoundException;
 import com.example.boilerplate.common.security.AccountEvents;
 import com.example.boilerplate.common.text.Texts;
+import com.example.boilerplate.common.web.Paging;
 import com.example.boilerplate.user.dto.UpdateUserRequest;
 import com.example.boilerplate.user.dto.UserResponse;
 import java.util.ArrayList;
@@ -12,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -43,7 +43,7 @@ public class UserAdminService {
     requireAdmin(actorId);
     String search = Texts.param("q", query);
     var pageable =
-        PageRequest.of(
+        Paging.request(
             page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id").descending()));
     Page<User> result =
         search == null
