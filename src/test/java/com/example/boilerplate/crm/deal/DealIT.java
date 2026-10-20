@@ -768,6 +768,32 @@ class DealIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.totalElements").value(1));
   }
 
+  /** {@code sourceId}: the deals from that source; another workspace's source matches nothing. */
+  @Test
+  void filterBySource() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long web = id(send(token, post(SOURCES, w), Map.of("name", "Web")));
+    long fair = id(send(token, post(SOURCES, w), Map.of("name", "Fair")));
+    create(token, w, Map.of("name", "From web", "amount", "1", "sourceId", web));
+    create(token, w, Map.of("name", "From fair", "amount", "1", "sourceId", fair));
+    create(token, w, Map.of("name", "No source", "amount", "1"));
+    long archived = create(token, w, Map.of("name", "Old web", "amount", "1", "sourceId", web));
+    send(token, post(DEAL + "/archive", w, archived)).andExpect(status().isOk());
+    String other = tokenFor(uniqueEmail());
+    long w2 = createWorkspace(other, "Other");
+    long theirs = id(send(other, post(SOURCES, w2), Map.of("name", "Theirs")));
+    create(other, w2, Map.of("name", "Their deal", "amount", "1", "sourceId", theirs));
+
+    list(token, w, "sourceId", String.valueOf(web)).andExpect(names("From web"));
+    list(token, w, "sourceId", String.valueOf(fair)).andExpect(names("From fair"));
+    list(token, w, "sourceId", String.valueOf(web), "archived", "true").andExpect(names("Old web"));
+    list(token, w, "sourceId", String.valueOf(theirs))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(0));
+    list(token, w, "sourceId", "web").andExpect(status().isBadRequest());
+  }
+
   @Test
   void sortByAmount() throws Exception {
     String token = tokenFor(uniqueEmail());

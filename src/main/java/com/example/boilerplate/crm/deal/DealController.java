@@ -35,6 +35,7 @@ public class DealController {
       @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long companyId,
       @RequestParam(required = false) Long contactId,
+      @RequestParam(required = false) Long sourceId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate closeFrom,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -53,6 +54,7 @@ public class DealController {
             unassigned,
             companyId,
             contactId,
+            sourceId,
             closeFrom,
             closeTo,
             archived),
@@ -74,6 +76,7 @@ public class DealController {
       @RequestParam(defaultValue = "false") boolean unassigned,
       @RequestParam(required = false) Long companyId,
       @RequestParam(required = false) Long contactId,
+      @RequestParam(required = false) Long sourceId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate closeFrom,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -89,6 +92,7 @@ public class DealController {
                 unassigned,
                 companyId,
                 contactId,
+                sourceId,
                 closeFrom,
                 closeTo,
                 archived))

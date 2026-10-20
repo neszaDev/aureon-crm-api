@@ -19,6 +19,7 @@ public record DealFilter(
     boolean unassigned,
     Long companyId,
     Long contactId,
+    Long sourceId,
     LocalDate closeFrom,
     LocalDate closeTo,
     boolean archived) {

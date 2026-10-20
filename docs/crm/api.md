@@ -234,7 +234,7 @@ LeadConversion = { leadId, company?: Ref, contact: PersonRef, deal?: Ref, alread
 
 `/workspaces/{w}/deals`: list, create, get, update (not the stage), archive, restore, export.
 List filters: `q` (name, company name), `stageId`, `status` (`OPEN`, `WON`, `LOST`), `ownerId`,
-`unassigned`, `companyId`, `contactId`, `closeFrom` / `closeTo` (expected close date),
+`unassigned`, `companyId`, `contactId`, `sourceId`, `closeFrom` / `closeTo` (expected close date),
 `archived`; `sort`: `UPDATED_AT` (default, `DESC`), `NAME`, `AMOUNT`, `EXPECTED_CLOSE_DATE`,
 `CREATED_AT`.
 The list returns `DealSummary`s. Without `direction`, `UPDATED_AT`, `CREATED_AT` and `AMOUNT`

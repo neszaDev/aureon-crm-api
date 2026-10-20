@@ -205,6 +205,7 @@ class ExportIT extends WorkspaceTestSupport {
     assertSameRows(o, w, "deals", List.of(f.dC), "unassigned", "true");
     assertSameRows(o, w, "deals", List.of(f.dB), "companyId", String.valueOf(f.coB));
     assertSameRows(o, w, "deals", List.of(f.dA), "contactId", String.valueOf(f.pA));
+    assertSameRows(o, w, "deals", List.of(f.dA), "sourceId", String.valueOf(f.website));
     assertSameRows(o, w, "deals", List.of(f.dB), "closeFrom", "2026-11-15");
     assertSameRows(o, w, "deals", List.of(f.dA), "closeTo", "2026-11-15");
     assertSameRows(o, w, "deals", List.of(f.dD), "archived", "true");
@@ -630,11 +631,18 @@ class ExportIT extends WorkspaceTestSupport {
                 w,
                 "deals",
                 Map.of(
-                    "name", "Deal One",
-                    "amount", "1250",
-                    "companyId", f.coA,
-                    "contactId", f.pA,
-                    "expectedCloseDate", "2026-11-01")));
+                    "name",
+                    "Deal One",
+                    "amount",
+                    "1250",
+                    "companyId",
+                    f.coA,
+                    "contactId",
+                    f.pA,
+                    "sourceId",
+                    f.website,
+                    "expectedCloseDate",
+                    "2026-11-01")));
     f.dB =
         id(
             create(

@@ -39,6 +39,7 @@ final class DealSpecifications {
       if (f.unassigned()) where.add(cb.isNull(root.get("ownerId")));
       if (f.companyId() != null) where.add(cb.equal(root.get("companyId"), f.companyId()));
       if (f.contactId() != null) where.add(cb.equal(root.get("contactId"), f.contactId()));
+      if (f.sourceId() != null) where.add(cb.equal(root.get("sourceId"), f.sourceId()));
       if (f.closeFrom() != null) {
         where.add(cb.greaterThanOrEqualTo(root.<LocalDate>get("expectedCloseDate"), f.closeFrom()));
       }
