@@ -110,11 +110,12 @@ public class Contact extends CrmRecord {
   }
 
   /**
-   * A tag as stored and filtered: composed (NFC), so an accent typed as a combining mark is the
-   * same tag, and in lower case.
+   * A tag as stored and filtered: in lower case, then composed (NFC), so an accent typed as a
+   * combining mark is the same tag. In that order: lower-casing can undo a composition ("W" with a
+   * combining ring has no precomposed capital; "ẘ" has a precomposed form).
    */
   public static String tag(String text) {
-    return Normalizer.normalize(text, Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
+    return Normalizer.normalize(text.toLowerCase(Locale.ROOT), Normalizer.Form.NFC);
   }
 
   public String getNotes() {

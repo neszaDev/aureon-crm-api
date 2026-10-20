@@ -207,6 +207,8 @@ class ContactIT extends WorkspaceTestSupport {
   /**
    * A tag is stored in Unicode's composed form (NFC), so "café" typed with a combining accent is
    * the same tag as with a precomposed é: one tag, one list entry, found by either spelling.
+   * Composed after lower-casing: a capital W with a combining ring has no precomposed form, its
+   * lower case has (ẘ).
    */
   @Test
   void tagsAreOneUnicodeForm() throws Exception {
@@ -220,9 +222,14 @@ class ContactIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.tags", contains(composed)));
     create(token, w, Map.of("firstName", "Bob", "tags", List.of(composed, decomposed)));
 
+    String ringW = "\u1e98";
+    create(token, w, Map.of("firstName", "Cy", "tags", List.of("W\u030a")));
+    create(token, w, Map.of("firstName", "Dee", "tags", List.of(ringW)));
+
     list(token, w, "tag", decomposed).andExpect(jsonPath("$.totalElements").value(2));
     list(token, w, "tag", composed).andExpect(jsonPath("$.totalElements").value(2));
-    send(token, get(CONTACTS + "/tags", w)).andExpect(jsonPath("$", contains(composed)));
+    list(token, w, "tag", "W\u030a").andExpect(jsonPath("$.totalElements").value(2));
+    send(token, get(CONTACTS + "/tags", w)).andExpect(jsonPath("$", contains(composed, ringW)));
   }
 
   @Test

@@ -185,7 +185,7 @@ name ignoring case), `CREATED_AT`, `UPDATED_AT`. Contacts without a last name (`
 ```ts
 ContactInput   = { firstName (1-100), lastName? (≤100), email? (≤254, stored lower case), phone? (≤50),
                    jobTitle? (≤100), companyId?, ownerId?, sourceId?, tags? (≤20 once stripped,
-                   composed (Unicode NFC), lower-cased and deduplicated, each 1-40; stored
+                   lower-cased, then composed (Unicode NFC), and deduplicated, each 1-40; stored
                    sorted), notes? (≤5000) }
 ContactSummary = { id, firstName, lastName?, fullName (first + " " + last), email?, phone?,
                    jobTitle?, company?: Ref, owner?: MemberRef, tags, archived, updatedAt }
