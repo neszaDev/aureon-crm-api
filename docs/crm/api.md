@@ -82,7 +82,7 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   | `LEAD_CONVERTED` | 409 | Editing a converted lead or changing its status |
   | `LEAD_NOT_QUALIFIED` | 409 | Converting a lead that isn't `QUALIFIED` |
   | `TASK_STATUS_CONFLICT` | 409 | `complete` or `cancel` a task that isn't `OPEN`, `reopen` one that is |
-  | `CONFLICT` | 409 | Any other conflict with stored data (a database constraint) |
+  | `CONFLICT` | 409 | Any other conflict with stored data (a database constraint), also a create or edit whose stage or lead source was deleted while it was being written: reload |
   | `RATE_LIMITED` | 429 | Too many sign-in, registration or refresh attempts: wait `Retry-After` seconds |
 
 Common shapes:

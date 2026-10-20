@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.boilerplate.crm.deal.Deal;
+import com.example.boilerplate.crm.deal.DealRepository;
 import com.example.boilerplate.crm.settings.LeadSource;
 import com.example.boilerplate.crm.settings.LeadSourceRepository;
 import com.example.boilerplate.crm.settings.PipelineStageRepository;
@@ -17,8 +19,10 @@ import com.example.boilerplate.workspace.Membership;
 import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -40,6 +44,7 @@ class ErrorCodeIT extends WorkspaceTestSupport {
 
   @Autowired LeadSourceRepository sources;
   @Autowired PipelineStageRepository stages;
+  @Autowired DealRepository deals;
   @Autowired GlobalExceptionHandler handler;
 
   @Test
@@ -243,6 +248,50 @@ class ErrorCodeIT extends WorkspaceTestSupport {
       var answer = handler.integrity(race, new MockHttpServletRequest("DELETE", "/x"));
       assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
       assertThat(answer.getBody().code()).hasToString(delete.getKey());
+    }
+  }
+
+  /**
+   * A create or edit that got past the link check while the stage or source was deleted meets the
+   * same foreign key from the other side: the stage or source is gone, not in use, so a plain
+   * {@code CONFLICT} (the client reloads), not the delete's {@code STAGE_IN_USE}.
+   */
+  @Test
+  void aWriteThatLostItsStageOrSourceIsAConflict() throws Exception {
+    String email = uniqueEmail();
+    String owner = tokenFor(email);
+    long w = createWorkspace(owner, "Acme");
+    Membership m = new Membership(w, userId(email), email, WorkspaceRole.OWNER);
+    long open = openStageIds(owner, w).get(0);
+    long goneStage =
+        body(send(owner, post(STAGES, w), Map.of("name", "Gone", "probability", 10))
+                .andExpect(status().isCreated()))
+            .get("id")
+            .asLong();
+    send(owner, delete(STAGES + "/{id}", w, goneStage)).andExpect(status().isNoContent());
+    long goneSource =
+        body(send(owner, post(SOURCES, w), Map.of("name", "Gone")).andExpect(status().isCreated()))
+            .get("id")
+            .asLong();
+    send(owner, delete(SOURCES + "/{id}", w, goneSource)).andExpect(status().isNoContent());
+
+    Map<String, Deal> late = new LinkedHashMap<>();
+    late.put("stage", new Deal(goneStage, null));
+    late.put("source", new Deal(open, null));
+    late.get("stage").update("Late", BigDecimal.ONE, "EUR", null, null, null, null, null, null);
+    late.get("source")
+        .update("Late", BigDecimal.ONE, "EUR", null, null, null, null, goneSource, null);
+    for (var write : late.entrySet()) {
+      DataIntegrityViolationException race =
+          catchThrowableOfType(
+              DataIntegrityViolationException.class,
+              () -> WorkspaceContext.runAs(m, () -> deals.saveAndFlush(write.getValue())));
+
+      for (String method : List.of("POST", "PUT")) {
+        var answer = handler.integrity(race, new MockHttpServletRequest(method, "/x"));
+        assertThat(answer.getStatusCode()).as(write.getKey()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(answer.getBody().code()).as(write.getKey()).hasToString("CONFLICT");
+      }
     }
   }
 

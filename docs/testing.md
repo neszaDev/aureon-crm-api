@@ -78,7 +78,7 @@ What the existing ITs cover:
 | `user/UserAdminIT` | Admin-only access, search, role/email changes, session revocation, delete |
 | `common/ErrorHandlingIT` | Client errors map to 4xx with the `ApiError` shape |
 | `common/web/OpenApiIT` | The spec has the `ApiError` body with the `code` enum, for the frontend's generated types; request money is a string; never-null response fields are required, nullable ones optional; the `Page*` wrappers require their fields; the four export 200s are `text/csv` strings; the dashboard's, the reports' (`period`) and the audit event's (`actor` optional) owner bucket's (`owner` optional) and activity row's (`user` optional, `total` required) required fields |
-| `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index, a stage or source delete that loses the race to its foreign key |
+| `common/exception/ErrorCodeIT` | Each rule's status and `code` in the error body (one request per code), a duplicate name that loses the race to the unique index, a stage or source delete that loses the race to its foreign key, a deal write that loses its stage or source to a delete (`CONFLICT`, not the delete's code) |
 | `workspace/WorkspaceIT` | Create (caller becomes owner), list, read, update, non-member 404, role change applies at once |
 | `workspace/MemberIT` | Member list, role changes, removal, leaving, owner rules, last-owner protection |
 | `workspace/invitation/InvitationIT` | Invite, preview, accept as an existing account, register through the link, revoke, expiry, owner rules, concurrent accepts, tokens stored hashed and kept out of logs |

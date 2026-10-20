@@ -97,33 +97,43 @@ class GlobalExceptionHandlerTest {
 
   /**
    * A unique index or foreign key behind a rule the service checks first: the race loser gets the
-   * rule's code.
+   * rule's code. The foreign keys' "in use" is the delete's; a create or edit that meets one lost
+   * its stage or source to that delete: a plain conflict.
    */
   @Test
   void aConstraintOfARuleAnswersWithItsCode() {
-    Map<String, ErrorCode> rules =
+    Map<String, ErrorCode> unique =
         Map.of(
             "uq_pipeline_stages_name", ErrorCode.DUPLICATE_NAME,
             "uq_lead_sources_name", ErrorCode.DUPLICATE_NAME,
             "users_email_key", ErrorCode.EMAIL_TAKEN,
             "uq_workspace_invitations_pending", ErrorCode.ALREADY_INVITED,
+            "deals_workspace_id_lead_id_key", ErrorCode.CONFLICT);
+    unique.forEach((constraint, code) -> assertCode(constraint, "POST", code));
+    Map<String, ErrorCode> inUse =
+        Map.of(
             "deals_workspace_id_stage_id_fkey", ErrorCode.STAGE_IN_USE,
             "leads_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
             "contacts_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
-            "deals_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
-            "deals_workspace_id_lead_id_key", ErrorCode.CONFLICT);
-    rules.forEach(
+            "deals_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE);
+    inUse.forEach(
         (constraint, code) -> {
-          SQLException sql = new SQLException("duplicate key", "23505");
-          ResponseEntity<ApiError> r =
-              handler.integrity(
-                  new DataIntegrityViolationException(
-                      "could not execute statement",
-                      new ConstraintViolationException("insert", sql, constraint)),
-                  new MockHttpServletRequest("POST", "/x"));
-          assertThat(r.getStatusCode()).as(constraint).isEqualTo(HttpStatus.CONFLICT);
-          assertThat(r.getBody().code()).as(constraint).isEqualTo(code);
+          assertCode(constraint, "DELETE", code);
+          assertCode(constraint, "POST", ErrorCode.CONFLICT);
+          assertCode(constraint, "PUT", ErrorCode.CONFLICT);
         });
+  }
+
+  private void assertCode(String constraint, String method, ErrorCode code) {
+    SQLException sql = new SQLException("violation", "23505");
+    ResponseEntity<ApiError> r =
+        handler.integrity(
+            new DataIntegrityViolationException(
+                "could not execute statement",
+                new ConstraintViolationException("statement", sql, constraint)),
+            new MockHttpServletRequest(method, "/x"));
+    assertThat(r.getStatusCode()).as(method + " " + constraint).isEqualTo(HttpStatus.CONFLICT);
+    assertThat(r.getBody().code()).as(method + " " + constraint).isEqualTo(code);
   }
 
   /**

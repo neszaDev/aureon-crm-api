@@ -40,7 +40,9 @@ public class GlobalExceptionHandler {
 
   /**
    * Unique indexes and foreign keys behind a rule the service checks first: a violation lost a race
-   * to it (a stage or source deleted while a deal, lead or contact took it).
+   * to it. A foreign key's code is the delete's (a stage or source deleted while a deal, lead or
+   * contact took it); a create or edit that meets it lost the stage or source instead: {@code
+   * CONFLICT}, as for any constraint without a rule.
    */
   private static final Map<String, ErrorCode> CONSTRAINT_RULES =
       Map.of(
@@ -52,6 +54,10 @@ public class GlobalExceptionHandler {
           "deals_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
           "leads_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE,
           "contacts_workspace_id_source_id_fkey", ErrorCode.SOURCE_IN_USE);
+
+  /** The codes of {@link #CONSTRAINT_RULES}' foreign keys, which only a delete can mean. */
+  private static final Set<ErrorCode> IN_USE =
+      Set.of(ErrorCode.STAGE_IN_USE, ErrorCode.SOURCE_IN_USE);
 
   @ExceptionHandler(ConflictException.class)
   ResponseEntity<ApiError> conflict(ConflictException e, HttpServletRequest r) {
@@ -82,8 +88,11 @@ public class GlobalExceptionHandler {
       return error(HttpStatus.BAD_REQUEST, ErrorCode.TEXT_INVALID, message, r, Map.of());
     }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
-    return error(
-        HttpStatus.CONFLICT, constraintRule(e), "Conflicts with existing data", r, Map.of());
+    ErrorCode rule = constraintRule(e);
+    if (IN_USE.contains(rule) && !HttpMethod.DELETE.matches(r.getMethod())) {
+      rule = ErrorCode.CONFLICT;
+    }
+    return error(HttpStatus.CONFLICT, rule, "Conflicts with existing data", r, Map.of());
   }
 
   /**
