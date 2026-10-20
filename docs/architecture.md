@@ -108,7 +108,8 @@ validates the schema and never alters it. See [docs/database.md](database.md).
   [docs/configuration.md](configuration.md).
 - `GlobalExceptionHandler` maps domain exceptions and client mistakes to 4xx responses with
   the `ApiError` shape. Only genuinely unexpected errors become a 500, and those are logged
-  with the method and path.
+  with the method and route; one from the database with its exception classes and SQLSTATE but
+  no message, which can quote stored values (see [docs/configuration.md](configuration.md#logging)).
 
 ## Operations
 

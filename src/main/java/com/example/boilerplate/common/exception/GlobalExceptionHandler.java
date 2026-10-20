@@ -219,7 +219,23 @@ public class GlobalExceptionHandler {
       HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
       return error(status, null, status.getReasonPhrase(), r, Map.of());
     }
-    log.error("Unhandled exception on {} {}", r.getMethod(), route(r), e);
+    SQLException sql = null;
+    StringJoiner chain = new StringJoiner(" < ");
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      chain.add(t.getClass().getName());
+      if (sql == null && t instanceof SQLException s) sql = s;
+    }
+    if (sql == null) {
+      log.error("Unhandled exception on {} {}", r.getMethod(), route(r), e);
+    } else {
+      // The database's messages (and Spring's, which repeat them) can quote stored values.
+      log.error(
+          "Unhandled exception on {} {}: SQLSTATE {} in {}",
+          r.getMethod(),
+          route(r),
+          sql.getSQLState(),
+          chain);
+    }
     return error(HttpStatus.INTERNAL_SERVER_ERROR, null, "Unexpected server error", r, Map.of());
   }
 

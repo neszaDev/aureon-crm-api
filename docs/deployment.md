@@ -70,6 +70,8 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
     published placeholders outside `local`/`dev`/`test`. The runtime image defaults to `prod`.
   - Keep `org.springframework.security` and `org.springframework.web` DEBUG logging off: it logs
     request URIs, which include invitation tokens.
+  - Leave `logServerErrorDetail` out of `DB_URL`: a URL parameter overrides `application.yml`'s
+    `false`, and PostgreSQL's Detail would put stored values in the logs.
   - The database on a private network, with `sslmode=verify-full` in `DB_URL` (the Azure setup
     uses `sslmode=require` over a firewall rule).
   - `SPRINGDOC_ENABLED` unset, unless the API docs should be public.

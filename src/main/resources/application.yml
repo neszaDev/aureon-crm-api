@@ -7,6 +7,11 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      data-source-properties:
+        # PostgreSQL's Detail quotes stored values ("Key (email)=(...)", "Failing row contains
+        # (...)") and Hibernate logs the message of every constraint violation: leave it out. The
+        # SQLSTATE and the constraint name (in the main message) are still logged.
+        logServerErrorDetail: false
   jpa:
     # Keep false: Hibernate fixes the tenant (workspace) when a session opens, which must happen
     # after WorkspaceAccessInterceptor has set it, not at the start of the request.

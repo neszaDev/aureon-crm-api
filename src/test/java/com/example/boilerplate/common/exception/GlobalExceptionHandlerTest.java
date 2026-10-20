@@ -85,6 +85,33 @@ class GlobalExceptionHandlerTest {
     }
   }
 
+  /** Its messages can quote stored values: the classes of the chain and the SQLSTATE only. */
+  @Test
+  void aServerErrorFromTheDatabaseLogsItsClassesAndStateButNoMessage(CapturedOutput output) {
+    answer("22P02", "invalid input syntax for type integer: \"secret-value\"");
+
+    assertThat(output)
+        .contains(
+            "Unhandled exception on POST "
+                + ROUTE
+                + ": SQLSTATE 22P02 in org.springframework.dao.DataIntegrityViolationException"
+                + " < java.lang.Exception < java.sql.SQLException")
+        .doesNotContain("secret-value")
+        .doesNotContain("could not execute statement");
+  }
+
+  /** Any other 500 is a bug in the code: logged with its message and stack. */
+  @Test
+  void anyOtherServerErrorLogsTheWholeException(CapturedOutput output) {
+    handler.generic(
+        new IllegalStateException("bug detail"), new MockHttpServletRequest("GET", "/x"));
+
+    assertThat(output)
+        .contains("Unhandled exception on GET <unmatched>")
+        .contains("java.lang.IllegalStateException: bug detail")
+        .contains("at " + GlobalExceptionHandlerTest.class.getName());
+  }
+
   @Test
   void aConstraintViolationIsStillAConflict() {
     for (String state : new String[] {"23505", "23503", null}) {

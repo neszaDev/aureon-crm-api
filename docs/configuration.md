@@ -71,6 +71,11 @@ profiles, the only ones with the seeder; `application.yml` has `enabled: false` 
 - Keep framework DEBUG logging (`org.springframework.security`, `org.springframework.web`) off
   in prod: it logs request URIs, and an invitation link's URI carries its token. Request and
   response records leave passwords and tokens out of their `toString()`.
+- The driver's `logServerErrorDetail` is `false` (`application.yml`, Hikari's
+  `data-source-properties`): PostgreSQL's Detail quotes stored values (`Key (email)=(...)`,
+  `Failing row contains (...)`), and Hibernate logs it on every constraint violation; the SQLSTATE
+  and the constraint name are still logged. A 500 from the database logs its exception classes and SQLSTATE, no message (a
+  main message such as 22P02's can quote a value; no endpoint is known to reach one).
 - A client's `X-Request-Id` is kept only when it matches `[A-Za-z0-9._-]{1,64}`; anything else
   gets a generated id.
 

@@ -21,7 +21,8 @@ request, an exception or async handling) and `audit/AuditChangesTest` (audit dif
 microsecond clock such as the Macs' can't show a miss, that every `Instant.now()` an entity takes
 is cut to them, read from the source) and `common/exception/GlobalExceptionHandlerTest` database
 data exceptions as the client's 400, the codes of unique indexes and foreign keys (a foreign key's
-"in use" only for a delete), stale updates and deadlocks. The CRM adds `crm/common/`
+"in use" only for a delete), stale updates and deadlocks, and what a 500 logs (from the database
+its exception classes and SQLSTATE, no message; anything else its stack). The CRM adds `crm/common/`
 (`CrmRecordTest` archive and owner, `CurrenciesTest`, `ListParamsTest` paging and sort orders,
 `MoneyTest` and `MoneyTotalTest` scale and string form, `OrderingTest` nulls last,
 `TextSearchTest` wildcard escaping, `NoInlineLiteralTest` no `cb.literal` in `src/main`),
