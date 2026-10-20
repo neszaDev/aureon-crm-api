@@ -28,11 +28,12 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Finding S-2 (phase 4 security review, carried item #30): stored values reach the logs through
- * PostgreSQL's error messages. pgjdbc puts the server's Detail ("Key (email)=(...)", "Failing row
- * contains (...)") into the exception message; Hibernate's SqlExceptionHelper logs that message at
- * ERROR on every constraint violation, and GlobalExceptionHandler.generic logs the whole exception
- * chain on a 500. The handler's own lines (route and SQLSTATE) are clean.
+ * Regression for finding S-2 (phase 4 security review, carried item #30), fixed by
+ * logServerErrorDetail=false and GlobalExceptionHandler.generic: stored values used to reach the
+ * logs through PostgreSQL's error messages. pgjdbc puts the server's Detail ("Key (email)=(...)",
+ * "Failing row contains (...)") into the exception message; Hibernate's SqlExceptionHelper logs
+ * that message at ERROR on every constraint violation, and GlobalExceptionHandler.generic logs the
+ * whole exception chain on a 500. The handler's own lines (route and SQLSTATE) are clean.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class S2DatabaseValuesInLogsProbeIT extends WorkspaceTestSupport {
@@ -42,9 +43,9 @@ class S2DatabaseValuesInLogsProbeIT extends WorkspaceTestSupport {
   @Autowired EntityManager entityManager;
   @Autowired TransactionTemplate tx;
 
-  /** A 409 over HTTP: the duplicated email ends up in the log (SqlExceptionHelper, ERROR). */
+  /** A 409 over HTTP: the duplicated email must stay out of the log (SqlExceptionHelper, ERROR). */
   @Test
-  void aUniqueViolationLogsTheDuplicatedValue(CapturedOutput output) throws Exception {
+  void aUniqueViolationKeepsTheDuplicatedValueOutOfTheLog(CapturedOutput output) throws Exception {
     String owner = tokenFor(uniqueEmail());
     long w = createWorkspace(owner, "Acme");
     String email = uniqueEmail();
@@ -71,12 +72,12 @@ class S2DatabaseValuesInLogsProbeIT extends WorkspaceTestSupport {
   }
 
   /**
-   * A NOT NULL or CHECK violation through Hibernate: "Failing row contains (...)" logs the whole
-   * row, here a users row with its password hash. (Inserted directly: no endpoint is known to reach
-   * one; a server bug or a race would.)
+   * A NOT NULL or CHECK violation through Hibernate: "Failing row contains (...)" must not log the
+   * whole row, here a users row with its password hash. (Inserted directly: no endpoint is known to
+   * reach one; a server bug or a race would.)
    */
   @Test
-  void aNotNullViolationLogsTheWholeRow(CapturedOutput output) {
+  void aNotNullViolationKeepsTheRowOutOfTheLog(CapturedOutput output) {
     String hash = "$2a$10$" + UUID.randomUUID().toString().replace("-", "") + "markerhash";
     assertThatThrownBy(
             () ->
@@ -96,11 +97,12 @@ class S2DatabaseValuesInLogsProbeIT extends WorkspaceTestSupport {
   }
 
   /**
-   * A 500 (a data exception that isn't the client's): the handler logs the value with the chain.
+   * A 500 (a data exception that isn't the client's): the handler must not log the value with the
+   * chain.
    */
   @Test
   @SuppressWarnings("unchecked")
-  void aServerErrorLogsTheValueInTheMessage(CapturedOutput output) throws Exception {
+  void aServerErrorKeepsTheValueOutOfTheLog(CapturedOutput output) throws Exception {
     String marker = "marker-" + UUID.randomUUID();
     DataAccessException e = null;
     try {
