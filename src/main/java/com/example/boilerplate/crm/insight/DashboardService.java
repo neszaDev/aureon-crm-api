@@ -57,6 +57,7 @@ public class DashboardService {
   private final PipelineStageService stages;
   private final AuditEventService audit;
   private final WorkspaceRepository workspaces;
+  private final Clock clock;
 
   public DashboardService(
       CompanyRepository companies,
@@ -68,7 +69,8 @@ public class DashboardService {
       ActivityService activities,
       PipelineStageService stages,
       AuditEventService audit,
-      WorkspaceRepository workspaces) {
+      WorkspaceRepository workspaces,
+      Clock clock) {
     this.companies = companies;
     this.contacts = contacts;
     this.leads = leads;
@@ -79,15 +81,16 @@ public class DashboardService {
     this.stages = stages;
     this.audit = audit;
     this.workspaces = workspaces;
+    this.clock = clock;
   }
 
   /** {@code from} and {@code to} as {@link Period#resolve} takes them (null: the default). */
   public DashboardResponse dashboard(LocalDate from, LocalDate to) {
     ZoneId zone =
         ZoneId.of(workspaces.findById(WorkspaceContext.workspaceId()).orElseThrow().getTimezone());
-    Period period = Period.resolve(from, to, zone, Clock.systemUTC());
-    // One instant for the overdue count and both task lists, so they agree.
-    Instant now = Instant.now();
+    // One instant for the period, the overdue count and both task lists, so they agree.
+    Instant now = clock.instant();
+    Period period = Period.resolve(from, to, zone, now);
 
     // Open deals: per stage and currency, then per currency across the stages.
     List<Object[]> open = deals.openTotals();

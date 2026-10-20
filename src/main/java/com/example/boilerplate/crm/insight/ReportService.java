@@ -63,6 +63,7 @@ public class ReportService {
   private final MemberDirectory members;
   private final WorkspaceRepository workspaces;
   private final ReportQueries queries;
+  private final Clock clock;
 
   public ReportService(
       DealRepository deals,
@@ -74,7 +75,8 @@ public class ReportService {
       PipelineStageService stages,
       MemberDirectory members,
       WorkspaceRepository workspaces,
-      ReportQueries queries) {
+      ReportQueries queries,
+      Clock clock) {
     this.deals = deals;
     this.history = history;
     this.activities = activities;
@@ -85,6 +87,7 @@ public class ReportService {
     this.members = members;
     this.workspaces = workspaces;
     this.queries = queries;
+    this.clock = clock;
   }
 
   /** By owner: the largest single-currency total first, then by email, unassigned last. */
@@ -215,7 +218,7 @@ public class ReportService {
    */
   public FollowUpReport followUps() {
     // One instant for both task lists, so they neither overlap nor leave a gap.
-    Instant now = Instant.now();
+    Instant now = clock.instant();
     Page<TaskResponse> overdue = openTasks(true, null, null, now);
     Page<TaskResponse> upcoming = openTasks(null, now, now.plus(UPCOMING), now);
     Page<LeadResponse> due =
@@ -260,7 +263,7 @@ public class ReportService {
 
   /** {@code from} and {@code to} as {@link Period#resolve} takes them (null: the default). */
   private Period period(LocalDate from, LocalDate to) {
-    return Period.resolve(from, to, zone(), Clock.systemUTC());
+    return Period.resolve(from, to, zone(), clock.instant());
   }
 
   private ZoneId zone() {

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.boilerplate.support.TestClock;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,6 +41,12 @@ class ReportIT extends WorkspaceTestSupport {
       List.of("Qualification", "Needs analysis", "Proposal", "Negotiation");
 
   @Autowired JdbcTemplate jdbc;
+  @Autowired TestClock clock;
+
+  @AfterEach
+  void unpinTheClock() {
+    clock.unpin();
+  }
 
   @Test
   void emptyWorkspaceReportsZeros() throws Exception {
@@ -313,6 +321,33 @@ class ReportIT extends WorkspaceTestSupport {
         .andExpect(
             jsonPath("$.dueLeads.first[*].firstName", contains("Last week", "Contacted", "Today")))
         .andExpect(jsonPath("$.dueLeads.first[2].followUpDate").value(today.toString()));
+  }
+
+  /**
+   * One instant, the application clock's: 11:00 UTC on 17 October is already the 18th in
+   * Pacific/Kiritimati (UTC+14). It splits the overdue from the upcoming tasks, says which leads
+   * are due today, and ends the period reports' default period.
+   */
+  @Test
+  void theClockDecidesTodayAndWhatIsDue() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Kiritimati", "Pacific/Kiritimati");
+    task(owner, w, "Overdue", Instant.parse("2026-10-17T10:00:00Z"), null);
+    task(owner, w, "Upcoming", Instant.parse("2026-10-17T12:00:00Z"), null);
+    lead(owner, w, "Due today", LocalDate.parse("2026-10-18"));
+    lead(owner, w, "Tomorrow", LocalDate.parse("2026-10-19"));
+    clock.pin(Instant.parse("2026-10-17T11:00:00Z"));
+
+    report(owner, w, "follow-ups")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.overdueTasks.first[*].title", contains("Overdue")))
+        .andExpect(jsonPath("$.upcomingTasks.first[*].title", contains("Upcoming")))
+        .andExpect(jsonPath("$.dueLeads.first[*].firstName", contains("Due today")));
+    for (String r : List.of("won-lost", "funnel", "activities")) {
+      report(owner, w, r)
+          .andExpect(jsonPath("$.period.from").value("2026-09-19"))
+          .andExpect(jsonPath("$.period.to").value("2026-10-18"));
+    }
   }
 
   /**

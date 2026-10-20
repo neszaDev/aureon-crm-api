@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.boilerplate.support.TestClock;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,6 +23,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -37,6 +39,12 @@ class DashboardIT extends WorkspaceTestSupport {
       List.of("COMPANY", "CONTACT", "LEAD", "DEAL", "TASK", "ACTIVITY");
 
   @Autowired JdbcTemplate jdbc;
+  @Autowired TestClock clock;
+
+  @AfterEach
+  void unpinTheClock() {
+    clock.unpin();
+  }
 
   @Test
   void emptyWorkspaceIsAllZeros() throws Exception {
@@ -236,6 +244,30 @@ class DashboardIT extends WorkspaceTestSupport {
     dashboard(token, w, "from", "2026-10-18", "to", "2026-10-18")
         .andExpect(jsonPath("$.won.totals[*].amount", contains("200.00")))
         .andExpect(jsonPath("$.lost.count").value(1));
+  }
+
+  /**
+   * One instant, the application clock's: at 18:00 UTC on 17 October it is the 18th in Bangkok, so
+   * the default period ends there; a task due an hour before is overdue and one due an hour after
+   * upcoming, in the count and in the lists alike.
+   */
+  @Test
+  void theClockDecidesTodayAndWhatIsOverdue() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createInZone(token, "Bangkok", "Asia/Bangkok");
+    task(token, w, "Before", Instant.parse("2026-10-17T17:00:00Z"), null);
+    task(token, w, "After", Instant.parse("2026-10-17T19:00:00Z"), null);
+    clock.pin(Instant.parse("2026-10-17T18:00:00Z"));
+
+    dashboard(token, w)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.period.from").value("2026-09-19"))
+        .andExpect(jsonPath("$.period.to").value("2026-10-18"))
+        .andExpect(jsonPath("$.counts.overdueTasks").value(1))
+        .andExpect(jsonPath("$.myOverdueTasks[*].title", contains("Before")))
+        .andExpect(jsonPath("$.myOverdueTasks[0].overdue").value(true))
+        .andExpect(jsonPath("$.myUpcomingTasks[*].title", contains("After")))
+        .andExpect(jsonPath("$.myUpcomingTasks[0].overdue").value(false));
   }
 
   @Test

@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,10 +15,12 @@ import com.example.boilerplate.audit.AuditAction;
 import com.example.boilerplate.audit.AuditEntityType;
 import com.example.boilerplate.audit.AuditEvent;
 import com.example.boilerplate.audit.AuditEventRepository;
+import com.example.boilerplate.support.TestClock;
 import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -25,6 +28,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -59,6 +63,33 @@ class ExportIT extends WorkspaceTestSupport {
   static final ObjectMapper PLAIN = new ObjectMapper();
 
   @Autowired AuditEventRepository events;
+  @Autowired TestClock clock;
+
+  @AfterEach
+  void unpinTheClock() {
+    clock.unpin();
+  }
+
+  /**
+   * The file is named for today in the workspace's zone, by the application's clock: 11:00 UTC on
+   * 17 October is already the 18th in Pacific/Kiritimati (UTC+14), still the 17th in UTC and Paris.
+   */
+  @Test
+  void theFileIsNamedForTodayInTheWorkspaceZone() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Kiritimati", "Pacific/Kiritimati");
+    clock.pin(Instant.parse("2026-10-17T11:00:00Z"));
+
+    for (String list : LISTS) {
+      export(owner, w, list)
+          .andExpect(status().isOk())
+          .andExpect(
+              header()
+                  .string(
+                      HttpHeaders.CONTENT_DISPOSITION,
+                      "attachment; filename=\"" + list + "-2026-10-18.csv\""));
+    }
+  }
 
   @Test
   void managerExportsContactsWithFilters() throws Exception {

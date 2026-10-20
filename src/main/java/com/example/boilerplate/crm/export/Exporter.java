@@ -18,6 +18,7 @@ import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -48,18 +49,21 @@ public class Exporter {
   private final AuditTrail audit;
   private final AuditChanges auditChanges;
   private final ExportProperties properties;
+  private final Clock clock;
 
   public Exporter(
       WorkspaceAccess access,
       WorkspaceRepository workspaces,
       AuditTrail audit,
       AuditChanges auditChanges,
-      ExportProperties properties) {
+      ExportProperties properties,
+      Clock clock) {
     this.access = access;
     this.workspaces = workspaces;
     this.audit = audit;
     this.auditChanges = auditChanges;
     this.properties = properties;
+    this.clock = clock;
   }
 
   /**
@@ -99,7 +103,7 @@ public class Exporter {
       throw new UncheckedIOException(e); // a StringWriter doesn't throw it
     }
     String zone = workspaces.findById(workspaceId).orElseThrow().getTimezone();
-    String filename = list + "-" + LocalDate.now(ZoneId.of(zone)) + ".csv";
+    String filename = list + "-" + LocalDate.ofInstant(clock.instant(), ZoneId.of(zone)) + ".csv";
     return new CsvFile(filename, csv.toString().getBytes(StandardCharsets.UTF_8));
   }
 

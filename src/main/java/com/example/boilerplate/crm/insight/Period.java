@@ -2,7 +2,6 @@ package com.example.boilerplate.crm.insight;
 
 import com.example.boilerplate.common.exception.FieldValidationException;
 import com.example.boilerplate.crm.insight.dto.PeriodDto;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -30,12 +29,12 @@ public record Period(LocalDate from, LocalDate to, ZoneId zone) {
   }
 
   /**
-   * The period a request asks for: {@code to} defaults to today in {@code zone}, {@code from} to 29
-   * days before {@code to}. {@code from} after {@code to} is a 400 on {@code from}, more than 366
-   * days a 400 on {@code to}.
+   * The period a request asks for at {@code now}: {@code to} defaults to today in {@code zone},
+   * {@code from} to 29 days before {@code to}. {@code from} after {@code to} is a 400 on {@code
+   * from}, more than 366 days a 400 on {@code to}.
    */
-  public static Period resolve(LocalDate from, LocalDate to, ZoneId zone, Clock clock) {
-    LocalDate end = to != null ? to : LocalDate.ofInstant(clock.instant(), zone);
+  public static Period resolve(LocalDate from, LocalDate to, ZoneId zone, Instant now) {
+    LocalDate end = to != null ? to : LocalDate.ofInstant(now, zone);
     LocalDate start = from != null ? from : end.minusDays(DEFAULT_DAYS - 1);
     if (start.isAfter(end)) throw new FieldValidationException("from", "must not be after to");
     if (ChronoUnit.DAYS.between(start, end) >= MAX_DAYS) {

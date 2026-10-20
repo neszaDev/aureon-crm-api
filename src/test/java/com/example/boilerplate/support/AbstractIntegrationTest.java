@@ -17,12 +17,13 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Base for {@code *IT} classes: full application context, real security filter chain, and a shared
  * PostgreSQL container. All subclasses share one cached context, so tests must not rely on an empty
- * database; use {@link #uniqueEmail()} instead of cleaning up.
+ * database; use {@link #uniqueEmail()} instead of cleaning up. A test that pins the {@link
+ * TestClock} unpins it after.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(PostgresTestcontainersConfig.class)
+@Import({PostgresTestcontainersConfig.class, TestClock.class})
 public abstract class AbstractIntegrationTest {
   protected static final String PASSWORD = "a-secure-password";
 
