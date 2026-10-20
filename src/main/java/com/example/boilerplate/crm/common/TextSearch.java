@@ -33,7 +33,10 @@ public final class TextSearch {
 
   /**
    * {@code text} as a bound parameter of the query. Not {@code cb.literal(text)}: Hibernate writes
-   * that into the SQL text, which a request must never reach (NoInlineLiteralTest).
+   * that into the SQL text, which a request must never reach (NoInlineLiteralTest). Bound only
+   * while {@code hibernate.criteria.value_handling_mode} is {@code BIND}, Hibernate's default:
+   * under {@code INLINE} this value would be written into the SQL too ({@code BoundTextFilterIT}
+   * would catch it).
    */
   public static Expression<String> bound(CriteriaBuilder cb, String text) {
     return ((HibernateCriteriaBuilder) cb).value(text);

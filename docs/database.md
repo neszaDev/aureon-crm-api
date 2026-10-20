@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V21__add_company_nickname.sql`. Note the **two**
+   highest existing version + 1. Example: `V22__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -59,6 +59,20 @@ tenant boundary, the composite foreign keys and the columns of the CRM tables ar
 (`ON DELETE SET NULL (owner_id)`): a plain `SET NULL` would also null the `NOT NULL`
 `workspace_id`. Workspaces are never hard-deleted, so
 `audit_events.workspace_id` is a plain foreign key and the trail stays append-only.
+
+## Query plans at scale
+
+Measured on 2026-10-20 (`EXPLAIN ANALYZE` through `auto_explain`, Testcontainers PostgreSQL 17)
+with 20 workspaces, the largest holding 10,000 deals, 18,000 stage changes, 20,000 activities,
+5,000 tasks and 50,000 audit events: every dashboard, report, board, list and export query reads
+through an index that starts with `workspace_id`; none scans a large table. The heaviest reads
+grow with the one workspace, not with the database: the funnel joins the workspace's whole stage
+history (5-9 ms), the audit list counts the workspace's events for its page total (9.5 ms at
+50,000), the dashboard counts its activities for a page total it doesn't show (5.4 ms at 20,000).
+A 10,000-row deal export takes about 0.3 s (its largest `IN` list is one bind per row, so
+`app.export.max-rows` stays under PgJDBC's 32,767). An index on `deals (workspace_id, created_at)`
+was tried for the funnel and left out: it cut the deals read from 10,000 to 408 rows, but the
+history join decides the time (6.0 to 5.0 ms). Measure again before adding one.
 
 ## Local database
 

@@ -30,8 +30,9 @@ stage kind, closing time), `crm/task/TaskTest` (task transitions, overdue, micro
 `crm/export/CsvWriterTest` (quoting, `;` too, formula protection also after leading blanks, CRLF),
 `ExportPropertiesTest` (`max-rows` 1 to 30000) and `RecordRefsTest` (`D-0042`),
 `crm/insight/PeriodTest` (defaults and bounds in the workspace zone, the 366-day cap, date
-parsing, years 1 and 9999, a zone behind UTC and its summer time) and `crm/demo/DemoDataSeederTest` (the opt-in gate, the password check that never shows
-the value, a login with another password left out).
+parsing, years 1 and 9999, a zone behind UTC and its summer time) and
+`crm/demo/DemoDataSeederTest` (the opt-in gate, the password check that never shows the value, a
+login with another password left out).
 
 ## Integration tests
 

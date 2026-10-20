@@ -25,7 +25,7 @@ refused before routing) the request path with invitation tokens masked.
 
 | Status | When |
 |---|---|
-| 400 | Validation failure, malformed JSON, bad query/path parameter; a URL the security firewall rejects (`//`, `;x=1`, an encoded `..`), with message `Malformed request` |
+| 400 | Validation failure, malformed JSON, bad query/path parameter; a URL the security firewall rejects (`//`, `;x=1`, an encoded `..`), with message `Malformed request`. An encoded NUL or slash in the path (`%00`, `%2F`) is refused by Tomcat itself, before the application: a 400 with Tomcat's HTML page, not an `ApiError` |
 | 401 | Missing, invalid or expired access token (with `WWW-Authenticate: Bearer`); wrong email/password; invalid refresh token; token of a deleted user, of a user whose email changed since, or of an earlier token version (an email, role or password change since) |
 | 403 | Valid token without the required role (admin endpoints) or workspace permission; `POST /auth/register` when `REGISTRATION_ENABLED=false` |
 | 404 | Unknown route, or a resource that doesn't exist *or belongs to another user*; anything under a workspace the caller is not a member of |

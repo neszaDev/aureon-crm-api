@@ -76,7 +76,8 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
   - Known gaps: no per-user upload quota or workspace caps (one user can fill `FILES_DIR` or
     create many workspaces), account events go to the logs only (no `account_events` table), and
     each refresh keeps a row for 30 days (rate-limited per user; one row per session is a
-    follow-up).
+    follow-up). The audit trail is append-only and kept forever, so an export's filters (its
+    search text included) stay in it: there is no retention period.
 - **Limits**: the backend must stay at one replica at most (rate limits are per instance).
   A redeploy of the frontend can make a form opened before it fail once ("Failed to find Server
   Action"); reloading the page fixes it.

@@ -51,10 +51,11 @@ code is the machine-readable version, and the frontend's `schema.d.ts` is genera
   delete a stage in use, remove the last owner, ...). `message` is English, for logs and API users;
   clients translate by **`code`**, which is stable. The OpenAPI spec has the body as
   `components.schemas.ApiError`, `code` as an enum. A 400 on fields also has `fieldErrors`
-  (`{ field: message }`). Errors outside this table have no `code` (it is left out): 401, a malformed
-  body or a query parameter of the wrong type (400; the dashboard's and reports' `from` / `to` are
-  the exception: `VALIDATION_FAILED` on the field), an unknown route (404), 405, 413, 415, the file
-  uploads' 400/413/415, 500. Show those by status.
+  (`{ field: message }`). Errors outside this table have no `code` (it is left out): 401, a
+  malformed body or a query parameter of the wrong type (400; the dashboard's and reports' `from` /
+  `to` are the exception: `VALIDATION_FAILED` on the field), an unknown route (404), 405, 413, 415,
+  the file uploads' 400/413/415, 500. Show those by status. An encoded NUL or slash in the path
+  (`%00`, `%2F`) never reaches the API: Tomcat answers a 400 with its own HTML page.
 
   | `code` | Status | Meaning |
   |---|---|---|
@@ -411,9 +412,9 @@ exported` (`12 contacts exported`), changes `{ list: { from: null, to: "contacts
 from: null, to: { ...the filters given } } }` (unset filters and `false` flags left out). The
 `filters` keys are the field names of the list's filter record, not the query parameters: a
 lead export with `?status=NEW&status=CONTACTED&followUpBefore=2026-11-15` records `{ statuses:
-["NEW", "CONTACTED"], followUpBefore: "2026-11-15" }`. It shows
-in the workspace's history, which needs `AUDIT_READ`; an export over the cap or refused records
-nothing.
+["NEW", "CONTACTED"], followUpBefore: "2026-11-15" }`. It shows in the workspace's history,
+which needs `AUDIT_READ`; an export over the cap or refused records nothing. The trail is
+append-only and has no retention period, so the filters (the search text `q` included) stay in it.
 
 ## Audit
 

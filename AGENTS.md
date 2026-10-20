@@ -50,7 +50,8 @@ src/main/java/com/example/boilerplate/
                tenant-filtered JPQL aggregates, the funnel's native SQL in ReportQueries binding
                the workspace itself; the lists through the record services' mappers);
                demo/ = the opt-in demo workspace of the local and dev profiles (DemoDataSeeder:
-               through the services as its members, then 21 of its 24 deals back-dated by SQL);
+               through the services as its members, then its deals and converted leads
+               back-dated by SQL);
                common/ = what every record type shares (CrmRecord, ListParams, SortField,
                TextSearch, RecordLinks, LinkRefs, ...)
   testresult/  owner-scoped CRUD + summary (/api/v1/test-results)
@@ -150,7 +151,9 @@ Always use `./mvnw`, never a system `mvn`. Run `make` to list every target.
 - **Invitation tokens are never logged**, nor put in an error message or an audit event. Only
   their SHA-256 hash is stored, and a URI under `/api/v1/invitations/{token}` counts as the token.
 - **Free text** from requests goes through `Texts.required(field, value)` / `Texts.optional(value)`:
-  `@NotBlank` and `strip()` miss Unicode spaces such as U+3000 and U+00A0.
+  `@NotBlank` and `strip()` miss Unicode spaces such as U+3000 and U+00A0. A text query parameter
+  (a filter such as `industry` or `tag`) goes through `Texts.param(field, value)`, which also makes
+  a NUL character a 400 on that field (`NulTextParameterIT` finds a new one that doesn't).
 - **Error bodies** use `RequestPaths.safePath(request)` for `ApiError.path`, never the raw URI.
 - **Secrets in records:** a request, response or configuration record holding a password, token
   or secret overrides `toString()` to leave it out (`SecretRedactionTest`): framework DEBUG
