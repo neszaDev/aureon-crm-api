@@ -175,6 +175,38 @@ class DealSignaturesIT extends WorkspaceTestSupport {
     }
   }
 
+  /** The owners and the signers of a page are one member query, on the list and on the board. */
+  @Test
+  void ownersAndSignersAreOneMemberQuery() throws Exception {
+    String x = uniqueEmail();
+    String owner = tokenFor(x);
+    long w = createWorkspace(owner, "Acme");
+    String y = member(w, WorkspaceRole.MANAGER);
+    long deal = create(owner, w, Map.of("name", "Signed", "amount", "1"));
+    move(tokenOf(y), w, deal, stages(owner, w).get("Proposal"), 0);
+    Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+    statistics.setStatisticsEnabled(true);
+    try {
+      statistics.clear();
+      assertThat(signatures(list(owner, w), "Signed")).containsValues(x, y);
+      assertThat(memberQueries(statistics)).as("list").isEqualTo(1);
+
+      statistics.clear();
+      assertThat(board(owner, w).get("Signed").get("owner").get("email").asText()).isEqualTo(x);
+      assertThat(memberQueries(statistics)).as("board").isEqualTo(1);
+    } finally {
+      statistics.setStatisticsEnabled(false);
+    }
+  }
+
+  /** How many times {@code MemberDirectory.refs} queried since the statistics were cleared. */
+  private static long memberQueries(Statistics statistics) {
+    return Arrays.stream(statistics.getQueries())
+        .filter(jpql -> jpql.contains("dto.MemberRef(") && jpql.contains("userId in"))
+        .mapToLong(jpql -> statistics.getQueryStatistics(jpql).getExecutionCount())
+        .sum();
+  }
+
   /** How many times the native signatures query ran since the statistics were cleared. */
   private static long signatureQueries(Statistics statistics) {
     return Arrays.stream(statistics.getQueries())

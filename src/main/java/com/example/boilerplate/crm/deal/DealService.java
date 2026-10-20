@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.jpa.domain.Specification;
@@ -353,16 +354,19 @@ public class DealService {
         Texts.optional(r.notes()));
   }
 
-  /** What a page shows besides the deals' own columns: one query each for a whole page. */
+  /**
+   * What a page shows besides the deals' own columns: one query each for a whole page ({@code
+   * people}: the owners and the signers together).
+   */
   private record Related(
-      Map<Long, MemberRef> owners,
+      Map<Long, MemberRef> people,
       Map<Long, Ref> companies,
       Map<Long, PersonRef> contacts,
       Map<Long, PipelineStage> stages,
       Map<Long, Instant> stageEnteredAt,
       Map<Long, List<StageSignature>> signatures) {
     MemberRef owner(Deal d) {
-      return d.getOwnerId() == null ? null : owners.get(d.getOwnerId());
+      return d.getOwnerId() == null ? null : people.get(d.getOwnerId());
     }
 
     Ref company(Deal d) {
@@ -386,13 +390,23 @@ public class DealService {
     }
   }
 
-  /** {@code signed}: the stage signatures too, which only the summaries show. */
-  private Related related(List<Deal> page, boolean signed) {
+  /** {@code signatures}: the stage signatures too, which only the summaries show. */
+  private Related related(List<Deal> page, boolean signatures) {
     if (page.isEmpty()) {
       return new Related(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
     }
+    List<Object[]> signed =
+        signatures
+            ? history.signatures(WorkspaceContext.workspaceId(), ids(page, Deal::getId))
+            : List.of();
+    // One member query for the owners and the signers.
+    Map<Long, MemberRef> people =
+        directory.refs(
+            Stream.concat(
+                    page.stream().map(Deal::getOwnerId), signed.stream().map(row -> (Long) row[2]))
+                .toList());
     return new Related(
-        directory.refs(page.stream().map(Deal::getOwnerId).toList()),
+        people,
         companies.findAllById(ids(page, Deal::getCompanyId)).stream()
             .collect(Collectors.toMap(c -> c.getId(), c -> new Ref(c.getId(), c.getName()))),
         contacts.findAllById(ids(page, Deal::getContactId)).stream()
@@ -402,13 +416,15 @@ public class DealService {
             .collect(Collectors.toMap(s -> s.getId(), Function.identity())),
         history.stageEnteredAt(ids(page, Deal::getId)).stream()
             .collect(Collectors.toMap(row -> (Long) row[0], row -> (Instant) row[1])),
-        signed ? signatures(ids(page, Deal::getId)) : Map.of());
+        signatures(signed, people));
   }
 
-  /** Per deal, who moved it into each stage: one query for the entries, one for the people. */
-  private Map<Long, List<StageSignature>> signatures(List<Long> dealIds) {
-    List<Object[]> rows = history.signatures(WorkspaceContext.workspaceId(), dealIds);
-    Map<Long, MemberRef> people = directory.refs(rows.stream().map(row -> (Long) row[2]).toList());
+  /**
+   * Per deal, who moved it into each stage: the rows of {@link
+   * DealStageChangeRepository#signatures}, the signers among {@code people}.
+   */
+  private static Map<Long, List<StageSignature>> signatures(
+      List<Object[]> rows, Map<Long, MemberRef> people) {
     return rows.stream()
         .collect(
             Collectors.groupingBy(
