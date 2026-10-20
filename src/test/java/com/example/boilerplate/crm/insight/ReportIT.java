@@ -256,6 +256,8 @@ class ReportIT extends WorkspaceTestSupport {
         .andExpect(jsonPath("$.byUser[*].meetings", contains(0, 1, 0)))
         .andExpect(jsonPath("$.byUser[*].notes", contains(1, 0, 0)))
         .andExpect(jsonPath("$.byUser[*].tasksCompleted", contains(0, 1, 0)))
+        // The sum of the five, the order's key.
+        .andExpect(jsonPath("$.byUser[*].total", contains(3, 2, 1)))
         .andExpect(jsonPath("$.byUser[2].user").doesNotExist());
   }
 

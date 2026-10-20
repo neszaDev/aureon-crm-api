@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -191,9 +192,6 @@ public class ReportService {
       byUser.computeIfAbsent((Long) row[0], id -> new long[5])[4] += (Long) row[1];
     }
     Map<Long, MemberRef> refs = members.refs(byUser.keySet());
-    Comparator<UserActivity> total =
-        Comparator.comparingLong(
-            u -> u.calls() + u.emails() + u.meetings() + u.notes() + u.tasksCompleted());
     return new ActivityReport(
         period.dto(),
         byUser.entrySet().stream()
@@ -201,9 +199,13 @@ public class ReportService {
                 e -> {
                   long[] n = e.getValue();
                   MemberRef user = e.getKey() == null ? null : refs.get(e.getKey());
-                  return new UserActivity(user, n[0], n[1], n[2], n[3], n[4]);
+                  return new UserActivity(
+                      user, n[0], n[1], n[2], n[3], n[4], Arrays.stream(n).sum());
                 })
-            .sorted(total.reversed().thenComparing(UserActivity::user, BY_EMAIL))
+            .sorted(
+                Comparator.comparingLong(UserActivity::total)
+                    .reversed()
+                    .thenComparing(UserActivity::user, BY_EMAIL))
             .toList());
   }
 

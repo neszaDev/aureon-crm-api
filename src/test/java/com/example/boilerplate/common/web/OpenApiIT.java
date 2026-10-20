@@ -135,6 +135,8 @@ class OpenApiIT extends AbstractIntegrationTest {
         .andExpect(jsonPath(schemas + "OwnerBucket.required", hasItems("count", "totals")))
         .andExpect(jsonPath(schemas + "WonLostReport.required", hasItems("period", "months")))
         .andExpect(jsonPath(schemas + "FunnelReport.required", hasItems("period", "stages")))
-        .andExpect(jsonPath(schemas + "ActivityReport.required", hasItems("period", "byUser")));
+        .andExpect(jsonPath(schemas + "ActivityReport.required", hasItems("period", "byUser")))
+        .andExpect(jsonPath(schemas + "UserActivity.required", not(hasItem("user"))))
+        .andExpect(jsonPath(schemas + "UserActivity.required", hasItems("calls", "total")));
   }
 }
