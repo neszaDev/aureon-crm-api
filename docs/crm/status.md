@@ -30,7 +30,7 @@ The runs behind every "Tested by" cell (Phase 4 final verification, 2026-10-21, 
 | Web, `feat/crm` at `4f924f3` | `make verify`: lint, types, knip, i18n keys, Vitest (unit and browser), production build | 1090 of 1090 tests in 174 files; build 194/194 pages |
 | Web | Playwright, Chromium, one worker, against a production build (`next start`) and the API above | 231 passed, twice; 0 flaky, skipped or failed |
 | Web, final fix round at `43b3357` | `make verify` and the same Playwright run twice, after the Phase 4 final review's fixes | 1099 of 1099; 231 passed, twice |
-| Web | Lighthouse 12.8.2, mobile, `/` | English 92 / 92 / 92 (accessibility, best practices, SEO 100); Thai 90 / 91 / 91 |
+| Web | Lighthouse 12.8.2, mobile, `/`: the performance score of three runs | At `4f924f3`: English 92 / 92 / 92 (accessibility, best practices, SEO 100), Thai 90 / 91 / 91. At `43b3357`, after the header changes: English 91 / 92 / 92; Thai not re-run |
 
 `tests/e2e/crm/Journey.e2e.ts` walks the brief's 10-step journey (§8) as one test with a step per
 item; it passed in both runs, and so did the per-area specs named below.
@@ -55,7 +55,7 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 | Membership and active-workspace selection | Implemented | `MemberIT`, `WorkspaceIT`; `Workspace.e2e.ts` ('switches between workspaces from the rail') | The workspace id is in the URL |
 | Access-denied and session-expired behaviour | Implemented | `Workspace.e2e.ts`, `Auth.e2e.ts` ('signs out a deleted account without a redirect loop'), `crm/Settings.e2e.ts` (an action with an expired session), `crm/Pipeline.e2e.ts` (a forged move's 403 as a translated toast) | A non-member gets "Workspace not found" (404, so ids can't be probed) |
 | Roles: owner, admin, manager, sales rep | Implemented | `WorkspaceRoleTest`, `MemberIT` | |
-| Permissions defined explicitly, enforced by the API | Implemented | `PrivilegeEscalationProbeIT`, the record ITs; `Security.e2e.ts` (replayed actions) | The web hides what a role can't do; the API decides |
+| Permissions defined explicitly, enforced by the API | Implemented | `PrivilegeEscalationProbeIT`, `CompanyIT`, `ContactIT`, `LeadIT`, `DealIT`, `TaskIT`, `ActivityIT`; `Security.e2e.ts` (replayed actions) | The web hides what a role can't do; the API decides |
 | No workspace data for non-members, on every query and change | Implemented | `TenantIsolationIT`, `CrossWorkspaceIdProbeIT`, `WorkspaceEndpointsGuardIT`, `ReportIT`, `DealSignaturesIT`; `Security.e2e.ts`, `crm/Journey.e2e.ts` (step 9) | `@TenantId`, explicit binds in native SQL, composite foreign keys |
 | No unsafe registration, invitation or provisioning shortcuts | Implemented | `InvitationIT` (email must match), `RegistrationDisabledIT`, `RateLimitIT` | Open sign-up is on by default (rate-limited per IP); `REGISTRATION_ENABLED=false` makes the API invite-only. Emails are not verified |
 | Password recovery | Not planned | - | Needs email delivery; not built rather than built unsafely |
@@ -102,7 +102,7 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 | Filters, sorting, pagination | Implemented | `ContactIT`, `UnassignedFilterIT`, `ListQuery.test.ts` | The list's e2e coverage is the shared list kit's, on companies |
 | Associated deals, tasks, activity timeline | Implemented | `DealIT`, `TaskIT`, `ActivityIT`; `crm/Records.e2e.ts` | |
 | Duplicate warnings and validation | Implemented | `ContactIT`, `ContactForm.test.tsx` | Same email, or the same phone digits (at least 6) |
-| From a contact to its company and deals | Implemented | `crm/Records.e2e.ts` (the contact links its company) | |
+| From a contact to its company and deals | Implemented | `DealIT` (the `contactId` filter); `crm/Records.e2e.ts` (the contact links its company) | The contact page's deal list has no e2e assertion of its own |
 | No data without workspace access | Implemented | `CrossWorkspaceIdProbeIT`, `TenantIsolationIT` | |
 
 ## E. Leads
@@ -159,7 +159,7 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 | Item | Status | Tested by | Notes |
 |---|---|---|---|
 | Server-side search | Implemented | `ListHelpersIT`, `BoundTextFilterIT`; `crm/Records.e2e.ts`, `crm/TopBar.e2e.ts` (⌘K) | Case-insensitive substring; `pg_trgm` is the upgrade path ([data-model.md](data-model.md#records)) |
-| Filters | Implemented | The record ITs, `UnassignedFilterIT` | |
+| Filters | Implemented | `CompanyIT`, `ContactIT`, `LeadIT`, `DealIT`, `TaskIT`, `ActivityIT`, `UnassignedFilterIT` | |
 | Sorting | Implemented | `ListHelpersIT`, `ListParamsTest`, `OrderingTest`, `SortHeader.test.tsx` | |
 | Pagination | Implemented | `ListParamsTest`, `QueryInputProbeIT`; `crm/Records.e2e.ts` | |
 | Query parameters and sort fields validated | Implemented | `QueryInputProbeIT`, `NulTextParameterIT`, `ListQuery.test.ts`; `Security.e2e.ts` ('keeps a list working whatever its URL asks for, and exports it the same way') | |
@@ -210,7 +210,7 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 | Flyway only, no ORM schema changes | Implemented | `MigrationsFromEmptyIT` | Hibernate `ddl-auto: validate` |
 | Existing migrations kept | Implemented | `MigrationsFromEmptyIT` | V1-V5 are the boilerplate's, unchanged |
 | Archival and deletion policy | Implemented | `CompanyIT`, `ContactIT`, `LeadIT`, `DealIT`, `ActivityIT` | [README](README.md#records-archive-never-delete) |
-| No accidental cascade deletes | Implemented | `PipelineStageIT`, `LeadSourceIT`, `MemberIT` and the record ITs | `RESTRICT`; a removed member's records become unassigned |
+| No accidental cascade deletes | Implemented | `PipelineStageIT`, `LeadSourceIT`, `MemberIT`, `CompanyIT`, `ContactIT`, `LeadIT`, `DealIT`, `TaskIT`, `ActivityIT` | `RESTRICT`; a removed member's records become unassigned |
 | No stored derived totals | Implemented | `DashboardIT`, `ReportIT` | |
 | Seed data without real customer data | Implemented | `DemoDataSeederIT` | Fictional, `example.com` |
 
@@ -224,16 +224,16 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 | Frontend types generated from OpenAPI | Implemented | - | `pnpm api:check` against the final API on 2026-10-21 (Phase 5): no difference. Not part of the runs above; CI runs it in its E2E job |
 | Backend errors shown as useful feedback | Implemented | `ApiError.test.ts`, `ActionFailure.test.ts`; `crm/Pipeline.e2e.ts`, `crm/Records.e2e.ts` | Translated by `code` |
 | Loading and pending states, no repeated submits | Implemented | `CompanyForm.test.tsx`, `ContactForm.test.tsx`, `ConvertDialog.test.tsx`; `crm/Records.e2e.ts` (a double click converts once) | |
-| Stale data | Implemented | The record ITs (409); `crm/Records.e2e.ts`, `crm/Settings.e2e.ts` (the reload message) | |
+| Stale data | Implemented | `CompanyIT`, `ContactIT`, `LeadIT`, `DealIT`, `TaskIT`, `ActivityIT` (409), `ErrorCodeIT`; `crm/Records.e2e.ts`, `crm/Settings.e2e.ts` (the reload message) | |
 
 ## Languages, themes, accessibility, demo data
 
 | Item | Status | Tested by | Notes |
 |---|---|---|---|
-| English, French, Thai | Implemented | `make verify`'s i18n check; `I18n.e2e.ts`, the 390 px Thai tests of each CRM spec | French and Thai were written without a native speaker's review |
+| English, French, Thai | Implemented | `make verify`'s i18n check; `I18n.e2e.ts`, the CRM specs' "fits…" tests at 390 px in Thai (all but Audit and Journey) | French and Thai were written without a native speaker's review |
 | Light and dark themes | Implemented | `crm/Settings.e2e.ts` ('switches to dark and to Thai from the account menu'), `Landing.e2e.ts` | |
 | Accessibility | Implemented | axe (WCAG 2.1 A and AA) in the CRM specs; `Showcase.e2e.ts` for the demo pages | Automated checks only. Known violations are listed for 15 demo pages, none for the CRM |
-| Phones (390 px) | Implemented | The "fits…" tests of each CRM spec | |
+| Phones (390 px) | Implemented | The CRM specs' "fits…" tests (all but Audit and Journey) | |
 | Visual regression | Deferred | - | No baselines committed: CI renders them on Linux, and CI hasn't run |
 | Demo data | Implemented | `DemoDataSeederIT`, `DemoDataSeederTest`, `ProdProfileRuntimeProbeIT` | Opt-in, `local` and `dev` profiles only, never under `prod` ([Try it](README.md#try-it)) |
 
@@ -249,7 +249,9 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 - **Next buffers up to 11 MB before the 413.** The web's body gate answers after Next has read
   the body, so the reverse proxy's body cap is required.
 - **The files page's exemption is per path.** `/dashboard/files` (the boilerplate's upload demo)
-  parses up to 11 MB from anyone, signed in or not; every other path refuses a body over 1 MiB.
+  parses up to 11 MB from anyone, signed in or not; every other path refuses a body over 1 MiB,
+  except those starting with `/_next/static` or `/_next/image`, which the gate skips
+  ([follow-up 2](#follow-ups)).
 - **No JSON body size cap on the API.** A signed-in user can send a large JSON body; keep the API
   off the internet.
 - **No email.** Invitations are links the inviter shares; there is no password recovery and no

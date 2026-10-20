@@ -80,6 +80,8 @@ with a `code`).
 - **Request bodies**: on every path but the files page, a POST over 1 MiB is refused with 413 (one
   without a stated length with 411) before a server action parses it
   ([request bodies](https://github.com/neszaDev/aureon-crm-web/blob/feat/crm/docs/architecture.md#request-bodies)).
+  The gate also skips paths starting with `/_next/static` or `/_next/image`
+  ([follow-up 2](status.md#follow-ups)).
 - **Invitation tokens** are stored hashed, kept out of both services' own logs, and invitation
   pages send no `Referer`.
 
@@ -128,8 +130,8 @@ The brief's §7 list. API tests are classes in this repository; web tests are in
 | **S-1**: a page offset past `Integer.MAX_VALUE` was a 500 on the boilerplate's lists (files, test results, users) | Low | Fixed (`b8491ad`): one shared page × size check (`common/web/Paging`) for every list; `QueryInputProbeIT` checks the offset on all 10 lists |
 | **S-2**: stored values reached the logs: PostgreSQL's Detail on constraint violations (an email, a failing row with a password hash), and a 500's whole exception chain | Low | Fixed (`685a699`): the driver's `logServerErrorDetail` is `false`; a database 500 logs its exception classes and SQLSTATE without messages; `S2DatabaseValuesInLogsProbeIT`. Accepted residuals below |
 | **W-1**: no security response headers on the web: other sites could frame the sign-in form (clickjacking), no CSP | Medium | Fixed (`9e770ad`, `b5f6dd2`, `693074f`): the headers above on every response; values asserted in `Security.e2e.ts`. No `script-src` and no HSTS in the app: accepted, see below |
-| **W-2**: 11 MB server-action bodies parsed for anyone, on every page (for the files page's uploads) | Low | Fixed in part (`61b0c2b`, `c38ab89`): a POST over 1 MiB is refused with 413 on every path but the files page, whatever the first segment. Accepted residuals below |
-| **W-3**: the web's per-IP sign-in and registration limit keys on the last `X-Forwarded-For` entry, which a client sets when Next.js is exposed directly | Low (Medium if exposed directly) | A deployment requirement (`be41aca`, `45f4cdc`): the reverse proxy makes the client's address the last entry ([checklist](production-checklist.md#edge-reverse-proxy-and-tls)). The per-email limit holds regardless |
+| **W-2**: 11 MB server-action bodies parsed for anyone, on every page (for the files page's uploads) | Low | Fixed in part (`61b0c2b`, `c38ab89`): a POST over 1 MiB is refused with 413 on every path but the files page (and those starting with `/_next/static` or `/_next/image`), whatever the first segment. Accepted residuals below |
+| **W-3**: the API's per-IP sign-in and registration limits key on the address the web server forwards (the last incoming `X-Forwarded-For` entry), which a client chooses when Next.js is exposed directly | Low (Medium if exposed directly) | A deployment requirement (`be41aca`, `45f4cdc`): the reverse proxy makes the client's address the last entry ([checklist](production-checklist.md#edge-reverse-proxy-and-tls)). The per-email limit holds regardless |
 | **I-1**: paths with a dot skip the session proxy | Info | No change: no data exposed; an expired session there ends instead of refreshing. Such paths do get the body gate |
 | **I-2**: the export route accepted a `same-site` request while the session route treated it as another site | Info | Fixed (`19574ea`): the export refuses same-site too (`route.test.ts`, `crm/Audit.e2e.ts`) |
 | **I-3**: `.` and `..` in an action's path parameters reach the API's path unencoded | Info | No change: all 100 operations were scripted with no harmful collision, and another workspace's id is refused anyway; a numeric check through one shared helper is a [follow-up](status.md#follow-ups) |

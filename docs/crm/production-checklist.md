@@ -3,7 +3,8 @@
 Work through this before real users sign in. The apps enforce only what is marked so; the rest is
 on the deployer. Variables in detail: the API's [configuration](../configuration.md) and the web's
 [configuration](https://github.com/neszaDev/aureon-crm-web/blob/feat/crm/docs/configuration.md).
-Azure Container Apps specifics (resources, secrets, rollback): [deployment.md](../deployment.md).
+Azure Container Apps specifics (resources, secrets, rollback): [deployment.md](../deployment.md);
+its template doesn't meet the [Edge](#edge-reverse-proxy-and-tls) items by itself.
 Why each item matters: [security.md](security.md). None of this has run in a real deployment yet
 (the project runs locally only), and the nginx lines below are a sketch, not tested here.
 
@@ -24,6 +25,8 @@ Why each item matters: [security.md](security.md). None of this has run in a rea
 - [ ] `JWT_SECRET`: random, at least 32 bytes, from a secret manager (`openssl rand -hex 32`).
       _Enforced:_ the app refuses a shorter one and this repository's placeholders under `prod`.
 - [ ] `DB_URL`: TLS with a verified certificate, `jdbc:postgresql://<host>:5432/<db>?sslmode=verify-full`.
+      The driver then needs the server's CA: mount it and add `&sslrootcert=/path/ca.pem`, or add
+      `&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory` to use the JVM's trust store.
       **Never add `logServerErrorDetail`** to it: the URL would override `application.yml`'s
       `false`, and PostgreSQL's Detail lines would put stored values (emails, rows with password
       hashes) in the logs.
@@ -35,16 +38,24 @@ Why each item matters: [security.md](security.md). None of this has run in a rea
       there. _Enforced:_ required and non-empty under `prod`.
 - [ ] `REGISTRATION_ENABLED`: decide. The default `true` lets anyone create an account (and then
       a workspace), limited per IP; `false` makes the API invite-only, and people join through
-      invitation links.
+      invitation links. To start invite-only, either register the first owner before switching
+      it off, or sign in as the first admin (below): like any account it can create a workspace,
+      becoming its owner, and invite the team, an owner included; invitation links still create
+      accounts (`RegistrationDisabledIT`). Once another owner has joined, the admin can leave.
 - [ ] `ADMIN_EMAIL`, `ADMIN_PASSWORD` (optional): the first system admin, a 12-72 character
       password from a secret manager. Created only when missing; an existing account is never
-      promoted. A system admin manages accounts, not workspaces.
+      promoted. A system admin manages accounts; it has no way into a workspace it isn't a member
+      of.
 - [ ] `DEMO_DATA` and `DEMO_PASSWORD` unset. _Enforced:_ the seeder exists only in the `local` and
       `dev` profiles and never runs under `prod`. No `*@demo.test` accounts in a production
       database.
 - [ ] `SPRINGDOC_ENABLED` unset: no public API docs or Swagger UI.
 - [ ] `FILES_DIR` on a persistent, backed-up volume; `FILES_MAX_SIZE` at most `10MB` (the web
       server takes 11 MB per upload).
+- [ ] `FILES_ALLOWED_TYPES` never with `text/html` or `image/svg+xml`: both can carry script.
+- [ ] `JWT_ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`, `REFRESH_REUSE_GRACE`, `SESSION_MAX_AGE` at
+      their defaults (`PT15M`, `P30D`, `PT30S`, `P90D`) or shorter. A shorter reuse grace revokes
+      more sessions whose tabs refresh at the same moment.
 - [ ] `APP_VERSION` set (shown at `/actuator/info`).
 - [ ] Rate limits left on (`RATE_LIMIT_ENABLED` unset); `RATE_LIMIT_*` at their defaults or lower.
       Never the e2e values (10,000 per IP).
@@ -69,6 +80,8 @@ Why each item matters: [security.md](security.md). None of this has run in a rea
       `debug` is for local use.
 - [ ] `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`: empty, or a key restricted by HTTP referrer (the demo
       map page only; inlined at build).
+- [ ] Know what a stock image holds: the web Dockerfile takes no build arguments and keeps `env/`
+      out of the build, so it is built with the defaults: logging at `info`, no Maps key.
 - [ ] `SKIP_ENV_VALIDATION` only inside `docker build` (the Dockerfile's build stage sets it),
       never at runtime.
 - [ ] Link previews: the public pages' `og:image` host is baked from `APP_URL` at build, and the
@@ -77,6 +90,13 @@ Why each item matters: [security.md](security.md). None of this has run in a rea
 - [ ] **Never exposed directly**: only the reverse proxy reaches the server's port (3000).
 
 ## Edge (reverse proxy and TLS)
+
+The Azure template in [deployment.md](../deployment.md) (`infra/main.bicep`) puts the Container
+Apps ingress straight in front of the web app (external, `allowInsecure: false`) and configures
+no HSTS header and no request body cap, nor anything about `X-Forwarded-For` or `Host`; how the
+managed ingress handles those two was not tested here. Before go-live, put an edge that meets the
+items below (Front Door, Application Gateway or nginx) in front of it, or verify each one on the
+ingress.
 
 - [ ] **TLS in front of the web server, with HSTS.** The TLS terminator sends
       `Strict-Transport-Security` (`max-age=31536000`; add `includeSubDomains` only when every
@@ -118,8 +138,9 @@ location / {
 
 ## Database and data
 
-- [ ] PostgreSQL 17 on a private network, reached over TLS (`sslmode=verify-full`; the Azure
-      template uses `require` behind a firewall rule).
+- [ ] PostgreSQL 17 on a private network, reached over TLS (`sslmode=verify-full` with the
+      server's CA, as in `DB_URL` above; the Azure template uses `require`, which doesn't verify
+      the certificate, behind a firewall rule open to Azure services).
 - [ ] Automated backups with point-in-time restore, and one restore tried; `FILES_DIR` backed up
       with them.
 - [ ] Plan for the audit trail: it is append-only (a trigger refuses `UPDATE` and `DELETE`) and has

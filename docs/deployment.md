@@ -75,6 +75,10 @@ Set them with `gh variable set NAME --env dev --body VALUE --repo <owner>/<repo>
   - The database on a private network, with `sslmode=verify-full` in `DB_URL` (the Azure setup
     uses `sslmode=require` over a firewall rule).
   - `SPRINGDOC_ENABLED` unset, unless the API docs should be public.
+  - An edge in front of the web app that sends HSTS, caps request bodies, makes the client's
+    address the last `X-Forwarded-For` entry and passes `Host` on: `main.bicep` configures none of
+    these on the Container Apps ingress
+    ([production checklist, Edge](crm/production-checklist.md#edge-reverse-proxy-and-tls)).
   - Known gaps: no per-user upload quota or workspace caps (one user can fill `FILES_DIR` or
     create many workspaces), account events go to the logs only (no `account_events` table), and
     each refresh keeps a row for 30 days (rate-limited per user; one row per session is a
