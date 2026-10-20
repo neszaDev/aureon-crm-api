@@ -9,9 +9,12 @@ import org.testcontainers.utility.DockerImageName;
 /** Real PostgreSQL for integration tests; same major version as docker-compose.yml. */
 @TestConfiguration(proxyBeanMethods = false)
 public class PostgresTestcontainersConfig {
+  /** The image every IT runs on, also MigrationsFromEmptyIT's own container. */
+  public static final DockerImageName IMAGE = DockerImageName.parse("postgres:17-alpine");
+
   @Bean
   @ServiceConnection
   PostgreSQLContainer<?> postgres() {
-    return new PostgreSQLContainer<>(DockerImageName.parse("postgres:17-alpine"));
+    return new PostgreSQLContainer<>(IMAGE);
   }
 }

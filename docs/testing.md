@@ -69,6 +69,7 @@ What the existing ITs cover:
 | Class | Covers |
 |---|---|
 | `BoilerplateApplicationIT` | Migrations applied, schema validates |
+| `MigrationsFromEmptyIT` | On its own empty container: Flyway (the application's locations) applies every file under `db/migration`, the highest version is current, validation passes, a second run applies none; then the application starts on that database (Hibernate's `validate`) |
 | `auth/AuthFlowIT` | Register → login → refresh rotation → logout, error paths |
 | `auth/RefreshConcurrencyIT` | Refresh under concurrency: parallel refreshes of one token (one winner, nothing revoked), a thief refreshing in a loop during a password change (no rotation after it, the thief's access token 401), concurrent clean-ups of expired rows (no 409) |
 | `auth/RefreshReuseIT` | Refresh-token families: a replay after the grace revokes the family, within it only that request fails, a family past 90 days (counted from the sign-in) can't rotate |
