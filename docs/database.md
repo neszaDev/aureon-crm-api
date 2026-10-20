@@ -51,6 +51,7 @@ Migrations run automatically at application startup, in every profile.
 | `V18__users_sessions_valid_after.sql` | `users.sessions_valid_after` (nullable): access tokens issued before it are refused; set on an email, role or password change (dropped by V20) |
 | `V19__refresh_token_families.sql` | `refresh_tokens.family_id`, `family_created_at` (existing tokens become one-token families started at their `created_at`) and `used_at`; index on `family_id` |
 | `V20__token_version.sql` | `users.token_version` and `refresh_tokens.token_version` (int, default 0): a token of another version is refused; drops `users.sessions_valid_after` |
+| `V21__lead_status_checks.sql` | `leads` status checks behind the services' rules: `unqualified_reason` set exactly when `UNQUALIFIED`, `converted_at` and `converted_contact_id` exactly when `CONVERTED`, `converted_company_id` and `converted_deal_id` only then |
 
 Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
 tenant boundary, the composite foreign keys and the columns of the CRM tables are described in

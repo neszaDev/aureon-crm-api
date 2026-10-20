@@ -619,11 +619,20 @@ class DealIT extends WorkspaceTestSupport {
           .isInstanceOf(DataIntegrityViolationException.class);
     }
     long ownLead = id(send(a, post(LEADS, wa), Map.of("firstName", "Ada", "lastName", "L")));
+    long ownContact = id(send(a, post(CONTACTS, wa), Map.of("firstName", "Ada")));
+    // Converted as a conversion writes it (the status columns go together), so only the foreign
+    // key can refuse the other workspace's deal.
+    jdbc.update(
+        "UPDATE leads SET status = 'CONVERTED', converted_at = now(), converted_contact_id = ?"
+            + " WHERE id = ?",
+        ownContact,
+        ownLead);
     assertThatThrownBy(
             () ->
                 jdbc.update(
                     "UPDATE leads SET converted_deal_id = ? WHERE id = ?", theirDeal, ownLead))
-        .isInstanceOf(DataIntegrityViolationException.class);
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("leads_workspace_id_converted_deal_id_fkey");
     jdbc.update("UPDATE leads SET converted_deal_id = ? WHERE id = ?", own, ownLead);
 
     // One deal per lead; the deal shows its lead.

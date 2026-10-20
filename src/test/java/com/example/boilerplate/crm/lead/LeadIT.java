@@ -18,6 +18,7 @@ import com.example.boilerplate.support.WorkspaceTestSupport;
 import com.example.boilerplate.workspace.WorkspaceRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -312,22 +313,73 @@ class LeadIT extends WorkspaceTestSupport {
     long wb = createWorkspace(b, "B");
     long theirCompany = id(send(b, post(COMPANIES, wb), Map.of("name", "B's")));
     long theirContact = id(send(b, post(CONTACTS, wb), Map.of("firstName", "B")));
+    long ownContact = id(send(a, post(CONTACTS, wa), Map.of("firstName", "A")));
     long own = create(a, wa, Map.of("firstName", "Ada"));
 
     // The conversion links only rows it found here; the composite foreign keys are the backstop.
-    assertThatThrownBy(
-            () ->
-                jdbc.update(
-                    "UPDATE leads SET converted_company_id = ? WHERE id = ?", theirCompany, own))
-        .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () ->
-                jdbc.update(
-                    "UPDATE leads SET converted_contact_id = ? WHERE id = ?", theirContact, own))
-        .isInstanceOf(DataIntegrityViolationException.class);
+    // Written as a conversion writes them (the status columns go together), so only the foreign
+    // key can refuse.
+    String convert =
+        "UPDATE leads SET status = 'CONVERTED', converted_at = now(), converted_contact_id = ?,"
+            + " converted_company_id = ? WHERE id = ?";
+    assertThatThrownBy(() -> jdbc.update(convert, ownContact, theirCompany, own))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("leads_workspace_id_converted_company_id_fkey");
+    assertThatThrownBy(() -> jdbc.update(convert, theirContact, null, own))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("leads_workspace_id_converted_contact_id_fkey");
     send(a, get(LEAD, wa, own))
         .andExpect(jsonPath("$.convertedCompany").doesNotExist())
         .andExpect(jsonPath("$.convertedContact").doesNotExist());
+  }
+
+  /**
+   * The status columns go together in the database too (V21), behind the services' rules: a reason
+   * only for UNQUALIFIED, the conversion's time and contact only for CONVERTED, its company and
+   * deal only with them.
+   */
+  @Test
+  void statusColumnsGoTogetherInTheDatabase() throws Exception {
+    String token = tokenFor(uniqueEmail());
+    long w = createWorkspace(token, "Acme");
+    long contact = id(send(token, post(CONTACTS, w), Map.of("firstName", "Ada")));
+    long company = id(send(token, post(COMPANIES, w), Map.of("name", "Acme")));
+    long deal =
+        id(
+            send(
+                token,
+                post("/api/v1/workspaces/{workspaceId}/deals", w),
+                Map.of("name", "Deal", "amount", "1")));
+    long lead = create(token, w, Map.of("firstName", "Ada"));
+
+    Map<String, String> refused = new LinkedHashMap<>();
+    refused.put("status = 'UNQUALIFIED'", "ck_leads_unqualified_reason");
+    refused.put("unqualified_reason = 'No budget'", "ck_leads_unqualified_reason");
+    refused.put("status = 'CONVERTED'", "ck_leads_converted");
+    refused.put("converted_at = now()", "ck_leads_converted");
+    refused.put("converted_contact_id = " + contact, "ck_leads_converted");
+    refused.put("converted_company_id = " + company, "ck_leads_converted_links");
+    refused.put("converted_deal_id = " + deal, "ck_leads_converted_links");
+    refused.forEach(
+        (set, check) ->
+            assertThatThrownBy(() -> jdbc.update("UPDATE leads SET " + set + " WHERE id = ?", lead))
+                .as(set)
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining(check));
+
+    // What the services write passes.
+    jdbc.update(
+        "UPDATE leads SET status = 'UNQUALIFIED', unqualified_reason = 'No budget' WHERE id = ?",
+        lead);
+    jdbc.update(
+        "UPDATE leads SET status = 'CONVERTED', unqualified_reason = NULL, converted_at = now(),"
+            + " converted_contact_id = ?, converted_company_id = ?, converted_deal_id = ?"
+            + " WHERE id = ?",
+        contact,
+        company,
+        deal,
+        lead);
+    send(token, get(LEAD, w, lead)).andExpect(jsonPath("$.status").value("CONVERTED"));
   }
 
   @Test
