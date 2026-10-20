@@ -38,6 +38,8 @@ public class LeadSourceController {
     return service.update(id, r);
   }
 
+  // A DELETE: GlobalExceptionHandler answers this route's foreign-key race with the in-use code
+  // only for that method; a delete through another method would get CONFLICT.
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void delete(@PathVariable long workspaceId, @PathVariable long id) {

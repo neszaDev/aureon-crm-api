@@ -89,6 +89,7 @@ public class GlobalExceptionHandler {
     }
     log.warn("Constraint violation on {} {}", r.getMethod(), route(r));
     ErrorCode rule = constraintRule(e);
+    // Relies on stage and source deletes being DELETE requests (their controllers say so).
     if (IN_USE.contains(rule) && !HttpMethod.DELETE.matches(r.getMethod())) {
       rule = ErrorCode.CONFLICT;
     }
