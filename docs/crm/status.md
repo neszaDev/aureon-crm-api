@@ -251,7 +251,7 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 - **The files page's exemption is per path.** `/dashboard/files` (the boilerplate's upload demo)
   parses up to 11 MB from anyone, signed in or not; every other path refuses a body over 1 MiB,
   except those starting with `/_next/static` or `/_next/image`, which the gate skips
-  ([follow-up 2](#follow-ups)).
+  ([follow-up 3](#follow-ups)).
 - **No JSON body size cap on the API.** A signed-in user can send a large JSON body; keep the API
   off the internet.
 - **No email.** Invitations are links the inviter shares; there is no password recovery and no
@@ -280,27 +280,31 @@ dependency advisory audit (CI's audit jobs haven't run on this branch).
 
 In order of priority:
 
-1. **Move uploads to an auth-gated streaming route handler and set server actions back to 1 MB**:
+1. **Upgrade to Spring Boot 4 (Spring Framework 7)**: the 6.2 line has no open-source fix for
+   CVE-2026-47884 and CVE-2026-47890 (both critical, both unreachable here; accepted in
+   `.trivyignore` until 2027-01-31, see [security.md](security.md#accepted-residuals)). Dependabot
+   already proposes the bump; it needs the Jackson 3, Hibernate 7 and Spring Security 7 changes.
+2. **Move uploads to an auth-gated streaming route handler and set server actions back to 1 MB**:
    ends the anonymous 11 MB parse on the files page and Next's 11 MB buffering on every path.
-2. **Exclude `_next/static/` and `_next/image$` from the body gate, not every path starting with
+3. **Exclude `_next/static/` and `_next/image$` from the body gate, not every path starting with
    them**: the prefixes are matched loosely, so a future `[locale]` page whose name starts with
    `static` or `image` (`/_next/static-x`) would skip the gate.
-3. **Run CI**: open pull requests from `feat/crm` (an owner's decision) and enable API image
-   publishing, so the web's E2E, contract and image-scan jobs and both repos' dependency audits
-   run on GitHub.
-4. **Commit the visual baselines** from that first CI run, so visual regression starts checking.
-5. **Shared state before scaling out**: rate limits, the web's refresh sharing and uploads in
+4. **Run the web E2E in CI**: draft pull requests from `feat/crm` are open (API #6, web #3) and
+   their other jobs run; enabling API image publishing lets the web's E2E, contract and visual
+   jobs run too.
+5. **Commit the visual baselines** from that first CI run, so visual regression starts checking.
+6. **Shared state before scaling out**: rate limits, the web's refresh sharing and uploads in
    shared storage, so more than one instance of each service is safe.
-6. **Email delivery** (invitations, password recovery, email verification): needs a mail service,
+7. **Email delivery** (invitations, password recovery, email verification): needs a mail service,
    which the brief keeps optional.
-7. **A `script-src` CSP** with nonces or hashes, so an XSS has a second line of defence.
-8. **A JSON body size cap in the API**: defence in depth if the API is ever reachable from
+8. **A `script-src` CSP** with nonces or hashes, so an XSS has a second line of defence.
+9. **A JSON body size cap in the API**: defence in depth if the API is ever reachable from
    outside.
-9. **Stack frames for database 500s without their messages**: easier diagnosis, still no values
+10. **Stack frames for database 500s without their messages**: easier diagnosis, still no values
    in the logs.
-10. **Upload quota, workspace caps, an `account_events` table, one refresh row per session**: the
+11. **Upload quota, workspace caps, an `account_events` table, one refresh row per session**: the
     known gaps in [deployment.md](../deployment.md#operating-it).
-11. **A numeric check on the ids server actions put in API paths** (finding I-3), through one
+12. **A numeric check on the ids server actions put in API paths** (finding I-3), through one
     shared path helper.
-12. **`pg_trgm` indexes** for substring search once a workspace outgrows SMB scale.
-13. **A native speaker's review** of the French and Thai copy.
+13. **`pg_trgm` indexes** for substring search once a workspace outgrows SMB scale.
+14. **A native speaker's review** of the French and Thai copy.

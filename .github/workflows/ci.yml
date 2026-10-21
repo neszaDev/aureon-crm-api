@@ -94,16 +94,16 @@ jobs:
           ./mvnw -q dependency:copy-dependencies -DincludeScope=test -DoutputDirectory=target/audit/test
       - name: No fixable high or critical vulnerabilities in what ships
         run: |
-          docker run --rm -v "$PWD/target/audit/runtime:/scan:ro" "$TRIVY" rootfs \
+          docker run --rm -v "$PWD/target/audit/runtime:/scan:ro" -v "$PWD/.trivyignore:/.trivyignore:ro" "$TRIVY" rootfs \
             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-            --skip-version-check --no-progress /scan
+            --skip-version-check --no-progress --ignorefile /.trivyignore /scan
       # Test-only libraries (Testcontainers, JUnit, ...) never ship; their advisories are
       # reported, not blocking.
       - name: Vulnerabilities in test-only dependencies (report only)
         run: |
-          docker run --rm -v "$PWD/target/audit/test:/scan:ro" "$TRIVY" rootfs \
+          docker run --rm -v "$PWD/target/audit/test:/scan:ro" -v "$PWD/.trivyignore:/.trivyignore:ro" "$TRIVY" rootfs \
             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-            --skip-version-check --no-progress /scan \
+            --skip-version-check --no-progress --ignorefile /.trivyignore /scan \
             || echo "::warning title=Test dependency advisories::Trivy found high or critical advisories in test-scoped dependencies (not blocking)"
       - if: github.event_name == 'pull_request'
         name: New dependencies have no known vulnerabilities or disallowed licences
@@ -223,9 +223,9 @@ jobs:
           compression-level: 0 # already gzipped
       - name: Image has no fixable high or critical vulnerabilities
         run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image \
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/.trivyignore:/.trivyignore:ro" "$TRIVY" image \
             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-            --skip-version-check --no-progress "$IMAGE"
+            --skip-version-check --no-progress --ignorefile /.trivyignore "$IMAGE"
 
   boot:
     name: App boot test

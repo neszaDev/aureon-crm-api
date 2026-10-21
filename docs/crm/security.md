@@ -81,7 +81,7 @@ with a `code`).
   without a stated length with 411) before a server action parses it
   ([request bodies](https://github.com/neszaDev/aureon-crm-web/blob/feat/crm/docs/architecture.md#request-bodies)).
   The gate also skips paths starting with `/_next/static` or `/_next/image`
-  ([follow-up 2](status.md#follow-ups)).
+  ([follow-up 3](status.md#follow-ups)).
 - **Invitation tokens** are stored hashed, kept out of both services' own logs, and invitation
   pages send no `Referer`.
 
@@ -166,6 +166,11 @@ deployment ones into requirements.
 - **A database 500 logs no stack frames**, only exception classes and SQLSTATE: harder diagnosis,
   no values in the logs (follow-up: frames without messages).
 - **Per-IP limits depend on the reverse proxy** (W-3), and all limits are per instance.
-
+- **Two critical Spring Framework advisories without an open-source fix on 6.2**:
+  CVE-2026-47884 (code execution through `XsltView`) and CVE-2026-47890 (stream corruption in
+  Server-Sent Events). The fix is Spring Framework 7.0.9, which needs Spring Boot 4. Neither is
+  reachable here: the API renders no views (JSON REST only) and serves no Server-Sent Events.
+  Accepted in `.trivyignore` with a review date (2027-01-31) so CI's scans pass; the upgrade is
+  the first [follow-up](status.md#follow-ups).
 This document records what was tested and what was not. No security certification or compliance
 (SOC 2, ISO 27001, GDPR or any other) is claimed for Aureon CRM.
