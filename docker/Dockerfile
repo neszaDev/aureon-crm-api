@@ -1,5 +1,5 @@
 # Java major must match <java.version> in pom.xml (21); Maven matches .mvn/wrapper.
-FROM maven:3.9.16-eclipse-temurin-21 AS local
+FROM maven:3.9-eclipse-temurin-26 AS local
 WORKDIR /workspace
 COPY pom.xml .
 RUN mvn -B dependency:go-offline
