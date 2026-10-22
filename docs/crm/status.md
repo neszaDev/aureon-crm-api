@@ -289,7 +289,7 @@ In order of priority:
 3. **Exclude `_next/static/` and `_next/image$` from the body gate, not every path starting with
    them**: the prefixes are matched loosely, so a future `[locale]` page whose name starts with
    `static` or `image` (`/_next/static-x`) would skip the gate.
-4. **Run the web E2E in CI**: draft pull requests from `feat/crm` are open (API #6, web #3) and
+4. **Run the web E2E in CI**: draft pull requests from `feat/crm` are open (API #1, web #1) and
    their other jobs run; enabling API image publishing lets the web's E2E, contract and visual
    jobs run too.
 5. **Commit the visual baselines** from that first CI run, so visual regression starts checking.
