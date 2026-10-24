@@ -13,14 +13,16 @@ public interface ActivityRepository
     extends JpaRepository<Activity, Long>, JpaSpecificationExecutor<Activity> {
   /**
    * Rows of (author id, null once they left; type, count) of the activities that occurred from
-   * {@code start} (inclusive) to {@code end} (exclusive).
+   * {@code start} (inclusive) to {@code end} (exclusive). Only {@code authorId}'s unless it is
+   * null.
    */
   @Query(
       """
       select a.authorId, a.type, count(a) from Activity a
       where a.occurredAt >= :start and a.occurredAt < :end
+        and (:authorId is null or a.authorId = :authorId)
       group by a.authorId, a.type""")
-  List<Object[]> countByAuthorAndType(Instant start, Instant end);
+  List<Object[]> countByAuthorAndType(Instant start, Instant end, Long authorId);
 
   /**
    * A converted lead's activities join the contact, company and deal it became; a link they have

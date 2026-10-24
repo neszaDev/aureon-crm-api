@@ -1,10 +1,12 @@
 package com.example.boilerplate.crm.insight;
 
+import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +21,8 @@ class ReportQueries {
    * (Lost and deleted stages, whose rows have no stage id, count for nothing; null: none). The
    * history drives: every deal has one, and joining by ids is enough, since ids are unique across
    * workspaces and the composite foreign keys keep a history row's deal and stage in its workspace.
-   * The deal's workspace is bound too, as defence in depth.
+   * The deal's workspace is bound too, as defence in depth, and with it the owner when one is
+   * given.
    */
   private static final String FUNNEL =
       """
@@ -31,6 +34,7 @@ class ReportQueries {
         LEFT JOIN pipeline_stages s ON s.id = c.to_stage_id AND s.kind <> 'LOST'
         WHERE c.workspace_id = :workspaceId AND d.workspace_id = :workspaceId
           AND d.archived_at IS NULL
+          AND (:ownerId IS NULL OR d.owner_id = :ownerId)
           AND d.created_at >= :start AND d.created_at < :end
         GROUP BY c.deal_id
       ) AS reached
@@ -45,14 +49,17 @@ class ReportQueries {
 
   /**
    * The active deals of {@code workspaceId} created from {@code start} (inclusive) to {@code end}
-   * (exclusive), counted by the highest stage position they reached (null key: none).
+   * (exclusive), only {@code ownerId}'s unless it is null, counted by the highest stage position
+   * they reached (null key: none).
    */
-  Map<Integer, Long> funnel(long workspaceId, Instant start, Instant end) {
-    Map<String, Object> params =
-        Map.of(
-            "workspaceId", workspaceId,
-            "start", OffsetDateTime.ofInstant(start, ZoneOffset.UTC),
-            "end", OffsetDateTime.ofInstant(end, ZoneOffset.UTC));
+  Map<Integer, Long> funnel(long workspaceId, Long ownerId, Instant start, Instant end) {
+    MapSqlParameterSource params =
+        new MapSqlParameterSource()
+            .addValue("workspaceId", workspaceId)
+            // Typed, so that PostgreSQL can tell what a null is.
+            .addValue("ownerId", ownerId, Types.BIGINT)
+            .addValue("start", OffsetDateTime.ofInstant(start, ZoneOffset.UTC))
+            .addValue("end", OffsetDateTime.ofInstant(end, ZoneOffset.UTC));
     Map<Integer, Long> deals = new HashMap<>();
     jdbc.query(
         FUNNEL,

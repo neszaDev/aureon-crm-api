@@ -93,7 +93,7 @@ public class DashboardService {
     Period period = Period.resolve(from, to, zone, now);
 
     // Open deals: per stage and currency, then per currency across the stages.
-    List<Object[]> open = deals.openTotals();
+    List<Object[]> open = deals.openTotals(null);
     Map<String, BigDecimal> amounts = new TreeMap<>();
     Map<String, BigDecimal> weighted = new HashMap<>();
     long openDeals = 0;
@@ -121,7 +121,7 @@ public class DashboardService {
     long won = 0;
     long lost = 0;
     List<MoneyTotal> wonTotals = new ArrayList<>();
-    for (Object[] row : deals.closedTotals(period.start(), period.endExclusive())) {
+    for (Object[] row : deals.closedTotals(period.start(), period.endExclusive(), null)) {
       long count = (Long) row[2];
       if (row[0] == StageKind.WON) {
         won += count;

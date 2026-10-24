@@ -15,14 +15,16 @@ public interface TaskRepository
 
   /**
    * Rows of (assignee id, null when unassigned; count) of the tasks completed from {@code start}
-   * (inclusive) to {@code end} (exclusive): only a completed task has a completion time.
+   * (inclusive) to {@code end} (exclusive): only a completed task has a completion time. Only
+   * {@code assigneeId}'s unless it is null.
    */
   @Query(
       """
       select t.assigneeId, count(t) from CrmTask t
       where t.completedAt >= :start and t.completedAt < :end
+        and (:assigneeId is null or t.assigneeId = :assigneeId)
       group by t.assigneeId""")
-  List<Object[]> countCompletedByAssignee(Instant start, Instant end);
+  List<Object[]> countCompletedByAssignee(Instant start, Instant end, Long assigneeId);
 
   /** As {@code ActivityRepository.linkConvertedLead}, for the lead's tasks. */
   @Transactional

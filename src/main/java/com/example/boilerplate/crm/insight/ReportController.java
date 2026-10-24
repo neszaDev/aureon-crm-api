@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Every member reads them. The dates are strings, as on the dashboard, so that a malformed one is a
- * 400 on its field ({@link Period#date}). workspaceId is declared for the API docs;
- * WorkspaceAccessInterceptor has already resolved it.
+ * 400 on its field ({@link Period#date}). {@code ownerId}: only that member's records (api.md,
+ * Dashboard and reports). workspaceId is declared for the API docs; WorkspaceAccessInterceptor has
+ * already resolved it.
  */
 @RestController
 @RequestMapping("/api/v1/workspaces/{workspaceId}/reports")
@@ -24,8 +25,9 @@ public class ReportController {
   }
 
   @GetMapping("/pipeline")
-  PipelineReport pipeline(@PathVariable long workspaceId) {
-    return service.pipeline();
+  PipelineReport pipeline(
+      @PathVariable long workspaceId, @RequestParam(required = false) Long ownerId) {
+    return service.pipeline(ownerId);
   }
 
   @GetMapping("/won-lost")
@@ -34,8 +36,9 @@ public class ReportController {
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
           String from,
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
-          String to) {
-    return service.wonLost(Period.date("from", from), Period.date("to", to));
+          String to,
+      @RequestParam(required = false) Long ownerId) {
+    return service.wonLost(Period.date("from", from), Period.date("to", to), ownerId);
   }
 
   @GetMapping("/funnel")
@@ -44,8 +47,9 @@ public class ReportController {
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
           String from,
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
-          String to) {
-    return service.funnel(Period.date("from", from), Period.date("to", to));
+          String to,
+      @RequestParam(required = false) Long ownerId) {
+    return service.funnel(Period.date("from", from), Period.date("to", to), ownerId);
   }
 
   @GetMapping("/activities")
@@ -54,12 +58,14 @@ public class ReportController {
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
           String from,
       @Parameter(schema = @Schema(type = "string", format = "date")) @RequestParam(required = false)
-          String to) {
-    return service.activities(Period.date("from", from), Period.date("to", to));
+          String to,
+      @RequestParam(required = false) Long ownerId) {
+    return service.activities(Period.date("from", from), Period.date("to", to), ownerId);
   }
 
   @GetMapping("/follow-ups")
-  FollowUpReport followUps(@PathVariable long workspaceId) {
-    return service.followUps();
+  FollowUpReport followUps(
+      @PathVariable long workspaceId, @RequestParam(required = false) Long ownerId) {
+    return service.followUps(ownerId);
   }
 }

@@ -20,6 +20,7 @@ import com.example.boilerplate.crm.task.TaskStatus;
 import com.example.boilerplate.crm.task.dto.TaskFilter;
 import com.example.boilerplate.crm.task.dto.TaskResponse;
 import com.example.boilerplate.workspace.MemberDirectory;
+import com.example.boilerplate.workspace.WorkspaceAccess;
 import com.example.boilerplate.workspace.WorkspaceContext;
 import com.example.boilerplate.workspace.WorkspaceRepository;
 import com.example.boilerplate.workspace.dto.MemberRef;
@@ -43,7 +44,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The reports of the current workspace (api.md, Dashboard and reports), computed from the stored
- * data on every request. Tenant-filtered JPQL, except the funnel ({@link ReportQueries}).
+ * data on every request. Tenant-filtered JPQL, except the funnel ({@link ReportQueries}). Each
+ * takes an optional {@code ownerId}, a member of the workspace (else 400 on it), to report on that
+ * member's records only.
  */
 @Service
 @Transactional(readOnly = true)
@@ -61,6 +64,7 @@ public class ReportService {
   private final LeadService leads;
   private final PipelineStageService stages;
   private final MemberDirectory members;
+  private final WorkspaceAccess access;
   private final WorkspaceRepository workspaces;
   private final ReportQueries queries;
   private final Clock clock;
@@ -74,6 +78,7 @@ public class ReportService {
       LeadService leads,
       PipelineStageService stages,
       MemberDirectory members,
+      WorkspaceAccess access,
       WorkspaceRepository workspaces,
       ReportQueries queries,
       Clock clock) {
@@ -85,21 +90,26 @@ public class ReportService {
     this.leads = leads;
     this.stages = stages;
     this.members = members;
+    this.access = access;
     this.workspaces = workspaces;
     this.queries = queries;
     this.clock = clock;
   }
 
-  /** By owner: the largest single-currency total first, then by email, unassigned last. */
-  public PipelineReport pipeline() {
+  /**
+   * By owner: the largest single-currency total first, then by email, unassigned last. With {@code
+   * ownerId}: their deals only, so {@code byOwner} has their entry alone (none without open deals).
+   */
+  public PipelineReport pipeline(Long ownerId) {
+    Long owner = access.member("ownerId", ownerId);
     Map<Long, Long> counts = new HashMap<>();
     Map<Long, List<MoneyTotal>> totals = new HashMap<>();
     // By currency, so each owner's totals come out sorted. Null: unassigned.
-    for (Object[] row : deals.openTotalsByOwner()) {
-      Long ownerId = (Long) row[0];
-      counts.merge(ownerId, (Long) row[2], Long::sum);
+    for (Object[] row : deals.openTotalsByOwner(owner)) {
+      Long dealOwner = (Long) row[0];
+      counts.merge(dealOwner, (Long) row[2], Long::sum);
       totals
-          .computeIfAbsent(ownerId, id -> new ArrayList<>())
+          .computeIfAbsent(dealOwner, id -> new ArrayList<>())
           .add(new MoneyTotal((String) row[1], (BigDecimal) row[3]));
     }
     Map<Long, MemberRef> refs = members.refs(totals.keySet());
@@ -116,11 +126,16 @@ public class ReportService {
                         e.getValue()))
             .sorted(largest.reversed().thenComparing(OwnerBucket::owner, BY_EMAIL))
             .toList();
-    return new PipelineReport(DashboardService.byStage(stages.list(), deals.openTotals()), byOwner);
+    return new PipelineReport(
+        DashboardService.byStage(stages.list(), deals.openTotals(owner)), byOwner);
   }
 
-  /** Every month from {@code from}'s to {@code to}'s, each cut to the period. */
-  public WonLostReport wonLost(LocalDate from, LocalDate to) {
+  /**
+   * Every month from {@code from}'s to {@code to}'s, each cut to the period; {@code ownerId}'s
+   * deals.
+   */
+  public WonLostReport wonLost(LocalDate from, LocalDate to, Long ownerId) {
+    Long owner = access.member("ownerId", ownerId);
     Period period = period(from, to);
     List<MonthBucket> months = new ArrayList<>();
     for (YearMonth month = YearMonth.from(period.from());
@@ -137,7 +152,7 @@ public class ReportService {
       long won = 0;
       long lost = 0;
       List<MoneyTotal> wonTotals = new ArrayList<>();
-      for (Object[] row : deals.closedTotals(days.start(), days.endExclusive())) {
+      for (Object[] row : deals.closedTotals(days.start(), days.endExclusive(), owner)) {
         long count = (Long) row[2];
         if (row[0] == StageKind.WON) {
           won += count;
@@ -151,11 +166,16 @@ public class ReportService {
     return new WonLostReport(period.dto(), months);
   }
 
-  /** The open stages in order, then Won, with the cohort's deals that reached each. */
-  public FunnelReport funnel(LocalDate from, LocalDate to) {
+  /**
+   * The open stages in order, then Won, with the cohort's deals ({@code ownerId}'s) that reached
+   * each. {@code historyFrom} stays the workspace's: it says when the history starts.
+   */
+  public FunnelReport funnel(LocalDate from, LocalDate to, Long ownerId) {
+    Long owner = access.member("ownerId", ownerId);
     Period period = period(from, to);
     Map<Integer, Long> byTop =
-        queries.funnel(WorkspaceContext.workspaceId(), period.start(), period.endExclusive());
+        queries.funnel(
+            WorkspaceContext.workspaceId(), owner, period.start(), period.endExclusive());
     List<FunnelStep> steps =
         stages.list().stream()
             .filter(s -> s.kind() != StageKind.LOST)
@@ -176,12 +196,17 @@ public class ReportService {
         steps);
   }
 
-  /** By member, most in total first, then by email, removed members last. */
-  public ActivityReport activities(LocalDate from, LocalDate to) {
+  /**
+   * By member, most in total first, then by email, removed members last. With {@code ownerId}: that
+   * member's entry alone (none without any).
+   */
+  public ActivityReport activities(LocalDate from, LocalDate to, Long ownerId) {
+    Long owner = access.member("ownerId", ownerId);
     Period period = period(from, to);
     // calls, emails, meetings, notes, tasks completed; by user id, null: no longer a member.
     Map<Long, long[]> byUser = new HashMap<>();
-    for (Object[] row : activities.countByAuthorAndType(period.start(), period.endExclusive())) {
+    for (Object[] row :
+        activities.countByAuthorAndType(period.start(), period.endExclusive(), owner)) {
       int i =
           switch ((ActivityType) row[1]) {
             case CALL -> 0;
@@ -191,7 +216,8 @@ public class ReportService {
           };
       byUser.computeIfAbsent((Long) row[0], id -> new long[5])[i] += (Long) row[2];
     }
-    for (Object[] row : taskRows.countCompletedByAssignee(period.start(), period.endExclusive())) {
+    for (Object[] row :
+        taskRows.countCompletedByAssignee(period.start(), period.endExclusive(), owner)) {
       byUser.computeIfAbsent((Long) row[0], id -> new long[5])[4] += (Long) row[1];
     }
     Map<Long, MemberRef> refs = members.refs(byUser.keySet());
@@ -214,19 +240,21 @@ public class ReportService {
 
   /**
    * Workspace-wide: overdue tasks longest overdue first, tasks due from now to 7 days later soonest
-   * first, open leads due by today in the workspace's zone oldest date first.
+   * first, open leads due by today in the workspace's zone oldest date first. With {@code ownerId}:
+   * the tasks assigned to them and the leads they own.
    */
-  public FollowUpReport followUps() {
+  public FollowUpReport followUps(Long ownerId) {
+    Long owner = access.member("ownerId", ownerId);
     // One instant for both task lists, so they neither overlap nor leave a gap.
     Instant now = clock.instant();
-    Page<TaskResponse> overdue = openTasks(true, null, null, now);
-    Page<TaskResponse> upcoming = openTasks(null, now, now.plus(UPCOMING), now);
+    Page<TaskResponse> overdue = openTasks(owner, true, null, null, now);
+    Page<TaskResponse> upcoming = openTasks(owner, null, now, now.plus(UPCOMING), now);
     Page<LeadResponse> due =
         leads.list(
             new LeadFilter(
                 null,
                 LeadStatus.open(),
-                null,
+                owner,
                 false,
                 null,
                 null,
@@ -243,12 +271,12 @@ public class ReportService {
   }
 
   private Page<TaskResponse> openTasks(
-      Boolean overdue, Instant dueFrom, Instant dueTo, Instant now) {
+      Long assignee, Boolean overdue, Instant dueFrom, Instant dueTo, Instant now) {
     TaskFilter filter =
         new TaskFilter(
             null,
             List.of(TaskStatus.OPEN),
-            null,
+            assignee,
             false,
             false,
             overdue,

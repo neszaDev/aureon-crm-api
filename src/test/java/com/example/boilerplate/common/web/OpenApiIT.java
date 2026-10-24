@@ -1,5 +1,6 @@
 package com.example.boilerplate.common.web;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
@@ -107,6 +108,21 @@ class OpenApiIT extends AbstractIntegrationTest {
           "$.paths['/api/v1/workspaces/{workspaceId}/" + list + "/export'].get.responses['200']";
       spec.andExpect(jsonPath(ok + ".content['text/csv'].schema.type").value("string"))
           .andExpect(jsonPath(ok + ".content", not(hasKey("*/*"))));
+    }
+  }
+
+  /** Every report takes the optional owner filter, as an integer the generated client can pass. */
+  @Test
+  void reportsTakeAnOwner() throws Exception {
+    ResultActions spec = mvc.perform(get("/v3/api-docs"));
+    for (String r : List.of("pipeline", "won-lost", "funnel", "activities", "follow-ups")) {
+      String ownerId =
+          "$.paths['/api/v1/workspaces/{workspaceId}/reports/"
+              + r
+              + "'].get.parameters[?(@.name == 'ownerId')]";
+      spec.andExpect(jsonPath(ownerId + ".in", contains("query")))
+          .andExpect(jsonPath(ownerId + ".schema.type", contains("integer")))
+          .andExpect(jsonPath(ownerId + ".required", not(contains(true))));
     }
   }
 

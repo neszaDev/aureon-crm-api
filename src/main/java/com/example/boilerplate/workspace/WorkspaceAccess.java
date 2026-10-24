@@ -62,12 +62,21 @@ public class WorkspaceAccess {
     return null;
   }
 
-  private long assign(Membership m, String field, long userId) {
-    if (!m.role().has(Permission.RECORDS_ASSIGN)) throw forbidden();
-    if (!members.existsByWorkspaceIdAndUserId(m.workspaceId(), userId)) {
+  /**
+   * A filter by person ({@code field} names it): null, or a current member of the workspace (else
+   * 400 on {@code field}, so another workspace's or a removed member's id never reaches a query).
+   */
+  public Long member(String field, Long userId) {
+    if (userId != null
+        && !members.existsByWorkspaceIdAndUserId(WorkspaceContext.workspaceId(), userId)) {
       throw new FieldValidationException(field, "is not a member of this workspace");
     }
     return userId;
+  }
+
+  private long assign(Membership m, String field, long userId) {
+    if (!m.role().has(Permission.RECORDS_ASSIGN)) throw forbidden();
+    return member(field, userId);
   }
 
   private static AccessDeniedException forbidden() {

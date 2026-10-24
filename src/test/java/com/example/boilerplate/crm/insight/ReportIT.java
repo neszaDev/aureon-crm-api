@@ -479,6 +479,124 @@ class ReportIT extends WorkspaceTestSupport {
     }
   }
 
+  /**
+   * {@code ownerId}: that member's records alone. The rep holds twice the owner's records here and
+   * the same again in a workspace of their own, which never counts.
+   */
+  @Test
+  void reportsOfOneOwner() throws Exception {
+    String ownerEmail = uniqueEmail();
+    String owner = tokenFor(ownerEmail);
+    long w = createWorkspace(owner, "Acme");
+    String repEmail = uniqueEmail();
+    String rep = tokenFor(repEmail);
+    addMember(w, repEmail, WorkspaceRole.SALES_REP);
+    long theirs = createWorkspace(rep, "Theirs");
+    seed(owner, w);
+    seed(rep, w);
+    seed(rep, w);
+    seed(rep, theirs);
+    String repId = String.valueOf(userId(repEmail));
+    String ownerId = String.valueOf(userId(ownerEmail));
+
+    report(owner, w, "pipeline", "ownerId", repId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.byStage[*].count", contains(0, 0, 0, 2)))
+        .andExpect(jsonPath("$.byStage[3].totals[*].amount", contains("140.00")))
+        .andExpect(jsonPath("$.byOwner.length()").value(1))
+        .andExpect(jsonPath("$.byOwner[0].owner.email").value(repEmail))
+        .andExpect(jsonPath("$.byOwner[0].count").value(2))
+        .andExpect(jsonPath("$.byOwner[0].totals[*].amount", contains("140.00")));
+    report(owner, w, "won-lost", "ownerId", repId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.months[-1].won").value(2))
+        .andExpect(jsonPath("$.months[-1].lost").value(2))
+        .andExpect(jsonPath("$.months[-1].wonTotals[*].amount", contains("200.00")));
+    report(owner, w, "funnel", "ownerId", repId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.created").value(6))
+        .andExpect(jsonPath("$.stages[*].reached", contains(6, 6, 4, 4, 2)));
+    report(owner, w, "activities", "ownerId", repId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.byUser.length()").value(1))
+        .andExpect(jsonPath("$.byUser[0].user.email").value(repEmail))
+        .andExpect(jsonPath("$.byUser[0].calls").value(2))
+        .andExpect(jsonPath("$.byUser[0].tasksCompleted").value(2))
+        .andExpect(jsonPath("$.byUser[0].total").value(4));
+    report(owner, w, "follow-ups", "ownerId", repId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.overdueTasks.count").value(2))
+        .andExpect(jsonPath("$.overdueTasks.first[*].assignee.email", contains(repEmail, repEmail)))
+        .andExpect(jsonPath("$.upcomingTasks.count").value(2))
+        .andExpect(
+            jsonPath("$.upcomingTasks.first[*].assignee.email", contains(repEmail, repEmail)))
+        .andExpect(jsonPath("$.dueLeads.count").value(2))
+        .andExpect(jsonPath("$.dueLeads.first[*].owner.email", contains(repEmail, repEmail)));
+
+    // The owner's, asked by the rep: a third of the workspace's.
+    report(rep, w, "pipeline", "ownerId", ownerId)
+        .andExpect(jsonPath("$.byStage[*].count", contains(0, 0, 0, 1)))
+        .andExpect(jsonPath("$.byOwner[*].owner.email", contains(ownerEmail)));
+    report(rep, w, "won-lost", "ownerId", ownerId)
+        .andExpect(jsonPath("$.months[-1].won").value(1))
+        .andExpect(jsonPath("$.months[-1].lost").value(1));
+    report(rep, w, "funnel", "ownerId", ownerId)
+        .andExpect(jsonPath("$.created").value(3))
+        .andExpect(jsonPath("$.stages[*].reached", contains(3, 3, 2, 2, 1)));
+    report(rep, w, "activities", "ownerId", ownerId)
+        .andExpect(jsonPath("$.byUser[*].user.email", contains(ownerEmail)))
+        .andExpect(jsonPath("$.byUser[0].total").value(2));
+    report(rep, w, "follow-ups", "ownerId", ownerId)
+        .andExpect(jsonPath("$.overdueTasks.count").value(1))
+        .andExpect(jsonPath("$.upcomingTasks.count").value(1))
+        .andExpect(jsonPath("$.dueLeads.count").value(1));
+
+    // Without ownerId: the workspace's, as before.
+    report(owner, w, "pipeline")
+        .andExpect(jsonPath("$.byStage[*].count", contains(0, 0, 0, 3)))
+        .andExpect(jsonPath("$.byOwner.length()").value(2));
+    report(owner, w, "funnel").andExpect(jsonPath("$.created").value(9));
+    report(owner, w, "activities").andExpect(jsonPath("$.byUser.length()").value(2));
+    report(owner, w, "follow-ups").andExpect(jsonPath("$.dueLeads.count").value(3));
+  }
+
+  /**
+   * An owner who isn't a member now, of another workspace with records to leak or removed from this
+   * one, or an id no user has: a 400 on ownerId, whose body holds no report.
+   */
+  @Test
+  void anOwnerOutsideTheWorkspaceIs400() throws Exception {
+    String owner = tokenFor(uniqueEmail());
+    long w = createWorkspace(owner, "Mine");
+    String strangerEmail = uniqueEmail();
+    String stranger = tokenFor(strangerEmail);
+    seed(stranger, createWorkspace(stranger, "Theirs"));
+    String leaverEmail = uniqueEmail();
+    String leaver = tokenFor(leaverEmail);
+    addMember(w, leaverEmail, WorkspaceRole.SALES_REP);
+    seed(leaver, w);
+    send(owner, delete(W + "/members/{userId}", w, userId(leaverEmail)))
+        .andExpect(status().isNoContent());
+
+    for (long id : List.of(userId(strangerEmail), userId(leaverEmail), 0L, -1L)) {
+      for (String r : REPORTS) {
+        JsonNode error =
+            body(
+                report(owner, w, r, "ownerId", String.valueOf(id))
+                    .andExpect(status().isBadRequest()));
+        assertThat(error.get("code").asText()).as(r).isEqualTo("VALIDATION_FAILED");
+        assertThat(error.at("/fieldErrors/ownerId").asText())
+            .as(r)
+            .isEqualTo("is not a member of this workspace");
+        assertThat(error.get("fieldErrors").size()).as(r).isEqualTo(1);
+        assertThat(error.fieldNames())
+            .toIterable()
+            .as(r)
+            .isSubsetOf("timestamp", "status", "error", "code", "message", "path", "fieldErrors");
+      }
+    }
+  }
+
   /** The three period reports return the period they used, as the dashboard does. */
   @Test
   void periodReportsReturnTheirPeriod() throws Exception {
