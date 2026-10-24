@@ -11,6 +11,10 @@ FROM local AS build
 RUN mvn -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
+# Security fixes Alpine ships after the base image was built (e.g. libexpat CVE-2026-77214).
+RUN apk upgrade --no-cache
+# The image runs as prod unless told otherwise (compose's app-dev sets dev).
+ENV SPRING_PROFILES_ACTIVE=prod
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 # Uploaded files (FILES_DIR defaults to data/files); compose mounts a volume here.

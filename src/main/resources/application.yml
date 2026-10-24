@@ -1,5 +1,5 @@
 spring:
-  application.name: spring-postgres-boilerplate
+  application.name: aureon-crm-api
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/boilerplate}
     username: ${DB_USERNAME:boilerplate}
@@ -7,7 +7,14 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:10}
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      data-source-properties:
+        # PostgreSQL's Detail quotes stored values ("Key (email)=(...)", "Failing row contains
+        # (...)") and Hibernate logs the message of every constraint violation: leave it out. The
+        # SQLSTATE and the constraint name (in the main message) are still logged.
+        logServerErrorDetail: false
   jpa:
+    # Keep false: Hibernate fixes the tenant (workspace) when a session opens, which must happen
+    # after WorkspaceAccessInterceptor has set it, not at the start of the request.
     open-in-view: false
     hibernate.ddl-auto: validate
   flyway:
@@ -24,10 +31,17 @@ management:
   info.env.enabled: true
 app:
   security.jwt:
-    # Override in every real deployment; min 32 bytes for HS256.
-    secret: ${JWT_SECRET:development-only-change-this-secret-to-at-least-32-bytes}
+    # Required, min 32 bytes for HS256. Only the local, dev and test profiles have a default, a
+    # published placeholder that JwtService refuses under any other profile.
+    secret: ${JWT_SECRET}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
   security.refresh-token-ttl: ${REFRESH_TOKEN_TTL:P30D}
+  # false = invite-only: POST /auth/register answers 403.
+  security.registration-enabled: ${REGISTRATION_ENABLED:true}
+  # Refresh-token families (docs/api.md, Refresh tokens and logout).
+  auth:
+    refresh-reuse-grace: ${REFRESH_REUSE_GRACE:PT30S}
+    session-max-age: ${SESSION_MAX_AGE:P90D}
   cors.allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
   files:
     # Relative paths resolve against the working directory (/app in the image).
@@ -45,11 +59,20 @@ app:
     register-per-ip:
       capacity: ${RATE_LIMIT_REGISTER_PER_IP:10}
       period: PT1H
+    # Keyed by user id: the frontend's server makes the call, so the IP is the proxy's.
+    refresh-per-user:
+      capacity: ${RATE_LIMIT_REFRESH_PER_USER:30}
+      period: PT15M
     max-tracked-keys: 100000
   # Optional first admin, created at startup if that account doesn't exist yet.
   admin:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+  # The demo workspace (crm/demo/DemoDataSeeder): the local and dev profiles only.
+  demo.enabled: false
+logging.level:
+  # Account security events (common/security/AccountEvents) stay on whatever the root level.
+  com.example.boilerplate.common.security.AccountEvents: INFO
 server:
   # Behind a proxy (e.g. the Next.js server) take the client IP from X-Forwarded-For, but only
   # when the connection comes from a trusted proxy: by default private and loopback addresses,

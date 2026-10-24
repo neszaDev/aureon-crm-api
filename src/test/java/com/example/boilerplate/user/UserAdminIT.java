@@ -3,17 +3,16 @@ package com.example.boilerplate.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.example.boilerplate.support.AbstractIntegrationTest;
+import com.example.boilerplate.support.WorkspaceTestSupport;
+import com.example.boilerplate.workspace.WorkspaceRole;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-class UserAdminIT extends AbstractIntegrationTest {
-  @Autowired UserRepository users;
+class UserAdminIT extends WorkspaceTestSupport {
   private String admin;
 
   @BeforeEach
@@ -103,10 +102,8 @@ class UserAdminIT extends AbstractIntegrationTest {
 
     mvc.perform(patchJson(id, Map.of("role", "USER"), admin)).andExpect(status().isOk());
 
-    // The token still says ADMIN; the service checks the database.
-    mvc.perform(auth(get("/api/v1/users"), token))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.message").value("Admin role required"));
+    // The token still says ADMIN, but it is of the version before the role change: refused.
+    mvc.perform(auth(get("/api/v1/users"), token)).andExpect(status().isUnauthorized());
   }
 
   @Test
@@ -175,6 +172,31 @@ class UserAdminIT extends AbstractIntegrationTest {
                         Map.of("refreshToken", tokens.get("refreshToken").asText()))))
         .andExpect(status().isUnauthorized());
     mvc.perform(auth(delete("/api/v1/users/{id}", id), admin)).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void cannotDeleteLastOwnerOfAWorkspace() throws Exception {
+    String ownerEmail = uniqueEmail();
+    String owner = tokenFor(ownerEmail);
+    long w = createWorkspace(owner, "Acme");
+    long id = idOf(ownerEmail);
+    // Co-owning another workspace doesn't help: one sole ownership is enough to refuse.
+    long shared = createWorkspace(owner, "Shared");
+    String partnerEmail = uniqueEmail();
+    tokenFor(partnerEmail);
+    addMember(shared, partnerEmail, WorkspaceRole.OWNER);
+
+    mvc.perform(auth(delete("/api/v1/users/{id}", id), admin))
+        .andExpect(status().isConflict())
+        .andExpect(
+            jsonPath("$.message")
+                .value("This account is the only owner of a workspace; add another owner first"));
+    mvc.perform(auth(get("/api/v1/users/{id}", id), admin)).andExpect(status().isOk());
+
+    String coOwnerEmail = uniqueEmail();
+    tokenFor(coOwnerEmail);
+    addMember(w, coOwnerEmail, WorkspaceRole.OWNER);
+    mvc.perform(auth(delete("/api/v1/users/{id}", id), admin)).andExpect(status().isNoContent());
   }
 
   private long idOf(String email) {

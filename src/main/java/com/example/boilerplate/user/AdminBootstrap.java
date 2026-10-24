@@ -1,5 +1,6 @@
 package com.example.boilerplate.user;
 
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -41,7 +42,7 @@ public class AdminBootstrap implements ApplicationRunner {
               + " to 72 characters when ADMIN_EMAIL is set");
 
     users
-        .findByEmail(properties.email().toLowerCase())
+        .findByEmail(properties.email().toLowerCase(Locale.ROOT))
         .ifPresentOrElse(
             existing -> {
               if (existing.getRole() != Role.ADMIN)

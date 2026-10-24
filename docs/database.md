@@ -6,7 +6,7 @@ PostgreSQL 17. **Flyway is the only thing that changes the schema.** Hibernate r
 ## Adding a migration
 
 1. Create `src/main/resources/db/migration/V{next}__{description}.sql`, where `{next}` is the
-   highest existing version + 1. Example: `V6__add_user_display_name.sql`. Note the **two**
+   highest existing version + 1. Example: `V22__add_company_nickname.sql`. Note the **two**
    underscores.
 2. Write plain PostgreSQL. Put related changes in one file, and add indexes for new
    foreign keys and query paths.
@@ -36,6 +36,43 @@ Migrations run automatically at application startup, in every profile.
 | `V3__make_refresh_token_hash_varchar.sql` | `token_hash` CHAR(64) → VARCHAR(64) |
 | `V4__add_test_results.sql` | `test_results` (owner FK, score check 0–100, owner/date index) |
 | `V5__add_stored_files.sql` | `stored_files` (file metadata; owner FK cascades; the bytes live in `FILES_DIR`) |
+| `V6__user_display_name.sql` | `users.display_name` (optional, up to 100 characters) |
+| `V7__workspaces.sql` | `workspaces` and `workspace_members` (role check; `UNIQUE (workspace_id, user_id)`, the target of the CRM tables' composite foreign keys; deleting an account cascades to its memberships) |
+| `V8__audit_events.sql` | `audit_events` (plain FK to the workspace, no FK to users; a trigger refuses `UPDATE` and `DELETE`; indexes by workspace/time and by entity) |
+| `V9__crm_reference_data.sql` | `pipeline_stages` (kind and probability checks, unique name per workspace, one Won and one Lost stage per workspace) and `lead_sources` (unique name per workspace, `archived_at`) |
+| `V10__workspace_invitations.sql` | `workspace_invitations` (SHA-256 of the link token, unique; partial unique index: one open invitation per email and workspace) |
+| `V11__invitation_invited_by_index.sql` | index on `workspace_invitations(invited_by)`, so deleting an account (`ON DELETE SET NULL`) doesn't scan the table |
+| `V12__companies.sql` | `companies` (`UNIQUE (workspace_id, id)`: the target of the other records' composite foreign keys; owner is a member foreign key `ON DELETE SET NULL (owner_id)`; index on `lower(name)` for the duplicate check) |
+| `V13__contacts.sql` | `contacts` (company, source and owner foreign keys; `tags text[]` with a GIN index; index on `lower(email)` for the duplicate check) |
+| `V14__leads.sql` | `leads` (status and priority checks; estimated value and currency both set or both null; `converted_company_id` and `converted_contact_id` foreign keys, the deal's comes in V15) |
+| `V15__deals.sql` | `deals` (stage, company, contact, source, lead and owner foreign keys; `UNIQUE (workspace_id, lead_id)`: one deal per converted lead) and `deal_stage_changes` (stage names kept as snapshots, the stage ids `ON DELETE SET NULL (column)`); adds the foreign key of `leads.converted_deal_id` |
+| `V16__tasks.sql` | `tasks` (status and priority checks; `completed_at` set exactly when `COMPLETED`; assignee and creator are member foreign keys `ON DELETE SET NULL (column)`; company, contact, lead and deal links; index on `(workspace_id, assignee_id, status, due_at)` for the reminders) |
+| `V17__activities.sql` | `activities` (type check; `CHECK (num_nonnulls(company_id, contact_id, lead_id, deal_id) >= 1)`: at least one link; author is a member foreign key `ON DELETE SET NULL (author_id)`; index on `(workspace_id, occurred_at DESC)` for the newest-first list) |
+| `V18__users_sessions_valid_after.sql` | `users.sessions_valid_after` (nullable): access tokens issued before it are refused; set on an email, role or password change (dropped by V20) |
+| `V19__refresh_token_families.sql` | `refresh_tokens.family_id`, `family_created_at` (existing tokens become one-token families started at their `created_at`) and `used_at`; index on `family_id` |
+| `V20__token_version.sql` | `users.token_version` and `refresh_tokens.token_version` (int, default 0): a token of another version is refused; drops `users.sessions_valid_after` |
+| `V21__lead_status_checks.sql` | `leads` status checks behind the services' rules: `unqualified_reason` set exactly when `UNQUALIFIED`, `converted_at` and `converted_contact_id` exactly when `CONVERTED`, `converted_company_id` and `converted_deal_id` only then |
+
+Every workspace-owned table has `workspace_id` and extends `WorkspaceOwnedEntity` in JPA. The
+tenant boundary, the composite foreign keys and the columns of the CRM tables are described in
+[docs/crm/data-model.md](crm/data-model.md). A member foreign key must list its column
+(`ON DELETE SET NULL (owner_id)`): a plain `SET NULL` would also null the `NOT NULL`
+`workspace_id`. Workspaces are never hard-deleted, so
+`audit_events.workspace_id` is a plain foreign key and the trail stays append-only.
+
+## Query plans at scale
+
+Measured on 2026-10-20 (`EXPLAIN ANALYZE` through `auto_explain`, Testcontainers PostgreSQL 17)
+with 20 workspaces, the largest holding 10,000 deals, 18,000 stage changes, 20,000 activities,
+5,000 tasks and 50,000 audit events: every dashboard, report, board, list and export query reads
+through an index that starts with `workspace_id`; none scans a large table. The heaviest reads
+grow with the one workspace, not with the database: the funnel joins the workspace's whole stage
+history (5-9 ms), the audit list counts the workspace's events for its page total (9.5 ms at
+50,000), the dashboard counts its activities for a page total it doesn't show (5.4 ms at 20,000).
+A 10,000-row deal export takes about 0.3 s (its largest `IN` list is one bind per row, so
+`app.export.max-rows` stays under PgJDBC's 32,767). An index on `deals (workspace_id, created_at)`
+was tried for the funnel and left out: it cut the deals read from 10,000 to 408 rows, but the
+history join decides the time (6.0 to 5.0 ms). Measure again before adding one.
 
 ## Local database
 

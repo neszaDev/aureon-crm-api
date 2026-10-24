@@ -16,6 +16,7 @@ public record RateLimitProperties(
     @Valid @NotNull Limit loginPerIp,
     @Valid @NotNull Limit loginFailuresPerEmail,
     @Valid @NotNull Limit registerPerIp,
+    @Valid @NotNull Limit refreshPerUser,
     @Min(100) long maxTrackedKeys) {
 
   /** {@code capacity} requests per {@code period}, refilled gradually. */

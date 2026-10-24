@@ -2,16 +2,31 @@ package com.example.boilerplate.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.boilerplate.common.security.Tokens;
 import com.example.boilerplate.support.PostgresTestcontainersConfig;
+import com.example.boilerplate.user.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -24,14 +39,18 @@ import org.springframework.test.context.ActiveProfiles;
       "app.rate-limit.enabled=true",
       "app.rate-limit.login-per-ip.capacity=4",
       "app.rate-limit.login-failures-per-email.capacity=2",
-      "app.rate-limit.register-per-ip.capacity=2"
+      "app.rate-limit.register-per-ip.capacity=2",
+      "app.rate-limit.refresh-per-user.capacity=3"
     })
 @ActiveProfiles("test")
 @Import(PostgresTestcontainersConfig.class)
 class RateLimitIT {
   static final String PASSWORD = "a-secure-password";
+  static final ObjectMapper JSON = new ObjectMapper();
   final HttpClient http = HttpClient.newHttpClient();
   @LocalServerPort int port;
+  @Autowired UserRepository users;
+  @Autowired JdbcTemplate jdbc;
 
   @Test
   void registrationIsLimitedPerForwardedClientIp() throws Exception {
@@ -42,7 +61,9 @@ class RateLimitIT {
     assertThat(blocked.statusCode()).isEqualTo(429);
     assertThat(blocked.headers().firstValue("Retry-After"))
         .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
-    assertThat(blocked.body()).contains("\"status\":429");
+    assertThat(blocked.headers().firstValue("Content-Type"))
+        .hasValueSatisfying(type -> assertThat(type).startsWith("application/json"));
+    assertThat(blocked.body()).contains("\"status\":429", "\"code\":\"RATE_LIMITED\"");
 
     // Another client behind the same proxy has its own budget.
     assertThat(register(email(), "198.51.100.2").statusCode()).isEqualTo(201);
@@ -89,6 +110,149 @@ class RateLimitIT {
     assertThat(login(email(), "x", "198.51.100.40").statusCode()).isEqualTo(429);
   }
 
+  /** Registering through an invitation link takes from the same per-IP budget as registration. */
+  @Test
+  void invitationRegistrationSharesThePerIpRegistrationLimit() throws Exception {
+    String ip = "198.51.100.50";
+    assertThat(register(email(), ip).statusCode()).isEqualTo(201);
+    // The limit is taken before the link is looked up, so an unknown link still counts.
+    String link = Tokens.random();
+    assertThat(registerThroughLink(link, ip).statusCode()).isEqualTo(404);
+
+    var blocked = registerThroughLink(link, ip);
+    assertThat(blocked.statusCode()).isEqualTo(429);
+    assertThat(blocked.headers().firstValue("Retry-After"))
+        .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
+    assertThat(blocked.body())
+        .contains("\"path\":\"/api/v1/invitations/{token}/register\"")
+        .doesNotContain(link);
+  }
+
+  /**
+   * Rotations are limited per user, whatever the client IP (the frontend's server makes the call):
+   * every rotation keeps a used row for the refresh TTL.
+   */
+  @Test
+  void refreshesAreLimitedPerUser() throws Exception {
+    String token =
+        JSON.readTree(register(email(), "198.51.100.80").body()).get("refreshToken").asText();
+    for (int i = 1; i <= 3; i++) {
+      var rotated = refresh(token, "198.51.100.8" + i);
+      assertThat(rotated.statusCode()).isEqualTo(200);
+      token = JSON.readTree(rotated.body()).get("refreshToken").asText();
+    }
+
+    var blocked = refresh(token, "198.51.100.84");
+    assertThat(blocked.statusCode()).isEqualTo(429);
+    assertThat(blocked.headers().firstValue("Retry-After"))
+        .hasValueSatisfying(v -> assertThat(Long.parseLong(v)).isPositive());
+    assertThat(blocked.body()).contains("\"code\":\"RATE_LIMITED\"");
+
+    // Another user has their own budget.
+    String other =
+        JSON.readTree(register(email(), "198.51.100.85").body()).get("refreshToken").asText();
+    assertThat(refresh(other, "198.51.100.84").statusCode()).isEqualTo(200);
+  }
+
+  /**
+   * Only a rotation that succeeds spends the budget. A thief who has emptied the bucket must not
+   * turn the victim's replay into a 429 before it can revoke the family.
+   */
+  @Test
+  void aDrainedBucketDoesNotStopAReplayFromRevokingTheFamily() throws Exception {
+    String stolen = tokenOf(register(email(), "198.51.100.90"));
+    String family =
+        jdbc.queryForObject(
+            "select family_id::text from refresh_tokens where token_hash = ?",
+            String.class,
+            Tokens.sha256Hex(stolen));
+    String thiefs = stolen;
+    for (int i = 0; i < 3; i++) thiefs = tokenOf(refresh(thiefs, "198.51.100.91"));
+    // The bucket (3) is empty now.
+    assertThat(refresh(thiefs, "198.51.100.91").statusCode()).isEqualTo(429);
+    // Past the 30-second grace.
+    jdbc.update(
+        "update refresh_tokens set used_at = now() - interval '31 seconds' where token_hash = ?",
+        Tokens.sha256Hex(stolen));
+
+    assertThat(refresh(stolen, "198.51.100.92").statusCode()).isEqualTo(401);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from refresh_tokens where family_id = ?::uuid",
+                Integer.class,
+                family))
+        .isZero();
+  }
+
+  /** The losers of parallel refreshes (401 within the grace) don't spend the user's budget. */
+  @Test
+  void losingParallelRefreshesDoNotSpendTheBudget() throws Exception {
+    String token = tokenOf(register(email(), "198.51.100.93"));
+    ExecutorService pool = Executors.newFixedThreadPool(4);
+    CountDownLatch go = new CountDownLatch(1);
+    try {
+      List<Future<HttpResponse<String>>> calls = new ArrayList<>();
+      for (int i = 0; i < 4; i++) {
+        calls.add(
+            pool.submit(
+                () -> {
+                  go.await();
+                  return refresh(token, "198.51.100.94");
+                }));
+      }
+      go.countDown();
+      List<HttpResponse<String>> responses = new ArrayList<>();
+      for (var call : calls) responses.add(call.get(30, TimeUnit.SECONDS));
+
+      assertThat(responses)
+          .extracting(HttpResponse::statusCode)
+          .containsExactlyInAnyOrder(200, 401, 401, 401);
+      HttpResponse<String> winner =
+          responses.stream().filter(r -> r.statusCode() == 200).findFirst().orElseThrow();
+      // One of the three rotations is spent, not four.
+      assertThat(refresh(tokenOf(winner), "198.51.100.95").statusCode()).isEqualTo(200);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  /** The failed sign-in that blocks an email is logged once, by user id (M3). */
+  @Test
+  @ExtendWith(OutputCaptureExtension.class)
+  void theFailedSignInThatBlocksAnEmailIsLoggedOnce(CapturedOutput out) throws Exception {
+    String email = email();
+    register(email, "198.51.100.70");
+    String line =
+        "Account event event=sign-in.lockout actorId=null targetId="
+            + users.findByEmail(email).orElseThrow().getId()
+            + " fields=[]";
+
+    login(email, "wrong-password", "198.51.100.71");
+    assertThat(out.getOut()).doesNotContain(line);
+    login(email, "wrong-password", "198.51.100.72");
+    assertThat(login(email, PASSWORD, "198.51.100.73").statusCode()).isEqualTo(429);
+
+    assertThat(out.getOut()).containsOnlyOnce(line).doesNotContain(email);
+  }
+
+  /** Guessing the current password while signed in counts as a failed sign-in, and vice versa. */
+  @Test
+  void wrongCurrentPasswordsShareThePerEmailFailureLimitWithLogin() throws Exception {
+    String email = email();
+    String accessToken =
+        JSON.readTree(register(email, "198.51.100.60").body()).get("accessToken").asText();
+
+    assertThat(login(email, "wrong-password", "198.51.100.61").statusCode()).isEqualTo(401);
+    assertThat(changePassword(accessToken, "wrong-password").statusCode()).isEqualTo(400);
+
+    assertThat(changePassword(accessToken, PASSWORD).statusCode()).isEqualTo(429);
+    assertThat(login(email, PASSWORD, "198.51.100.62").statusCode()).isEqualTo(429);
+  }
+
+  private static String tokenOf(HttpResponse<String> tokens) throws Exception {
+    return JSON.readTree(tokens.body()).get("refreshToken").asText();
+  }
+
   private HttpResponse<String> register(String email, String clientIp) throws Exception {
     return post("/api/v1/auth/register", email, PASSWORD, clientIp);
   }
@@ -98,15 +262,47 @@ class RateLimitIT {
     return post("/api/v1/auth/login", email, password, clientIp);
   }
 
+  private HttpResponse<String> registerThroughLink(String link, String clientIp) throws Exception {
+    return send(
+        "/api/v1/invitations/" + link + "/register",
+        "{\"password\":\"" + PASSWORD + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> refresh(String refreshToken, String clientIp) throws Exception {
+    return send(
+        "/api/v1/auth/refresh",
+        "{\"refreshToken\":\"" + refreshToken + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> changePassword(String accessToken, String currentPassword)
+      throws Exception {
+    return send(
+        "/api/v1/users/me/password",
+        "{\"currentPassword\":\"" + currentPassword + "\",\"newPassword\":\"another-password\"}",
+        "Authorization",
+        "Bearer " + accessToken);
+  }
+
   private HttpResponse<String> post(String path, String email, String password, String clientIp)
+      throws Exception {
+    return send(
+        path,
+        "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}",
+        "X-Forwarded-For",
+        clientIp);
+  }
+
+  private HttpResponse<String> send(String path, String json, String header, String value)
       throws Exception {
     return http.send(
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
             .header("Content-Type", "application/json")
-            .header("X-Forwarded-For", clientIp)
-            .POST(
-                HttpRequest.BodyPublishers.ofString(
-                    "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
+            .header(header, value)
+            .POST(HttpRequest.BodyPublishers.ofString(json))
             .build(),
         HttpResponse.BodyHandlers.ofString());
   }

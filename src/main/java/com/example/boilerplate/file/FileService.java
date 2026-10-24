@@ -2,6 +2,7 @@ package com.example.boilerplate.file;
 
 import com.example.boilerplate.common.exception.FileRejectedException;
 import com.example.boilerplate.common.exception.NotFoundException;
+import com.example.boilerplate.common.web.Paging;
 import com.example.boilerplate.file.dto.FileResponse;
 import com.example.boilerplate.user.User;
 import com.example.boilerplate.user.UserDeletionEvent;
@@ -17,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -54,7 +54,7 @@ public class FileService {
   /** The file's metadata and its bytes. */
   public record Download(FileResponse file, Resource content) {}
 
-  public FileResponse upload(String email, MultipartFile upload) {
+  public FileResponse upload(long ownerId, MultipartFile upload) {
     if (upload.isEmpty()) throw new FileRejectedException(HttpStatus.BAD_REQUEST, "File is empty");
     if (upload.getSize() > properties.maxSize().toBytes())
       throw new FileRejectedException(
@@ -68,8 +68,7 @@ public class FileService {
       throw new FileRejectedException(
           HttpStatus.UNSUPPORTED_MEDIA_TYPE, "File content does not match its type " + type);
 
-    User owner =
-        users.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
+    User owner = users.findById(ownerId).orElseThrow(() -> new NotFoundException("User not found"));
     String key = UUID.randomUUID().toString();
     try (InputStream content = upload.getInputStream()) {
       storage.store(key, content);
@@ -84,21 +83,21 @@ public class FileService {
   }
 
   @Transactional(readOnly = true)
-  public Page<FileResponse> list(String email, int page, int size) {
+  public Page<FileResponse> list(long ownerId, int page, int size) {
     return files
-        .findByOwnerEmail(
-            email, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
+        .findByOwnerId(
+            ownerId, Paging.request(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
         .map(FileService::response);
   }
 
   @Transactional(readOnly = true)
-  public FileResponse get(String email, Long id) {
-    return response(file(email, id));
+  public FileResponse get(long ownerId, Long id) {
+    return response(file(ownerId, id));
   }
 
   @Transactional(readOnly = true)
-  public Download download(String email, Long id) {
-    StoredFile file = file(email, id);
+  public Download download(long ownerId, Long id) {
+    StoredFile file = file(ownerId, id);
     Resource content =
         storage
             .load(file.getStorageKey())
@@ -110,8 +109,8 @@ public class FileService {
     return new Download(response(file), content);
   }
 
-  public void delete(String email, Long id) {
-    StoredFile file = file(email, id);
+  public void delete(long ownerId, Long id) {
+    StoredFile file = file(ownerId, id);
     files.delete(file);
     afterCommit(List.of(file.getStorageKey()));
   }
@@ -122,9 +121,9 @@ public class FileService {
     afterCommit(files.findStorageKeysByOwnerId(event.userId()));
   }
 
-  private StoredFile file(String email, Long id) {
+  private StoredFile file(long ownerId, Long id) {
     return files
-        .findByIdAndOwnerEmail(id, email)
+        .findByIdAndOwnerId(id, ownerId)
         .orElseThrow(() -> new NotFoundException("File not found"));
   }
 

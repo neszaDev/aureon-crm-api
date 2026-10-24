@@ -1,0 +1,7 @@
+# Accepted advisories, each with its reason and a review date (Trivy drops an entry after `exp`).
+#
+# Spring Framework 6.2.19 (the last open-source 6.2 release): fixed only in 7.0.x, which needs
+# Spring Boot 4 (the Dependabot upgrade). Not reachable in this API: it renders no views
+# (JSON REST only, no XsltView) and serves no Server-Sent Events. See docs/crm/security.md.
+CVE-2026-47884 exp:2027-01-31
+CVE-2026-47890 exp:2027-01-31

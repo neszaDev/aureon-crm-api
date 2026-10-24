@@ -6,8 +6,15 @@ spring.servlet.multipart:
   max-file-size: 64KB
   max-request-size: 64KB
 app:
+  security.jwt.secret: ${JWT_SECRET:development-only-change-this-secret-to-at-least-32-bytes}
   # ITs register many users from one address; ratelimit/RateLimitIT turns this on.
   rate-limit.enabled: false
+  # Small, so a test reaches the export cap with a fourth row (ExportIT, ErrorCodeIT).
+  export.max-rows: 3
+  # DemoDataSeederIT builds the seeder (a local/dev bean, never started here) and runs it with these.
+  demo:
+    enabled: true
+    password: test-demo-password
   files:
     storage-dir: ${java.io.tmpdir}/boilerplate-it-files/${random.uuid}
     max-size: 64KB

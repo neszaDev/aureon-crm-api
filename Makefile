@@ -46,9 +46,10 @@ up: env/.env docker-ready ## Run the packaged image with a local Postgres (compo
 down: env/.env docker-ready ## Stop local/dev containers (keeps data)
 	$(COMPOSE_ALL) down
 
+# The volume belongs to the compose project: COMPOSE_PROJECT_NAME when set, else the directory name.
 db-reset: env/.env docker-ready ## Stop containers and delete the local Postgres volume
 	$(COMPOSE_ALL) down
-	docker volume rm -f $(PROJECT)_postgres-data
+	docker volume rm -f $(or $(COMPOSE_PROJECT_NAME),$(PROJECT))_postgres-data
 
 docker-ready: ## Check Docker is running; on macOS start Docker Desktop and wait
 	@scripts/ensure-docker.sh

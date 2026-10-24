@@ -19,4 +19,10 @@ public record AdminProperties(
   public boolean enabled() {
     return email != null && !email.isBlank();
   }
+
+  // Configuration records end up in logs and failure reports: never the password.
+  @Override
+  public String toString() {
+    return "AdminProperties[email=" + email + ", password=***]";
+  }
 }

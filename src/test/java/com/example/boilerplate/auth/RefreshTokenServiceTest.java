@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.boilerplate.common.exception.InvalidRefreshTokenException;
+import com.example.boilerplate.ratelimit.RateLimiter;
+import com.example.boilerplate.ratelimit.RateLimiter.Policy;
 import com.example.boilerplate.user.User;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -16,17 +18,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class RefreshTokenServiceTest {
   @Mock RefreshTokenRepository tokens;
   @Mock JwtService jwt;
+  @Mock RateLimiter rateLimiter;
   RefreshTokenService service;
   final User user = new User("me@example.com", "hash");
 
@@ -38,7 +43,11 @@ class RefreshTokenServiceTest {
             jwt,
             new AuthProperties(
                 new AuthProperties.Jwt("x".repeat(32), Duration.ofMinutes(15)),
-                Duration.ofDays(30)));
+                Duration.ofDays(30),
+                true),
+            new SessionProperties(Duration.ofSeconds(30), Duration.ofDays(90)),
+            rateLimiter);
+    ReflectionTestUtils.setField(user, "id", 7L);
   }
 
   @Test
@@ -51,6 +60,9 @@ class RefreshTokenServiceTest {
     assertThat(response.refreshToken()).isNotBlank();
     assertThat(response.refreshExpiresIn()).isEqualTo(Duration.ofDays(30).toSeconds());
     assertThat(saved.getValue().getExpiresAt()).isAfter(Instant.now().plus(Duration.ofDays(29)));
+    // A sign-in starts a family.
+    assertThat(saved.getValue().getFamilyId()).isNotNull();
+    assertThat(saved.getValue().getFamilyCreatedAt()).isNotNull();
     // Only the SHA-256 hex digest is persisted, never the raw token.
     assertThat(saved.getValue())
         .extracting("tokenHash")
@@ -64,26 +76,49 @@ class RefreshTokenServiceTest {
   }
 
   @Test
-  void rotateDeletesOldTokenAndIssuesNewOne() {
-    var existing = new RefreshToken(user, "h", Instant.now().plusSeconds(60));
+  void rotateKeepsTheOldTokenAsUsedAndIssuesANewOneInItsFamily() {
+    UUID family = UUID.randomUUID();
+    Instant started = Instant.now().minus(Duration.ofDays(3));
+    var existing = new RefreshToken(user, "h", Instant.now().plusSeconds(60), family, started);
     when(tokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.of(existing));
 
     var response = service.rotate("raw");
 
-    verify(tokens).delete(existing);
-    verify(tokens).save(any(RefreshToken.class));
+    verify(rateLimiter).consume(Policy.REFRESH_PER_USER, "7");
+    verify(tokens, never()).delete(any());
+    assertThat(existing.getUsedAt()).isNotNull();
+    var saved = ArgumentCaptor.forClass(RefreshToken.class);
+    verify(tokens).save(saved.capture());
+    assertThat(saved.getValue().getFamilyId()).isEqualTo(family);
+    assertThat(saved.getValue().getFamilyCreatedAt()).isEqualTo(started);
     assertThat(response.refreshToken()).isNotEqualTo("raw");
   }
 
   @Test
-  void rotateRejectsAndDeletesExpiredToken() {
-    var expired = new RefreshToken(user, "h", Instant.now().minusSeconds(1));
+  void rotateRejectsATokenOfAnEarlierTokenVersionAndDeletesItsFamily() {
+    UUID family = UUID.randomUUID();
+    var stale = new RefreshToken(user, "h", Instant.now().plusSeconds(60), family, Instant.now());
+    user.changePasswordHash("new-hash");
+    when(tokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.of(stale));
+
+    assertThatThrownBy(() -> service.rotate("raw"))
+        .isInstanceOf(InvalidRefreshTokenException.class);
+    verify(tokens).deleteByFamilyId(family);
+    verify(tokens, never()).save(any());
+    verify(rateLimiter, never()).consume(any(), any());
+  }
+
+  @Test
+  void rotateRejectsAnExpiredTokenAndDeletesItsFamily() {
+    UUID family = UUID.randomUUID();
+    var expired = new RefreshToken(user, "h", Instant.now().minusSeconds(1), family, Instant.now());
     when(tokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.of(expired));
 
     assertThatThrownBy(() -> service.rotate("raw"))
         .isInstanceOf(InvalidRefreshTokenException.class);
-    verify(tokens).delete(expired);
+    verify(tokens).deleteByFamilyId(family);
     verify(tokens, never()).save(any());
+    verify(rateLimiter, never()).consume(any(), any());
   }
 
   @Test
@@ -97,6 +132,6 @@ class RefreshTokenServiceTest {
   void revokeOfUnknownTokenIsANoOp() {
     when(tokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.empty());
     service.revoke("raw");
-    verify(tokens, never()).delete(any());
+    verify(tokens, never()).deleteByFamilyId(any());
   }
 }

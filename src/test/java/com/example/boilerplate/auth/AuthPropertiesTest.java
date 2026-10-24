@@ -28,7 +28,20 @@ class AuthPropertiesTest {
               var props = ctx.getBean(AuthProperties.class);
               assertThat(props.jwt().accessTokenTtl()).isEqualTo(Duration.ofMinutes(15));
               assertThat(props.refreshTokenTtl()).isEqualTo(Duration.ofDays(30));
+              // Open sign-up unless switched off.
+              assertThat(props.registrationEnabled()).isTrue();
             });
+  }
+
+  @Test
+  void registrationCanBeSwitchedOff() {
+    runner
+        .withPropertyValues(
+            "app.security.jwt.secret=" + VALID_SECRET,
+            "app.security.jwt.access-token-ttl=PT15M",
+            "app.security.refresh-token-ttl=P30D",
+            "app.security.registration-enabled=false")
+        .run(ctx -> assertThat(ctx.getBean(AuthProperties.class).registrationEnabled()).isFalse());
   }
 
   @Test

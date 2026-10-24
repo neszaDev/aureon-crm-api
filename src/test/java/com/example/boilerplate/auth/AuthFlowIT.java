@@ -94,6 +94,15 @@ class AuthFlowIT extends AbstractIntegrationTest {
         .andExpect(jsonPath("$.fieldErrors.password").exists());
   }
 
+  @Test
+  void passwordOver72BytesIs400EvenWhenUnder72Characters() throws Exception {
+    // 30 Thai characters are 90 bytes in UTF-8, which BCrypt cannot hash.
+    postJson("/api/v1/auth/register", new Credentials(uniqueEmail(), "ก".repeat(30)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("Validation failed"))
+        .andExpect(jsonPath("$.fieldErrors.password").exists());
+  }
+
   private ResultActions postJson(String path, Object body) throws Exception {
     return mvc.perform(
         post(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)));

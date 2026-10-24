@@ -1,5 +1,6 @@
 package com.example.boilerplate.file;
 
+import com.example.boilerplate.common.security.CurrentUser;
 import com.example.boilerplate.file.dto.FileResponse;
 import jakarta.validation.constraints.*;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +25,7 @@ public class FileController {
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   FileResponse upload(Authentication a, @RequestPart("file") MultipartFile file) {
-    return service.upload(a.getName(), file);
+    return service.upload(CurrentUser.id(a), file);
   }
 
   @GetMapping
@@ -32,18 +33,18 @@ public class FileController {
       Authentication a,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-    return service.list(a.getName(), page, size);
+    return service.list(CurrentUser.id(a), page, size);
   }
 
   @GetMapping("/{id}")
   FileResponse get(Authentication a, @PathVariable Long id) {
-    return service.get(a.getName(), id);
+    return service.get(CurrentUser.id(a), id);
   }
 
   /** Always a download, never rendered: uploaded HTML or SVG can't run in the API's origin. */
   @GetMapping("/{id}/content")
   ResponseEntity<Resource> content(Authentication a, @PathVariable Long id) {
-    var download = service.download(a.getName(), id);
+    var download = service.download(CurrentUser.id(a), id);
     FileResponse file = download.file();
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(file.contentType()))
@@ -61,6 +62,6 @@ public class FileController {
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void delete(Authentication a, @PathVariable Long id) {
-    service.delete(a.getName(), id);
+    service.delete(CurrentUser.id(a), id);
   }
 }
